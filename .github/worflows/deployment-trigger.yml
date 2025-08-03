@@ -1,0 +1,140 @@
+name: Pro-Mata Deployment Trigger
+
+on:
+  repository_dispatch:
+    types: [deploy-dev, deploy-prod]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - prod
+      backend_image_tag:
+        description: 'Backend image tag'
+        required: true
+        default: 'latest'
+      frontend_image_tag:
+        description: 'Frontend image tag'
+        required: true
+        default: 'latest'
+      force_infrastructure_update:
+        description: 'Force infrastructure update'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  DOCKER_REGISTRY: docker.io
+  DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+
+jobs:
+  determine-environment:
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.env.outputs.environment }}
+      backend_image_tag: ${{ steps.env.outputs.backend_image_tag }}
+      frontend_image_tag: ${{ steps.env.outputs.frontend_image_tag }}
+      cloud_provider: ${{ steps.env.outputs.cloud_provider }}
+    
+    steps:
+      - name: Determine Environment and Tags
+        id: env
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
+            echo "backend_image_tag=${{ github.event.inputs.backend_image_tag }}" >> $GITHUB_OUTPUT
+            echo "frontend_image_tag=${{ github.event.inputs.frontend_image_tag }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.action }}" = "deploy-dev" ]; then
+            echo "environment=dev" >> $GITHUB_OUTPUT
+            echo "backend_image_tag=${{ github.event.client_payload.backend_tag }}" >> $GITHUB_OUTPUT
+            echo "frontend_image_tag=${{ github.event.client_payload.frontend_tag }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.action }}" = "deploy-prod" ]; then
+            echo "environment=prod" >> $GITHUB_OUTPUT
+            echo "backend_image_tag=${{ github.event.client_payload.backend_tag }}" >> $GITHUB_OUTPUT
+            echo "frontend_image_tag=${{ github.event.client_payload.frontend_tag }}" >> $GITHUB_OUTPUT
+          fi
+          
+          # Set cloud provider based on environment
+          if [ "${{ steps.env.outputs.environment }}" = "dev" ]; then
+            echo "cloud_provider=azure" >> $GITHUB_OUTPUT
+          else
+            echo "cloud_provider=aws" >> $GITHUB_OUTPUT
+          fi
+
+  check-images:
+    needs: determine-environment
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Verify Backend Image Exists
+        run: |
+          docker manifest inspect ${{ env.DOCKER_REGISTRY }}/norohim/pro-mata-backend:${{ needs.determine-environment.outputs.backend_image_tag }}
+
+      - name: Verify Frontend Image Exists
+        run: |
+          docker manifest inspect ${{ env.DOCKER_REGISTRY }}/norohim/pro-mata-frontend:${{ needs.determine-environment.outputs.frontend_image_tag }}
+
+  deploy-to-development:
+    needs: [determine-environment, check-images]
+    if: needs.determine-environment.outputs.environment == 'dev'
+    uses: ./.github/workflows/deploy-dev.yml
+    with:
+      backend_image_tag: ${{ needs.determine-environment.outputs.backend_image_tag }}
+      frontend_image_tag: ${{ needs.determine-environment.outputs.frontend_image_tag }}
+    secrets:
+      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+      AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY_DEV }}
+
+  deploy-to-production:
+    needs: [determine-environment, check-images]
+    if: needs.determine-environment.outputs.environment == 'prod'
+    uses: ./.github/workflows/deploy-prod.yml
+    with:
+      backend_image_tag: ${{ needs.determine-environment.outputs.backend_image_tag }}
+      frontend_image_tag: ${{ needs.determine-environment.outputs.frontend_image_tag }}
+    secrets:
+      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY_PROD }}
+
+  rollback-on-failure:
+    needs: [deploy-to-development, deploy-to-production]
+    if: failure()
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Rollback Development
+        if: needs.deploy-to-development.result == 'failure'
+        run: |
+          echo "Rolling back development deployment..."
+          # Implement rollback logic
+
+      - name: Rollback Production  
+        if: needs.deploy-to-production.result == 'failure'
+        run: |
+          echo "Rolling back production deployment..."
+          # Implement rollback logic
+
+  update-deployment-status:
+    needs: [deploy-to-development, deploy-to-production]
+    if: always()
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Update Status
+        run: |
+          if [ "${{ needs.deploy-to-development.result }}" = "success" ] || [ "${{ needs.deploy-to-production.result }}" = "success" ]; then
+            echo "✅ Deployment completed successfully"
+            # Update deployment tracking system
+          else
+            echo "❌ Deployment failed"
+            # Send failure notifications
+          fi

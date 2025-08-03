@@ -1,0 +1,133 @@
+name: Deploy to Development Environment
+
+on:
+  workflow_call:
+    inputs:
+      backend_image_tag:
+        required: true
+        type: string
+      frontend_image_tag:
+        required: true
+        type: string
+    secrets:
+      DOCKER_USERNAME:
+        required: true
+      DOCKER_PASSWORD:
+        required: true
+      AZURE_CREDENTIALS:
+        required: true
+      SSH_PRIVATE_KEY:
+        required: true
+
+jobs:
+  deploy-infrastructure:
+    runs-on: ubuntu-latest
+    environment: development
+    
+    steps:
+      - name: Checkout Infrastructure Code
+        uses: actions/checkout@v4
+        with:
+          repository: pro-mata/pro-mata-infra
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.5.0
+
+      - name: Setup Azure CLI
+        uses: azure/setup-cli@v1
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Terraform Init and Plan
+        working-directory: ./terraform/azure
+        run: |
+          terraform init
+          terraform plan -var-file="../../environments/dev/.env.dev" -out=tfplan
+
+      - name: Terraform Apply
+        working-directory: ./terraform/azure
+        run: terraform apply tfplan
+
+      - name: Save Terraform State
+        working-directory: ./terraform/azure
+        run: |
+          # Save state to Azure Storage or GitHub
+          ../../save-terraform-state.sh --provider azure --action save --storage github
+
+  deploy-application:
+    needs: deploy-infrastructure
+    runs-on: ubuntu-latest
+    environment: development
+    
+    steps:
+      - name: Checkout Infrastructure Code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ needs.deploy-infrastructure.outputs.manager_ip }} >> ~/.ssh/known_hosts
+
+      - name: Setup Ansible
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ansible
+          ansible-galaxy install -r requirements.yml
+
+      - name: Deploy with Ansible
+        env:
+          BACKEND_IMAGE_TAG: ${{ inputs.backend_image_tag }}
+          FRONTEND_IMAGE_TAG: ${{ inputs.frontend_image_tag }}
+        run: |
+          cd deployment/ansible
+          ansible-playbook -i ../../static_ip.ini \
+            -e "backend_image_tag=$BACKEND_IMAGE_TAG" \
+            -e "frontend_image_tag=$FRONTEND_IMAGE_TAG" \
+            -e "environment=dev" \
+            playbooks/swarm_setup.yml
+
+  health-check:
+    needs: deploy-application
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Wait for Services
+        run: sleep 120
+
+      - name: Health Check - Backend
+        run: |
+          curl -f https://api.promata-dev.duckdns.org/health || exit 1
+
+      - name: Health Check - Frontend
+        run: |
+          curl -f https://promata-dev.duckdns.org || exit 1
+
+      - name: Health Check - Database
+        run: |
+          curl -f https://pgadmin.promata-dev.duckdns.org || exit 1
+
+  notify:
+    needs: [deploy-infrastructure, deploy-application, health-check]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Notify Success
+        if: ${{ needs.health-check.result == 'success' }}
+        run: |
+          echo "✅ Deployment to DEV completed successfully!"
+          # Add Slack/Discord/Email notification here
+
+      - name: Notify Failure
+        if: ${{ needs.health-check.result == 'failure' }}
+        run: |
+          echo "❌ Deployment to DEV failed!"
+          # Add failure notification here

@@ -20,7 +20,8 @@ on:
     - cron: '*/30 * * * *'
 
 env:
-  GITLAB_URL: ${{ vars.GITLAB_URL || 'https://tools.ages.pucrs.br' }}
+  GITLAB_URL: ${{ vars.GITLAB_URL }}
+  GITLAB_GROUP_ID: ${{ vars.GITLAB_GROUP_ID }}
   GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
   GITLAB_PROJECT_ID: ${{ secrets.GITLAB_PROJECT_ID }}
   GIT_TOKEN: ${{ secrets.GIT_TOKEN }}
@@ -32,13 +33,12 @@ jobs:
     steps:
     - name: 🔍 Verificar Pré-requisitos
       run: |
-        if [ -z "$GITLAB_TOKEN" ] || [ -z "$GITLAB_PROJECT_ID" ]; then
-          echo "❌ GITLAB_TOKEN ou GITLAB_PROJECT_ID não configurados"
+        if [ -z "$GITLAB_TOKEN" ] && [ -z "$GITLAB_PROJECT_ID" ] || [ -z "$GITLAB_GROUP_ID" ]; then
+          echo "❌ GITLAB_TOKEN, GITLAB_PROJECT_ID ou GITLAB_GROUP_ID não configurados"
           echo "Configure os secrets e variables necessários no repositório"
           exit 1
         fi
         echo "✅ Todos os pré-requisitos atendidos"
-
     - name: 📥 Checkout do Repositório
       uses: actions/checkout@v4
       with:

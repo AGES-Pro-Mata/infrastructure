@@ -335,13 +335,4 @@ jobs:
           }
           EOF
           
-          curl -sS -X POST -H "Content-Type: application/json" -d @payload.json "$WEBHOOK"Frontend CI/CD PipelineCI/CD PipelinePush to Dev BranchPush to Main branch          # Construir payload baseado no estado do review
-          # Criar payload JSON sem interpolação complexa
-          # Construir payload baseado na ação
-🐛buildCI/CDbuildBUILD          DOCKER_IMAGE=""
-BUILDBuild"
-            DOCKER_IMAGE="norohim/pro-mata-frontend:devBUILDBuild"
-            DOCKER_IMAGE="norohim/pro-mata-frontend:latestbuild/CIBUILDci.*cd\|build\|pipelineBUILDBUILD�Build & Push Docker Realizado comoCIBUILDBuild Docker FalhouCIBUILDBuildBUILD-n "$DOCKER_IMAGEImagem Docker\`$DOCKER_IMAGE\`\",
-falseDockerHub[Ver no DockerHub](https://hub.docker.com/r/norohim/pro-mata-frontend)\",
-Frontend Build FalhouBuild dofrontend e enviado para DockerHub          # Só notificar pushes para branches principais
-🔥🧪para
+          curl -sS -X POST -H "Content-Type: application/json" -d @payload.json "$WEBHOOK"

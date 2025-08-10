@@ -1,7 +1,6 @@
 name: Deploy to Development Environment
 
 on:
-  if: false # 🚫 DISABLED
   workflow_call:
     inputs:
       backend_image_tag:
@@ -22,6 +21,7 @@ on:
 
 jobs:
   deploy-infrastructure:
+    if: false # 🚫 DISABLED
     runs-on: ubuntu-latest
     environment: development
     
@@ -62,6 +62,7 @@ jobs:
           ../../save-terraform-state.sh --provider azure --action save --storage github
 
   deploy-application:
+    if: false # 🚫 DISABLED
     needs: deploy-infrastructure
     runs-on: ubuntu-latest
     environment: development
@@ -96,6 +97,7 @@ jobs:
             playbooks/swarm_setup.yml
 
   health-check:
+    if: false # 🚫 DISABLED
     needs: deploy-application
     runs-on: ubuntu-latest
     
@@ -116,9 +118,9 @@ jobs:
           curl -f https://pgadmin.promata-dev.duckdns.org || exit 1
 
   notify:
+    if: false # 🚫 DISABLED
     needs: [deploy-infrastructure, deploy-application, health-check]
     runs-on: ubuntu-latest
-    if: always()
     
     steps:
       - name: Notify Success

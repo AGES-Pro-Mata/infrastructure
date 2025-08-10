@@ -32,8 +32,11 @@ env:
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
 
 jobs:
+  # 🚫 TEMPORARILY DISABLED - Infrastructure CI/CD
+  # Remove the condition below to re-enable
   determine-environment:
     runs-on: ubuntu-latest
+    if: false  # 🚫 DISABLED
     outputs:
       environment: ${{ steps.env.outputs.environment }}
       backend_image_tag: ${{ steps.env.outputs.backend_image_tag }}
@@ -80,30 +83,23 @@ jobs:
 
   deploy-to-development:
     needs: [determine-environment, check-images]
-    if: needs.determine-environment.outputs.environment == 'dev'
-    uses: ./.github/workflows/deploy-dev.yml
-    with:
-      backend_image_tag: ${{ needs.determine-environment.outputs.backend_image_tag }}
-      frontend_image_tag: ${{ needs.determine-environment.outputs.frontend_image_tag }}
-    secrets:
-      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-      AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
-      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY_DEV }}
+    if: false # 🚫 DISABLED - workflow deploy-dev.yml required
+    runs-on: ubuntu-latest
+    steps:
+      - name: ⚠️ Deployment Disabled
+        run: |
+          echo "❌ Development deployment is disabled"
+          echo "To enable: create deploy-dev.yml workflow and remove 'if: false'"
 
   deploy-to-production:
     needs: [determine-environment, check-images]
-    if: needs.determine-environment.outputs.environment == 'prod'
-    uses: ./.github/workflows/deploy-prod.yml
-    with:
-      backend_image_tag: ${{ needs.determine-environment.outputs.backend_image_tag }}
-      frontend_image_tag: ${{ needs.determine-environment.outputs.frontend_image_tag }}
-    secrets:
-      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY_PROD }}
+    if: false # 🚫 DISABLED - workflow deploy-prod.yml required
+    runs-on: ubuntu-latest
+    steps:
+      - name: ⚠️ Deployment Disabled
+        run: |
+          echo "❌ Production deployment is disabled"
+          echo "To enable: create deploy-prod.yml workflow and remove 'if: false'"
 
   rollback-on-failure:
     needs: [deploy-to-development, deploy-to-production]

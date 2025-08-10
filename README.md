@@ -1,311 +1,350 @@
-# Pro-Mata Infrastructure
+# 🏗️ Pro-Mata Infrastructure
 
-Repositório de infraestrutura como código (IaC) e configuração como código (CaC) para o projeto Pro-Mata - Plataforma de reservas e atendimento ao visitante do Centro Pró-Mata PUCRS.
+Repositório de infraestrutura do projeto Pro-Mata AGES, contendo configurações Terraform, playbooks Ansible, workflows CI/CD e scripts de automação.
 
-## 🏗️ Arquitetura
+## 📁 Visão Geral
 
-```plaintext
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Frontend      │    │    Backend      │    │  Infrastructure │
-│   (React +      │    │  (Spring Boot   │    │   (Terraform +  │
-│   Tanstack)     │    │   + JPA)        │    │    Ansible)     │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         └───────────────────────┼───────────────────────┘
-                                 │
-                    ┌─────────────────┐
-                    │   Docker Hub    │
-                    │   (Registry)    │
-                    └─────────────────┘
-```
+Este repositório implementa uma estratégia de **monitoramento de infraestrutura**, onde mudanças em arquivos de build são detectadas e implantadas automaticamente, sem construção local de imagens Docker.
 
-### Tecnologias
+## 🌐 Arquitetura
 
-- **Frontend**: React, Tanstack Router, Shadcn/ui, Axios
-- **Backend**: Spring Boot, JPA, JWT, PostgreSQL
-- **Infrastructure**: Terraform, Ansible, Docker Swarm
-- **CI/CD**: GitHub Actions
-- **Cloud**: Azure (Dev), AWS (Prod)
+### 🧪 **Ambientes de Desenvolvimento**
+
+- **Azure East US 2**: Development & Staging
+- **Orquestração**: Docker Swarm
+- **Infraestrutura**: Terraform + Ansible
+
+### 🌟 **Ambiente de Produção**
+
+- **AWS US East 1**: Production
+- **Orquestração**: Amazon ECS Fargate
+- **Balanceamento**: Application Load Balancer
 
 ## 🚀 Quick Start
 
-### Pré-requisitos
+### 1. Pré-requisitos
 
 ```bash
 # Instalar dependências
-sudo apt-get update
-sudo apt-get install -y terraform ansible docker.io
-
-# Configurar credenciais AWS
-aws configure
-
-# Configurar credenciais Azure
-az login
-
-# Configurar Docker Hub
-docker login
+terraform --version  # >= 1.8.0
+ansible --version    # >= 8.5.0
 ```
 
-### Deploy Local
+### 2. Configurar Ambiente
 
 ```bash
-# 1. Clonar repositórios
-git clone https://github.com/pro-mata/pro-mata-infra.git
-git clone https://github.com/pro-mata/pro-mata-backend.git
-git clone https://github.com/pro-mata/pro-mata-frontend.git
+# Clonar repositório
+git clone <repo-url>
+cd infra/
 
-# 2. Configurar ambiente local
-cd pro-mata-infra
-cp .env.example .env
-# Editar .env com suas configurações
-
-# 3. Subir ambiente local
-cd environments/local
-docker-compose -f docker-compose.local.yml up -d
-
-# 4. Verificar serviços
-curl http://localhost:3000          # Frontend
-curl http://localhost:8080/health   # Backend
-curl http://localhost:5050          # PgAdmin
+# Configurar variáveis de ambiente
+cp environments/dev/.env.dev.example environments/dev/.env.dev
+# Editar com suas configurações
 ```
 
-### Deploy Development (Azure)
+### 3. Deploy Desenvolvimento (Azure)
 
 ```bash
-# Deploy completo para ambiente de desenvolvimento
-./deploy.sh --provider azure --environment dev
-
-# Ou deploy específico
-cd terraform/azure
+# Inicializar Terraform
+cd terraform/azure/
 terraform init
-terraform plan -var-file="../../environments/dev/.env.dev"
+terraform plan
 terraform apply
 
-cd ../../deployment/ansible
-ansible-playbook -i ../../static_ip.ini playbooks/swarm_setup.yml
+# Configurar Docker Swarm
+cd ../../deployment/ansible/
+ansible-playbook playbooks/swarm_setup.yml
 ```
 
-### Deploy Production (AWS)
+### 4. Deploy Produção (AWS)
 
 ```bash
-# Deploy completo para ambiente de produção
-./deploy.sh --provider aws --environment prod
-
-# Destruir infraestrutura
-./destroy.sh --provider aws
+# Deploy AWS ECS
+cd terraform/aws/
+terraform init
+terraform plan
+terraform apply
 ```
 
-## 📁 Estrutura do Projeto
+## 📊 Container Registry
 
-```plaintext
-pro-mata-infra/
-├── terraform/           # Infrastructure as Code
-│   ├── aws/            # AWS resources
-│   ├── azure/          # Azure resources
-│   └── modules/        # Shared modules
-├── deployment/         # Configuration as Code
-│   ├── ansible/        # Ansible playbooks
-│   └── swarm/          # Docker Swarm configs
-├── docker/            # Dockerfiles
-├── ci-cd/             # GitHub Actions workflows
-├── environments/      # Environment-specific configs
-├── monitoring/        # Monitoring setup
-└── docs/              # Documentation
+Todas as imagens são armazenadas em:
+
+```text
+ghcr.io/ages-pro-mata/backend:latest
+ghcr.io/ages-pro-mata/frontend:latest
 ```
 
-## 🔄 CI/CD Pipeline
+## 🔧 Workflows CI/CD
 
-### Fluxo de Desenvolvimento
-
-1. **Developer Push**: Código commitado em `develop` ou `main`
-2. **Build & Test**: CI roda testes, security scan, build
-3. **Docker Push**: Imagem enviada para Docker Hub
-4. **Trigger Deploy**: Repository dispatch para infra
-5. **Infrastructure**: Terraform provisiona recursos
-6. **Configuration**: Ansible configura serviços
-7. **Health Check**: Verificação de saúde dos serviços
-
-### Ambientes
-
-| Branch    | Environment | Cloud Provider | URL |
-|-----------|------------|----------------|-----|
-| `develop` | Development | Azure | <https://promata-dev.duckdns.org> |
-| `main`    | Production | AWS | <https://promata.duckdns.org> |
-
-## 🎯 Serviços
-
-### Frontend
-
-- **URL**: <https://promata.duckdns.org>
-- **Tech**: React + Vite + Tanstack Router
-- **Port**: 3000
-
-### Backend  
-
-- **URL**: <https://api.promata.duckdns.org>
-- **Tech**: Spring Boot + JPA
-- **Port**: 8080
-
-### Database
-
-- **Tech**: PostgreSQL 15
-- **Port**: 5432 (Primary), 5433 (Replica)
-- **Management**: PgAdmin em <https://pgadmin.promata.duckdns.org>
-
-### Monitoring
-
-- **Visualizer**: <https://viz.promata.duckdns.org>
-- **Traefik**: <https://traefik.promata.duckdns.org>
-
-## 🔧 Configuração
-
-### Variáveis de Ambiente
-
-```bash
-# Database
-POSTGRES_USER=promata_user
-POSTGRES_PASSWORD=your_secure_password
-POSTGRES_DB=promata
-
-# Authentication
-JWT_SECRET=your_jwt_secret_key
-
-# Domain
-DOMAIN_NAME=promata.duckdns.org
-DUCKDNS_TOKEN=your_duckdns_token
-
-# Email
-ACME_EMAIL=admin@promata.org
-
-# Cloud Credentials
-AWS_ACCESS_KEY_ID=your_aws_key
-AWS_SECRET_ACCESS_KEY=your_aws_secret
-AZURE_SUBSCRIPTION_ID=your_azure_subscription
-```
-
-### Secrets do GitHub
-
-```bash
-# Docker Hub
-DOCKER_USERNAME
-DOCKER_PASSWORD
-
-# Cloud Providers
-AWS_ACCESS_KEY_ID
-AWS_SECRET_ACCESS_KEY
-AZURE_CREDENTIALS
-
-# SSH Keys
-SSH_PRIVATE_KEY_DEV
-SSH_PRIVATE_KEY_PROD
-
-# Repository Access
-INFRA_TRIGGER_TOKEN
-
-# Monitoring
-SONAR_TOKEN
-```
-
-## 🏥 Health Checks
-
-```bash
-# Verificar status dos serviços
-curl https://promata.duckdns.org/health
-curl https://api.promata.duckdns.org/health
-
-# Logs dos contêineres
-docker service logs CP-Planta_backend
-docker service logs CP-Planta_frontend
-
-# Status do Swarm
-docker node ls
-docker service ls
-```
-
-## 🔍 Troubleshooting
-
-### Problemas Comuns
-
-#### 1. Falha na conexão com banco de dados
-
-```bash
-# Verificar se PostgreSQL está rodando
-docker service ps CP-Planta_postgres_primary
-
-# Verificar logs do PgBouncer
-docker service logs CP-Planta_pgbouncer
-```
-
-#### 2. Certificados SSL não funcionando**
-
-```bash
-# Verificar logs do Traefik
-docker service logs CP-Planta_traefik
-
-# Verificar se DuckDNS está atualizando
-curl "https://www.duckdns.org/update?domains=promata&token=YOUR_TOKEN&ip="
-```
-
-#### 3. Serviços não inicializam**
-
-```bash
-# Verificar recursos disponíveis
-docker system df
-docker system prune
-
-# Verificar constraints do Swarm
-docker service inspect CP-Planta_backend
-```
-
-### Logs e Monitoramento
-
-```bash
-# Logs centralizados
-docker service logs -f CP-Planta_backend
-docker service logs -f CP-Planta_frontend
-
-# Métricas do sistema
-docker stats
-ctop  # Container monitoring tool
-
-# Monitoramento de rede
-docker network ls
-docker network inspect CP-Planta_traefik_network
-```
-
-## 🤝 Contribuindo
-
-1. Fork o projeto
-2. Crie uma branch feature (`git checkout -b feature/AmazingFeature`)
-3. Commit suas mudanças (`git commit -m 'Add some AmazingFeature'`)
-4. Push para a branch (`git push origin feature/AmazingFeature`)
-5. Abra um Pull Request
-
-### Padrões de Código
-
-- Use **Terraform format**: `terraform fmt`
-- Valide **Ansible syntax**: `ansible-playbook --syntax-check`
-- Teste **Docker builds** localmente antes do push
-- Documente **mudanças na infraestrutura**
+| Workflow | Status | Descrição |
+|----------|---------|-----------|
+| `ci-cd.yml` | `DISABLED` | Pipeline principal (monitoramento) |
+| `discord-notify-extended.yml` | `ACTIVE` | Notificações Discord |
+| `gitlab-sync.yml` | `ACTIVE` | Sincronização GitLab |
+| `notify-pr.yml` | `ACTIVE` | Notificações de PR |
 
 ## 📚 Documentação
 
-- [Setup Guide](./docs/SETUP.md)
-- [Deployment Guide](./docs/DEPLOYMENT.md)
-- [CI/CD Guide](./docs/CI-CD.md)
-- [Troubleshooting](./docs/TROUBLESHOOTING.md)
-- [Architecture](./docs/ARCHITECTURE.md)
+- [📋 Estrutura Completa](./docs/STRUCTURE.md)
+- [⚙️ Configuração](./docs/SETUP.md)
+- [🔧 Troubleshooting](./docs/TROUBLESHOOTING.md)
+
+## 🤝 Como Contribuir
+
+1. Crie uma branch feature
+2. Faça suas alterações
+3. Teste localmente
+4. Abra um Pull Request
 
 ## 📄 Licença
 
-Este projeto é um projeto de código aberto.
+MIT License - veja [LICENSE](LICENSE) para detalhes.
 
-## 👥 Time
+Este repositório contém toda a infraestrutura como código (IaC) para o projeto Pro-Mata AGES PUCRS.
 
-- **Infrastructure**: Equipe AGES III
-- **Backend**: Equipe Spring Boot
-- **Frontend**: Equipe React
+> **⚠️ STATUS ATUAL**: Os workflows de deployment estão temporariamente desabilitados. Apenas sincronização com GitLab e notificações estão ativos.
+
+## 📋 Visão Geral
+
+O repositório de infraestrutura é responsável por:
+
+- ⚙️ Provisionamento de recursos cloud (Azure/AWS) - **DESABILITADO**
+- 🚀 Pipelines de deployment automatizado - **DESABILITADO**
+- 📊 Monitoramento de mudanças em builds - **DESABILITADO**
+- 🔄 Sincronização com GitLab AGES - **ATIVO**
+- � Sistema de notificações - **ATIVO**
+
+## 🏗️ Arquitetura
+
+### Ambientes de Deploy
+
+- **Development**: Azure (East US 2) - Docker Swarm
+- **Staging**: Azure (East US 2) - Docker Swarm  
+- **Production**: AWS (US East 1) - ECS Fargate
+
+### Stack Tecnológico
+
+- **IaC**: Terraform 1.8.0
+- **Orquestração**: Ansible 8.5.0
+- **Containers**: Docker, Docker Swarm, ECS
+- **CI/CD**: GitHub Actions
+- **Monitoramento**: CloudWatch, Azure Monitor
+
+## 📁 Estrutura do Repositório
+
+```text
+infra/
+├── .github/workflows/           # GitHub Actions workflows (padrão frontend)
+│   ├── ci-cd.yml               # Pipeline principal (DESABILITADO)
+│   ├── discord-notify-extended.yml  # Notificações Discord
+│   ├── gitlab-sync.yml         # Sincronização GitLab
+│   └── notify-pr.yml           # Notificações de PR
+├── environments/               # Configurações por ambiente
+│   ├── dev/                   # Desenvolvimento
+│   ├── staging/               # Staging
+│   └── prod/                  # Produção
+├── terraform/                 # Módulos Terraform
+├── ansible/                   # Playbooks Ansible
+├── scripts/                   # Scripts de automação
+│   ├── sync-infrastructure.py # Sincronização GitLab
+│   ├── notify-deployment.sh   # Notificações Discord
+│   ├── rollback.sh           # Rollback automatizado
+│   └── test-infrastructure.sh # Testes de infraestrutura
+└── docs/                     # Documentação
+```
+
+## 🚀 Como Usar
+
+> **⚠️ IMPORTANTE**: Os deployments estão temporariamente desabilitados. Para reativar, remova `if: false` dos workflows de deployment.
+
+### Workflows Ativos
+
+#### 1. Sincronização GitLab (Automática)
+
+- Executa a cada 30 minutos
+- Sincroniza issues, PRs e código com GitLab AGES
+- Pode ser executada manualmente
+
+#### 2. Notificações Discord (Automática)
+
+- Envia notificações para Discord
+- Monitora atividades do repositório (issues, PRs, deployments)
+- Notificações estendidas para eventos específicos
+
+#### 3. Notificações de PR (Automática)
+
+- Notifica abertura, fechamento e merge de PRs
+- Integrado com sistema de Discord
+- Executa automaticamente em mudanças de PR
+
+### Workflows Desabilitados (CI/CD)
+
+Para reativar o pipeline de deployment, edite `.github/workflows/ci-cd.yml` e remova:
+
+```yaml
+if: false  # 🚫 DISABLED
+```
+
+## 🧪 Testes
+
+### Executar Testes de Infraestrutura
+
+```bash
+# Todos os testes
+./scripts/test-infrastructure.sh
+
+# Apenas Terraform
+./scripts/test-infrastructure.sh --type terraform --environment dev
+
+# Dry run
+./scripts/test-infrastructure.sh --dry-run --verbose
+
+# Testar endpoints de produção
+./scripts/test-infrastructure.sh --type endpoints --environment prod --provider aws
+```
+
+### Validações Incluídas
+
+- ✅ Sintaxe Terraform
+- ✅ Validação de playbooks Ansible
+- ✅ Conectividade de endpoints
+- ✅ Validação de workflows GitHub Actions
+- ✅ Sintaxe de scripts Python/Shell
+
+## 🔄 Rollback
+
+Em caso de problemas, use o script de rollback:
+
+```bash
+# Rollback desenvolvimento
+./scripts/rollback.sh --environment dev --provider azure
+
+# Rollback produção (com confirmação)
+./scripts/rollback.sh --environment prod --provider aws
+
+# Dry run do rollback
+./scripts/rollback.sh --environment staging --provider azure --dry-run
+```
+
+## 📊 Monitoramento
+
+### Health Checks Automáticos
+
+- **Development**: <https://dev.promata.ages.pucrs.br>
+- **Staging**: <https://staging.promata.ages.pucrs.br>
+- **Production**: <https://promata.ages.pucrs.br>
+
+### Notificações Discord
+
+O sistema envia notificações automáticas via Discord para:
+
+- ✅ Deployments bem-sucedidos
+- ❌ Falhas de deployment
+- 🔄 Rollbacks executados
+- 🏗️ Atualizações de infraestrutura
+
+## 🔧 Configuração
+
+### Secrets Necessários
+
+#### GitHub Secrets
+
+```text
+GITLAB_TOKEN=xxx               # Token GitLab AGES
+GITLAB_PROJECT_ID=xxx          # ID do projeto GitLab
+GIT_TOKEN=xxx                  # Token GitHub
+
+# Azure (Dev/Staging)
+AZURE_CREDENTIALS=xxx          # Service Principal JSON
+SSH_PRIVATE_KEY_DEV=xxx        # Chave SSH desenvolvimento  
+SSH_PRIVATE_KEY_STAGING=xxx    # Chave SSH staging
+
+# AWS (Production)
+AWS_ACCESS_KEY_ID=xxx          # Access Key AWS
+AWS_SECRET_ACCESS_KEY=xxx      # Secret Key AWS
+SSH_PRIVATE_KEY_PROD=xxx       # Chave SSH produção
+
+# Notificações
+DISCORD_WEBHOOK_URL=xxx        # Webhook Discord
+```
+
+#### GitHub Variables
+
+```text
+GITLAB_URL=https://tools.ages.pucrs.br
+```
+
+### Configuração de Ambientes
+
+Cada ambiente possui:
+
+- `variables.tfvars` - Variáveis Terraform
+- `docker-compose.template.yml` - Template Docker Compose
+- `inventory.yml` - Inventário Ansible (Azure environments)
+
+## 📚 Links Úteis
+
+### Aplicações
+
+- 🧪 **Dev**: [App](https://dev.promata.ages.pucrs.br) | [API](https://api-dev.promata.ages.pucrs.br)
+- 🎭 **Staging**: [App](https://staging.promata.ages.pucrs.br) | [API](https://api-staging.promata.ages.pucrs.br)
+- 🌟 **Prod**: [App](https://promata.ages.pucrs.br) | [API](https://api.promata.ages.pucrs.br)
+
+### Repositórios Relacionados
+
+- 🌐 [Frontend](https://github.com/AGES-Pro-Mata/frontend)
+- 🖥️ [Backend](https://github.com/AGES-Pro-Mata/backend)
+- 🗄️ [Database](https://github.com/AGES-Pro-Mata/database)
+
+### GitLab AGES
+
+- 🦊 [Projeto GitLab](https://tools.ages.pucrs.br/pro-mata/infra)
+- 📋 [Board Kanban](https://tools.ages.pucrs.br/pro-mata/infra/-/boards)
+
+## 🔒 Segurança
+
+### Práticas Implementadas
+
+- 🔐 Rotação automática de secrets
+- 🛡️ Validação de imagens antes do deploy
+- 🔍 Scan de vulnerabilidades em containers
+- 📊 Monitoramento de segurança contínuo
+- 🚨 Alertas automáticos para falhas críticas
+
+### Tags de Produção
+
+Apenas tags estáveis são aceitas em produção:
+
+- ✅ `latest`
+- ✅ `v1.2.3` (semver)
+- ❌ `dev`, `feature-*`
+
+## 🤝 Contribuição
+
+### Workflow de Mudanças
+
+1. Criar branch `feature/nome-da-mudanca`
+2. Fazer alterações e testar localmente
+3. Executar `./scripts/test-infrastructure.sh`
+4. Criar Pull Request
+5. Aguardar review e merge
+
+### Padrões de Commit
+
+```text
+feat(terraform): adiciona suporte para Azure Container Instances
+fix(ansible): corrige configuração de nginx
+docs(readme): atualiza instruções de deployment
+```
+
+## 📞 Suporte
+
+- 💬 **Discord**: Canal #infra-pro-mata
+- 📧 **Email**: <promata@ages.pucrs.br>
+- 🐛 **Issues**: [GitHub Issues](https://github.com/AGES-Pro-Mata/infra/issues)
 
 ---
 
-**Pro-Mata** - Centro de Pesquisas e Proteção da Natureza - PUCRS
+**Pro-Mata Infrastructure System - AGES PUCRS**  
+*Infraestrutura como Código para o Sistema Pro-Mata*

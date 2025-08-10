@@ -1,6 +1,7 @@
 name: Deploy to Development Environment
 
 on:
+  if: false # 🚫 DISABLED
   workflow_call:
     inputs:
       backend_image_tag:

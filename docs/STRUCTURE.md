@@ -1,44 +1,36 @@
-# infrastructure
+# 🏗️ Pro-Mata Infrastructure
 
-This repo stores infrastructure specific artifacts for the MATA project, including Terraform configurations, Ansible playbooks, Dockerfiles, and CI/CD scripts.
+Este repositório armazena artefatos específicos de infraestrutura para o projeto Pro-Mata AGES, incluindo configurações Terraform, playbooks Ansible, Dockerfiles e scripts de CI/CD.
 
-## Project Structure
+## 📁 Estrutura do Projeto
 
 ```plaintext
-infrastructure/
+infra/
 ├── README.md
-├── .env.example
-├── .gitignore
-├── deploy.sh
-├── destroy.sh
-├── save-terraform-state.sh
-├── terraform/
+├── .github/workflows/           # GitHub Actions (padrão frontend)
+│   ├── ci-cd.yml               # Pipeline principal (DESABILITADO)
+│   ├── discord-notify-extended.yml  # Notificações Discord
+│   ├── gitlab-sync.yml         # Sincronização GitLab  
+│   └── notify-pr.yml           # Notificações de PR
+├── terraform/                  # Infraestrutura como Código
 │   ├── modules/
 │   │   └── common/
 │   │       ├── security-rules/
 │   │       ├── ssh-keys/
 │   │       ├── inventory/
 │   │       └── service-config/
-│   ├── aws/
+│   ├── aws/                    # Produção (ECS Fargate)
 │   │   ├── main.tf
-│   │   ├── providers.tf
 │   │   ├── variables.tf
 │   │   ├── outputs.tf
-│   │   ├── network.tf
-│   │   ├── instance.tf
-│   │   └── inventory.tf
-│   └── azure/
+│   │   └── providers.tf
+│   └── azure/                  # Dev/Staging (Docker Swarm)
 │       ├── main.tf
-│       ├── providers.tf
 │       ├── variables.tf
 │       ├── outputs.tf
-│       ├── resource_group.tf
-│       ├── network.tf
-│       ├── vm.tf
-│       └── inventory.tf
-│
+│       └── providers.tf
 ├── deployment/
-│   ├── ansible/
+│   ├── ansible/                # Configuração e Deploy
 │   │   ├── playbooks/
 │   │   │   ├── ansible.cfg
 │   │   │   ├── swarm_setup.yml
@@ -52,8 +44,7 @@ infrastructure/
 │   │           └── pgadmin/
 │   └── swarm/
 │       └── stack.yml.j2
-│
-├── docker/
+├── docker/                     # Configurações Docker
 │   ├── backend/
 │   │   ├── Dockerfile.dev
 │   │   ├── Dockerfile.prod
@@ -66,39 +57,63 @@ infrastructure/
 │       ├── postgresql/
 │       ├── pgbouncer/
 │       └── pgadmin/
-│
-├── ci-cd/
-│   ├── github-actions/
-│   │   ├── build-backend.yml
-│   │   ├── build-frontend.yml
-│   │   ├── deploy-dev.yml
-│   │   ├── deploy-prod.yml
-│   │   └── infrastructure-update.yml
-│   └── scripts/
-│       ├── build-and-push.sh
-│       ├── deploy-to-environment.sh
-│       └── health-check.sh
-│
-├── environments/
+├── environments/               # Configurações por Ambiente
 │   ├── dev/
-│   │   ├── .env.dev
-│   │   └── docker-compose.dev.yml
+│   │   └── .env.dev           # Azure East US 2
+│   ├── staging/
+│   │   └── .env.staging       # Azure East US 2  
 │   ├── prod/
-│   │   ├── .env.prod
-│   │   └── docker-compose.prod.yml
+│   │   └── .env.prod          # AWS US East 1
 │   └── local/
-│       ├── .env.local
-│       └── docker-compose.local.yml
-│
-├── monitoring/
+│       └── .env.local
+├── monitoring/                 # Observabilidade
 │   ├── prometheus/
 │   ├── grafana/
 │   └── logs/
-│
+├── scripts/                    # Scripts de Automação
+│   ├── sync-infrastructure.py  # Sincronização GitLab
+│   ├── notify-deployment.sh    # Notificações Discord
+│   ├── rollback.sh            # Rollback automatizado
+│   └── test-infrastructure.sh  # Testes de infraestrutura
 └── docs/
     ├── SETUP.md
-    ├── DEPLOYMENT.md
-    ├── CI-CD.md
-    ├── TROUBLESHOOTING.md
-    └── ARCHITECTURE.md
+    └── STRUCTURE.md
 ```
+
+## 🌐 Arquitetura de Ambientes
+
+### 🧪 **Development & Staging** (Azure East US 2)
+
+- **Plataforma**: Azure Container Instances + Docker Swarm
+- **Compute**: Standard_B2s/B2ms VMs
+- **Rede**: VNet 10.1.0.0/16 (dev), 10.2.0.0/16 (staging)
+- **Armazenamento**: Premium SSD
+- **Monitoramento**: Azure Monitor
+
+### 🌟 **Production** (AWS US East 1)
+
+- **Plataforma**: Amazon ECS Fargate
+- **Compute**: Fargate 512 CPU / 1024 Memory
+- **Rede**: VPC 10.0.0.0/16 com subnets privadas/públicas
+- **Balanceamento**: Application Load Balancer
+- **Monitoramento**: CloudWatch + Container Insights
+
+## 🔧 Configuração de Infraestrutura
+
+### Terraform Modules
+
+- **`terraform/azure/`**: Infraestrutura de desenvolvimento e staging
+- **`terraform/aws/`**: Infraestrutura de produção
+- **`terraform/modules/common/`**: Módulos reutilizáveis
+
+### Ansible Roles
+
+- **`deployment/ansible/roles/`**: Configuração automática de serviços
+- **`deployment/swarm/`**: Configuração do Docker Swarm para Azure
+
+### Environment Variables
+
+- **`environments/dev/`**: Configurações de desenvolvimento
+- **`environments/staging/`**: Configurações de staging  
+- **`environments/prod/`**: Configurações de produção
+- **`environments/local/`**: Desenvolvimento local

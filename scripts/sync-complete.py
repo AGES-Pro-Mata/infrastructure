@@ -6,13 +6,12 @@ Para uso no projeto Pro-Mata PUCRS
 """
 
 import os
-import json
-import requests
-import gitlab
 import subprocess
 import sys
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List
+import requests
+import gitlab
 
 class ProMataCompleteSyncer:
     def __init__(self):
@@ -21,10 +20,11 @@ class ProMataCompleteSyncer:
         self.gitlab_url = os.environ.get('GITLAB_URL', 'https://tools.ages.pucrs.br')
         self.gitlab_token = os.environ.get('GITLAB_TOKEN')
         self.gitlab_project_id = os.environ.get('GITLAB_PROJECT_ID')
+        self.gitlab_group_id = os.environ.get('GITLAB_GROUP_ID', '1735')
         self.repo_name = os.environ.get('GITHUB_REPOSITORY')
         
         # Validar configurações
-        if not all([self.git_token, self.gitlab_token, self.gitlab_project_id, self.repo_name]):
+        if not all([self.git_token, self.gitlab_token, self.gitlab_group_id, self.repo_name]):
             raise ValueError("Configurações incompletas. Verifique os secrets.")
         
         # Clientes API
@@ -49,8 +49,8 @@ class ProMataCompleteSyncer:
         
         # Tentar acessar o projeto ou criar se não existir
         try:
-            # Se GITLAB_PROJECT_ID for fornecido, tentar usar
-            if self.gitlab_project_id and self.gitlab_project_id != '1735':
+            # Se GITLAB_PROJECT_ID for fornecido e não estiver vazio, tentar usar
+            if self.gitlab_project_id and self.gitlab_project_id.strip():
                 try:
                     self.project = self.gl.projects.get(self.gitlab_project_id)
                     self.log(f"✅ Projeto encontrado: {self.project.name}")
@@ -62,7 +62,7 @@ class ProMataCompleteSyncer:
             
             # Se não encontrou projeto, buscar por nome no grupo
             if not self.project:
-                group = self.gl.groups.get(1735)  # Group ID do Pró-Mata
+                group = self.gl.groups.get(self.gitlab_group_id)
                 projects = group.projects.list(search=self.gitlab_repo_name)
                 
                 if projects:
@@ -70,7 +70,7 @@ class ProMataCompleteSyncer:
                     self.log(f"✅ Projeto encontrado por nome: {self.project.name} (ID: {self.project.id})")
                 else:
                     # Criar projeto automaticamente
-                    self.log(f"📝 Criando projeto '{self.gitlab_repo_name}' no grupo Pró-Mata...")
+                    self.log(f"📝 Criando projeto '{self.gitlab_repo_name}' no grupo...")
                     self.project = self._create_project_in_group(group)
                     
         except Exception as e:
@@ -102,6 +102,12 @@ class ProMataCompleteSyncer:
             project = self.gl.projects.create(project_data)
             self.log(f"✅ Projeto criado com sucesso: {project.name} (ID: {project.id})")
             self.log(f"🔗 URL: {project.web_url}")
+            
+            # Configurar variável de ambiente para próximas execuções
+            if 'GITHUB_ENV' in os.environ:
+                with open(os.environ['GITHUB_ENV'], 'a') as f:
+                    f.write(f"GITLAB_PROJECT_ID={project.id}\n")
+                self.log(f"📝 GITLAB_PROJECT_ID configurado para próximas execuções: {project.id}")
             
             return project
             

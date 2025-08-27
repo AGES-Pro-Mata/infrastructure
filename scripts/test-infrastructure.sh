@@ -122,7 +122,7 @@ execute_test() {
 
 # Check if we're in the right directory
 check_directory() {
-    if [[ ! -f ".github/workflows/infrastructure-deployment.yml" ]]; then
+    if [[ ! -f ".github/workflows/ci-cd.yml" ]]; then
         print_error "Not in infrastructure repository root"
         exit 1
     fi

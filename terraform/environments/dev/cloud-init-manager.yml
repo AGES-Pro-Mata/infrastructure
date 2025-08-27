@@ -1,0 +1,99 @@
+#cloud-config
+# Cloud-init for Pro-Mata Swarm Manager
+
+users:
+  - name: promata
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    groups: [docker, sudo]
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - docker.io
+  - docker-compose
+  - curl
+  - wget
+  - git
+  - htop
+  - ncdu
+  - unzip
+  - jq
+
+runcmd:
+  # Docker setup
+  - systemctl enable docker
+  - systemctl start docker
+  - usermod -aG docker promata
+  
+  # Install Docker Compose v2
+  - curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+  - chmod +x /usr/local/bin/docker-compose
+  - ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
+  
+  # Create directories
+  - mkdir -p /opt/promata/{scripts,stacks,configs,logs,data}
+  - chown -R promata:promata /opt/promata
+  
+  # Set timezone
+  - timedatectl set-timezone America/Sao_Paulo
+  
+  # Configure log rotation
+  - echo '/var/log/promata/*.log { daily missingok rotate 7 compress delaycompress notifempty copytruncate }' > /etc/logrotate.d/promata
+  
+  # Create swap file (helps with small VMs)
+  - fallocate -l 2G /swapfile
+  - chmod 600 /swapfile
+  - mkswap /swapfile
+  - swapon /swapfile
+  - echo '/swapfile none swap sw 0 0' >> /etc/fstab
+  
+  # Install Node.js (for development tools)
+  - curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+  - apt-get install -y nodejs
+  
+  # Create ready marker
+  - touch /opt/promata/.cloud-init-done
+  
+write_files:
+  - path: /opt/promata/scripts/node-ready.sh
+    permissions: '0755'
+    owner: promata:promata
+    content: |
+      #!/bin/bash
+      echo "🏗️  Pro-Mata Swarm Manager Node Ready"
+      echo "📅 Initialized: $(date)"
+      echo "🐳 Docker: $(docker --version)"
+      echo "🔧 Docker Compose: $(docker-compose --version)"
+      echo "💾 Memory: $(free -h | grep Mem | awk '{print $2}')"
+      echo "💽 Disk: $(df -h / | tail -1 | awk '{print $4}')"
+      echo "🌐 IP: $(curl -s http://checkip.amazonaws.com/)"
+      
+  - path: /etc/docker/daemon.json
+    permissions: '0644'
+    content: |
+      {
+        "log-driver": "json-file",
+        "log-opts": {
+          "max-size": "10m",
+          "max-file": "3"
+        },
+        "storage-driver": "overlay2",
+        "metrics-addr": "0.0.0.0:9323",
+        "experimental": true
+      }
+
+final_message: |
+  Pro-Mata Swarm Manager is ready!
+  
+  Node info:
+  - Role: Docker Swarm Manager
+  - User: promata
+  - Docker: Installed and running
+  - Location: /opt/promata/
+  
+  Next steps:
+  1. SSH: ssh promata@<public-ip>
+  2. Initialize swarm: docker swarm init
+  3. Deploy stacks: /opt/promata/scripts/deploy.sh

@@ -32,11 +32,8 @@ env:
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
 
 jobs:
-  # 🚫 TEMPORARILY DISABLED - Infrastructure CI/CD
-  # Remove the condition below to re-enable
   determine-environment:
     runs-on: ubuntu-latest
-    if: false  # 🚫 DISABLED
     outputs:
       environment: ${{ steps.env.outputs.environment }}
       backend_image_tag: ${{ steps.env.outputs.backend_image_tag }}

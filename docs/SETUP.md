@@ -44,13 +44,6 @@ az login
 az account set --subscription "sua-subscription-id"
 ```
 
-#### GitHub Container Registry
-
-```bash
-# Configurar acesso ao GHCR
-echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
-```
-
 ## 🌐 Configuração por Ambiente
 
 ### 🧪 Development (Azure)
@@ -72,8 +65,8 @@ AZURE_LOCATION=eastus2
 
 # Application
 ENVIRONMENT=development
-BACKEND_IMAGE=ghcr.io/ages-pro-mata/backend:latest
-FRONTEND_IMAGE=ghcr.io/ages-pro-mata/frontend:latest
+BACKEND_IMAGE=norohim/pro-mata-backend-dev
+FRONTEND_IMAGE=gnorohim/pro-mata-frontend-dev
 
 # Database
 POSTGRES_DB=pro_mata_dev
@@ -118,8 +111,8 @@ AWS_ACCOUNT_ID=123456789012
 
 # Application
 ENVIRONMENT=production
-BACKEND_IMAGE=ghcr.io/ages-pro-mata/backend:latest
-FRONTEND_IMAGE=ghcr.io/ages-pro-mata/frontend:latest
+BACKEND_IMAGE=norohim/pro-mata-backend-dev:latest
+FRONTEND_IMAGE=norohim/pro-mata-frotnend-dev:latest
 
 # Database
 POSTGRES_DB=pro_mata_prod
@@ -228,7 +221,7 @@ telnet <node-ip> 2377
 docker system info | grep Registry
 
 # Re-login
-echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
+docker login
 ```
 
 ## 📊 Monitoramento
@@ -265,7 +258,7 @@ az container logs --resource-group pro-mata-dev-rg --name pro-mata-backend
 
 ```bash
 # Azure (Docker Swarm)
-docker service update --image ghcr.io/ages-pro-mata/backend:latest pro-mata-backend
+docker service update --image docker.io/ages-pro-mata/backend:latest pro-mata-backend
 
 # AWS (ECS)
 aws ecs update-service --cluster pro-mata-prod --service pro-mata-backend --force-new-deployment

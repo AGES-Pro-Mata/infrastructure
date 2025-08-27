@@ -21,7 +21,6 @@ on:
 
 jobs:
   deploy-infrastructure:
-    if: false # 🚫 DISABLED
     runs-on: ubuntu-latest
     environment: development
     
@@ -35,7 +34,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.5.0
+          terraform_version: 1.8.0
 
       - name: Setup Azure CLI
         uses: azure/setup-cli@v1
@@ -62,7 +61,6 @@ jobs:
           ../../save-terraform-state.sh --provider azure --action save --storage github
 
   deploy-application:
-    if: false # 🚫 DISABLED
     needs: deploy-infrastructure
     runs-on: ubuntu-latest
     environment: development

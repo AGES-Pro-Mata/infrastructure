@@ -1,0 +1,73 @@
+# Deploy Scripts Task
+---
+- name: Deploy Docker stack files
+  template:
+    src: "{{ item.src }}"
+    dest: "/opt/promata/stacks/{{ item.dest }}"
+    mode: '0644'
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+  loop:
+    - { src: "proxy-stack.yml.j2", dest: "proxy-stack.yml" }
+    - { src: "app-stack.yml.j2", dest: "app-stack.yml" }
+    - { src: "database-stack.yml.j2", dest: "database-stack.yml" }
+
+- name: Deploy management scripts
+  template:
+    src: "{{ item.src }}"
+    dest: "/opt/promata/scripts/{{ item.dest }}"
+    mode: '0755'
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+  loop:
+    - { src: "deploy-stacks.sh.j2", dest: "deploy-stacks.sh" }
+    - { src: "update-stacks.sh.j2", dest: "update-stacks.sh" }
+    - { src: "health-check.sh.j2", dest: "health-check.sh" }
+    - { src: "backup-database.sh.j2", dest: "backup-database.sh" }
+    - { src: "duckdns-updater.sh.j2", dest: "duckdns-updater.sh" }
+    - { src: "rollback.sh.j2", dest: "rollback.sh" }
+
+- name: Deploy environment file for stacks
+  template:
+    src: stack.env.j2
+    dest: /opt/promata/.env
+    mode: '0600'
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+
+- name: Create symbolic links for common commands
+  file:
+    src: "/opt/promata/scripts/{{ item.src }}"
+    dest: "/usr/local/bin/{{ item.dest }}"
+    state: link
+  loop:
+    - { src: "health-check.sh", dest: "promata-health" }
+    - { src: "backup-database.sh", dest: "promata-backup" }
+    - { src: "duckdns-updater.sh", dest: "promata-dns-update" }
+  
+- name: Configure cron job for DuckDNS updates
+  cron:
+    name: "DuckDNS IP update"
+    minute: "*/5"
+    job: "/opt/promata/scripts/duckdns-updater.sh >> /var/log/promata/duckdns.log 2>&1"
+    user: "{{ ansible_user }}"
+
+- name: Configure cron job for daily backups
+  cron:
+    name: "Daily database backup"
+    minute: "0"
+    hour: "2"
+    job: "/opt/promata/scripts/backup-database.sh >> /var/log/promata/backup.log 2>&1"
+    user: "{{ ansible_user }}"
+
+- name: Create helper aliases in bashrc
+  lineinfile:
+    path: "/home/{{ ansible_user }}/.bashrc"
+    line: "{{ item }}"
+    create: yes
+  loop:
+    - "alias promata-status='docker service ls'"
+    - "alias promata-logs='docker service logs -f'"
+    - "alias promata-health='/opt/promata/scripts/health-check.sh'"
+    - "alias promata-backup='/opt/promata/scripts/backup-database.sh'"
+    - "alias promata-update-dns='/opt/promata/scripts/duckdns-updater.sh'"

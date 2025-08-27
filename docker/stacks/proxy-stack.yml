@@ -1,0 +1,125 @@
+# Traefik Proxy Stack - Pro-Mata Infrastructure
+# Handles: Reverse Proxy, Load Balancing, SSL/TLS, Service Discovery
+
+version: "3.8"
+
+services:
+  traefik:
+    image: traefik:v3.0
+    command:
+      # API and Dashboard
+      - --api=true
+      - --api.dashboard=true
+      - --api.insecure=false
+      
+      # Providers
+      - --providers.docker=true
+      - --providers.docker.swarmMode=true
+      - --providers.docker.exposedByDefault=false
+      - --providers.docker.network=promata_public
+      
+      # Entry points
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      
+      # SSL/TLS with Let's Encrypt
+      - --certificatesresolvers.letsencrypt.acme.tlschallenge=true
+      - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.letsencrypt.acme.caserver=https://acme-v02.api.letsencrypt.org/directory
+      
+      # HTTP to HTTPS redirect
+      - --entrypoints.web.http.redirections.entryPoint.to=websecure
+      - --entrypoints.web.http.redirections.entryPoint.scheme=https
+      - --entrypoints.web.http.redirections.entrypoint.permanent=true
+      
+      # Logging
+      - --log.level=${TRAEFIK_LOG_LEVEL:-INFO}
+      - --accesslog=true
+      - --accesslog.filepath=/logs/access.log
+      
+      # Metrics
+      - --metrics.prometheus=true
+      - --metrics.prometheus.addentrypointslabels=true
+      - --metrics.prometheus.addserviceslabels=true
+      
+    ports:
+      - "80:80"     # HTTP
+      - "443:443"   # HTTPS  
+      - "8080:8080" # Dashboard (internal only)
+    
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_letsencrypt:/letsencrypt
+      - traefik_logs:/logs
+    
+    networks:
+      - promata_public
+      - promata_internal
+    
+    environment:
+      - TRAEFIK_API_DASHBOARD=${TRAEFIK_API_DASHBOARD:-true}
+      - ACME_EMAIL=${ACME_EMAIL}
+      - TRAEFIK_LOG_LEVEL=${TRAEFIK_LOG_LEVEL:-INFO}
+    
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      labels:
+        # Traefik Dashboard
+        - traefik.enable=true
+        - traefik.http.routers.traefik-dashboard.rule=Host(`traefik.${DOMAIN_NAME}`)
+        - traefik.http.routers.traefik-dashboard.entrypoints=websecure
+        - traefik.http.routers.traefik-dashboard.tls.certresolver=letsencrypt
+        - traefik.http.routers.traefik-dashboard.service=api@internal
+        - traefik.http.routers.traefik-dashboard.middlewares=auth
+        
+        # Basic Auth for Dashboard
+        - traefik.http.middlewares.auth.basicauth.users=${TRAEFIK_AUTH_USERS}
+        
+        # Dashboard service
+        - traefik.http.services.traefik-dashboard.loadbalancer.server.port=8080
+    
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # DuckDNS Updater
+  duckdns-updater:
+    image: linuxserver/duckdns:latest
+    environment:
+      - PUID=1000
+      - PGID=1000  
+      - SUBDOMAINS=${DUCKDNS_DOMAIN}
+      - TOKEN=${DUCKDNS_TOKEN}
+      - UPDATE_IP=ipv4
+      - LOG_FILE=false
+    
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+      restart_policy:
+        condition: on-failure
+        delay: 30s
+    
+    networks:
+      - promata_internal
+
+volumes:
+  traefik_letsencrypt:
+    driver: local
+  traefik_logs:
+    driver: local
+
+networks:
+  promata_public:
+    external: true
+  promata_internal:
+    external: true

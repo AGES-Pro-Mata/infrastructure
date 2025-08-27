@@ -1,0 +1,102 @@
+# Docker Role - Pro-Mata Infrastructure
+---
+- name: Install Docker dependencies
+  apt:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg
+      - lsb-release
+    state: present
+    update_cache: yes
+
+- name: Add Docker GPG key
+  apt_key:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    state: present
+
+- name: Add Docker repository
+  apt_repository:
+    repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+    state: present
+
+- name: Install Docker
+  apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    state: present
+    update_cache: yes
+
+- name: Start and enable Docker service
+  systemd:
+    name: docker
+    state: started
+    enabled: yes
+
+- name: Add users to docker group
+  user:
+    name: "{{ ansible_user }}"
+    groups: docker
+    append: yes
+
+- name: Configure Docker daemon
+  template:
+    src: daemon.json.j2
+    dest: /etc/docker/daemon.json
+    backup: yes
+  notify: restart docker
+
+- name: Install Docker Compose standalone (for compatibility)
+  get_url:
+    url: "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64"
+    dest: /usr/local/bin/docker-compose
+    mode: '0755'
+    owner: root
+    group: root
+
+- name: Create symbolic link for docker-compose
+  file:
+    src: /usr/local/bin/docker-compose
+    dest: /usr/bin/docker-compose
+    state: link
+
+- name: Install Docker Python library
+  pip:
+    name:
+      - docker
+      - docker-compose
+    state: present
+
+- name: Create Docker log rotation
+  template:
+    src: docker-logrotate.j2
+    dest: /etc/logrotate.d/docker
+    mode: '0644'
+
+- name: Verify Docker installation
+  command: docker --version
+  register: docker_version_output
+  changed_when: false
+
+- name: Display Docker version
+  debug:
+    msg: "Docker installed: {{ docker_version_output.stdout }}"
+
+- name: Test Docker functionality
+  docker_container:
+    name: hello-world-test
+    image: hello-world
+    state: started
+    detach: no
+    cleanup: yes
+  register: hello_world_test
+  
+- name: Remove test container
+  docker_container:
+    name: hello-world-test
+    state: absent

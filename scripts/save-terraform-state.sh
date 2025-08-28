@@ -79,9 +79,9 @@ PROJECT_ROOT=$(pwd)
 
 # Set terraform directory based on provider and environment
 if [[ "$PROVIDER" == "aws" ]]; then
-    TERRAFORM_DIR="terraform/aws"
+    TERRAFORM_DIR="environments/${ENVIRONMENT}/aws"
 elif [[ "$PROVIDER" == "azure" ]]; then
-    TERRAFORM_DIR="terraform/azure"
+    TERRAFORM_DIR="environments/${ENVIRONMENT}/azure"
 else
     echo -e "${RED}Invalid provider: ${PROVIDER}. Must be 'aws' or 'azure'.${NC}"
     exit 1

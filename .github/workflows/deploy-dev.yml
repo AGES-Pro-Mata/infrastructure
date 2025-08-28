@@ -35,9 +35,6 @@ jobs:
         with:
           terraform_version: 1.8.0
 
-      - name: Setup Azure CLI
-        uses: azure/setup-cli@v1
-
       - name: Azure Login
         uses: azure/login@v1
         with:

@@ -304,7 +304,7 @@ reporting:
   
   schedule: "0 6 * * 1"  # Segunda-feira às 6h
   recipients:
-    - "security@promata.ages.pucrs.br"
+    - "security@promata.duckdns.org"
 
 dashboard:
   enabled: true

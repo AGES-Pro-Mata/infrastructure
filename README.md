@@ -467,13 +467,6 @@ docker service update --rollback promata_frontend
 4. **Push**: `git push origin feature/nova-funcionalidade`
 5. **PR**: Criar Pull Request
 
-## 📞 Suporte e Contatos
-
-- 💬 **Discord**: Canal #infra-pro-mata
-- 📧 **Email**: <promata@ages.pucrs.br>
-- 🐛 **Issues**: [GitHub Issues](https://github.com/AGES-Pro-Mata/infrastructure/issues)
-- 📚 **Docs**: [Documentação Completa](./docs/)
-
 ---
 
 **Pro-Mata Infrastructure** - AGES PUCRS  

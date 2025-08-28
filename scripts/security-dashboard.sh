@@ -205,10 +205,10 @@ EOF
             services=("Backend API:http://localhost:3000/health" "PostgreSQL:localhost:5432" "Redis:localhost:6379")
             ;;
         "staging")
-            services=("Backend API:https://api-staging.promata.ages.pucrs.br/health" "Frontend:https://staging.promata.ages.pucrs.br")
+            services=("Backend API:https://api-staging.promata.duckdns.org/health" "Frontend:https://staging.promata.duckdns.org")
             ;;
         "prod")
-            services=("Backend API:https://api.promata.ages.pucrs.br/health" "Frontend:https://promata.ages.pucrs.br")
+            services=("Backend API:https://api.promata.duckdns.org/health" "Frontend:https://promata.duckdns.org")
             ;;
         *)
             services=("Sistema:localhost:22")

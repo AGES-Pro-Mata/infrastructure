@@ -102,16 +102,16 @@ get_environment_config() {
     
     case "$env" in
         "dev")
-            echo "development" "🧪" "3447003" "https://dev.promata.ages.pucrs.br" "https://api-dev.promata.ages.pucrs.br"
+            echo "development" "🧪" "3447003" "https://dev.promata.duckdns.org" "https://api-dev.promata.duckdns.org"
             ;;
         "staging")
-            echo "staging" "🎭" "16776960" "https://staging.promata.ages.pucrs.br" "https://api-staging.promata.ages.pucrs.br"
+            echo "staging" "🎭" "16776960" "https://staging.promata.duckdns.org" "https://api-staging.promata.duckdns.org"
             ;;
         "prod")
-            echo "production" "🌟" "65280" "https://promata.ages.pucrs.br" "https://api.promata.ages.pucrs.br"
+            echo "production" "🌟" "65280" "https://promata.duckdns.org" "https://api.promata.duckdns.org"
             ;;
         *)
-            echo "unknown" "❓" "8421504" "https://unknown.promata.ages.pucrs.br" "https://api-unknown.promata.ages.pucrs.br"
+            echo "unknown" "❓" "8421504" "https://unknown.promata.duckdns.org" "https://api-unknown.promata.duckdns.org"
             ;;
     esac
 }

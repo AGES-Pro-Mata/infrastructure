@@ -732,7 +732,6 @@ show_help() {
     echo -e "${CYAN}🆘 SUPORTE:${NC}"
     echo ""
     echo "• Discord: Canal #infra-pro-mata"
-    echo "• Email: security@promata.ages.pucrs.br"
     echo "• GitHub Issues: https://github.com/AGES-Pro-Mata/infra/issues"
     echo ""
     echo -e "${CYAN}🚨 COMANDOS DE EMERGÊNCIA:${NC}"

@@ -9,4 +9,4 @@ roles:
   - name: geerlingguy.docker
     version: "7.0.2"
   - name: geerlingguy.pip
-    version: "2.2.0"s
+    version: "2.2.0"

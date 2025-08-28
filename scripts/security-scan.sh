@@ -567,13 +567,13 @@ scan_ssl_certificates() {
     local endpoints
     case "$ENVIRONMENT" in
         "dev")
-            endpoints="dev.promata.ages.pucrs.br:443 api-dev.promata.ages.pucrs.br:443"
+            endpoints="dev.promata.duckdns.org:443 api-dev.promata.duckdns.org:443"
             ;;
         "staging")
-            endpoints="staging.promata.ages.pucrs.br:443 api-staging.promata.ages.pucrs.br:443"
+            endpoints="staging.promata.duckdns.org:443 api-staging.promata.duckdns.org:443"
             ;;
         "prod")
-            endpoints="promata.ages.pucrs.br:443 api.promata.ages.pucrs.br:443"
+            endpoints="promata.duckdns.org:443 api.promata.duckdns.org:443"
             ;;
         *)
             endpoints=""

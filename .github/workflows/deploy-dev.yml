@@ -22,7 +22,7 @@ on:
 jobs:
   deploy-infrastructure:
     runs-on: ubuntu-latest
-    environment: development
+    environment: dev
     
     steps:
       - name: Checkout Infrastructure Code
@@ -63,7 +63,7 @@ jobs:
   deploy-application:
     needs: deploy-infrastructure
     runs-on: ubuntu-latest
-    environment: development
+    environment: dev
     
     steps:
       - name: Checkout Infrastructure Code

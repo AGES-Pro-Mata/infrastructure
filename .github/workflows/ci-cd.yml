@@ -59,7 +59,7 @@ jobs:
           fi
           
           # Set cloud provider based on environment
-          if [ "${{ steps.env.outputs.environment }}" = "dev" ]; then
+          if [ "$(echo $GITHUB_OUTPUT | grep environment= | cut -d= -f2)" = "dev" ]; then
             echo "cloud_provider=azure" >> $GITHUB_OUTPUT
           else
             echo "cloud_provider=aws" >> $GITHUB_OUTPUT
@@ -72,62 +72,128 @@ jobs:
     steps:
       - name: Verify Backend Image Exists
         run: |
-          docker manifest inspect ${{ env.DOCKER_REGISTRY }}/norohim/pro-mata-backend:${{ needs.determine-environment.outputs.backend_image_tag }}
+          echo "Checking backend image: ${{ env.DOCKER_REGISTRY }}/norohim/pro-mata-backend:${{ needs.determine-environment.outputs.backend_image_tag }}"
+          docker manifest inspect ${{ env.DOCKER_REGISTRY }}/norohim/pro-mata-backend:${{ needs.determine-environment.outputs.backend_image_tag }} || {
+            echo "Backend image not found. Available tags:"
+            curl -s "https://registry.hub.docker.com/v2/repositories/norohim/pro-mata-backend/tags/" | jq -r '.results[].name' | head -10
+            exit 1
+          }
 
       - name: Verify Frontend Image Exists
         run: |
-          docker manifest inspect ${{ env.DOCKER_REGISTRY }}/norohim/pro-mata-frontend:${{ needs.determine-environment.outputs.frontend_image_tag }}
+          echo "Checking frontend image: ${{ env.DOCKER_REGISTRY }}/norohim/pro-mata-frontend:${{ needs.determine-environment.outputs.frontend_image_tag }}"
+          docker manifest inspect ${{ env.DOCKER_REGISTRY }}/norohim/pro-mata-frontend:${{ needs.determine-environment.outputs.frontend_image_tag }} || {
+            echo "Frontend image not found. Available tags:"
+            curl -s "https://registry.hub.docker.com/v2/repositories/norohim/pro-mata-frontend/tags/" | jq -r '.results[].name' | head -10
+            exit 1
+          }
 
   deploy-to-development:
     needs: [determine-environment, check-images]
-    if: false # 🚫 DISABLED - workflow deploy-dev.yml required
-    runs-on: ubuntu-latest
-    steps:
-      - name: ⚠️ Deployment Disabled
-        run: |
-          echo "❌ Development deployment is disabled"
-          echo "To enable: create deploy-dev.yml workflow and remove 'if: false'"
+    if: needs.determine-environment.outputs.environment == 'dev'
+    uses: ./.github/workflows/deploy-dev.yml
+    with:
+      backend_image_tag: ${{ needs.determine-environment.outputs.backend_image_tag }}
+      frontend_image_tag: ${{ needs.determine-environment.outputs.frontend_image_tag }}
+    secrets:
+      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+      AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY_DEV }}
 
   deploy-to-production:
     needs: [determine-environment, check-images]
-    if: false # 🚫 DISABLED - workflow deploy-prod.yml required
-    runs-on: ubuntu-latest
-    steps:
-      - name: ⚠️ Deployment Disabled
-        run: |
-          echo "❌ Production deployment is disabled"
-          echo "To enable: create deploy-prod.yml workflow and remove 'if: false'"
+    if: needs.determine-environment.outputs.environment == 'prod'
+    uses: ./.github/workflows/deploy-prod.yml
+    with:
+      backend_image_tag: ${{ needs.determine-environment.outputs.backend_image_tag }}
+      frontend_image_tag: ${{ needs.determine-environment.outputs.frontend_image_tag }}
+    secrets:
+      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY_PROD }}
 
   rollback-on-failure:
-    needs: [deploy-to-development, deploy-to-production]
+    needs: [deploy-to-development, deploy-to-production, determine-environment]
     if: failure()
     runs-on: ubuntu-latest
     
     steps:
+      - name: Checkout Infrastructure Code
+        uses: actions/checkout@v4
+
       - name: Rollback Development
         if: needs.deploy-to-development.result == 'failure'
         run: |
           echo "Rolling back development deployment..."
-          # Implement rollback logic
+          chmod +x scripts/rollback.sh
+          ./scripts/rollback.sh --environment dev --provider azure
 
       - name: Rollback Production  
         if: needs.deploy-to-production.result == 'failure'
         run: |
           echo "Rolling back production deployment..."
-          # Implement rollback logic
+          chmod +x scripts/rollback.sh
+          ./scripts/rollback.sh --environment prod --provider aws
 
-  update-deployment-status:
-    needs: [deploy-to-development, deploy-to-production]
+  notify-deployment:
+    needs: [deploy-to-development, deploy-to-production, determine-environment]
     if: always()
     runs-on: ubuntu-latest
     
     steps:
-      - name: Update Status
+      - name: Checkout Infrastructure Code
+        uses: actions/checkout@v4
+
+      - name: Notify Success
+        if: needs.deploy-to-development.result == 'success' || needs.deploy-to-production.result == 'success'
+        run: |
+          echo "Deployment completed successfully!"
+          chmod +x scripts/notify-deployment.sh
+          ./scripts/notify-deployment.sh \
+            --status success \
+            --environment ${{ needs.determine-environment.outputs.environment }} \
+            --backend-tag ${{ needs.determine-environment.outputs.backend_image_tag }} \
+            --frontend-tag ${{ needs.determine-environment.outputs.frontend_image_tag }}
+
+      - name: Notify Failure
+        if: needs.deploy-to-development.result == 'failure' || needs.deploy-to-production.result == 'failure'
+        run: |
+          echo "Deployment failed!"
+          chmod +x scripts/notify-deployment.sh
+          ./scripts/notify-deployment.sh \
+            --status failure \
+            --environment ${{ needs.determine-environment.outputs.environment }} \
+            --backend-tag ${{ needs.determine-environment.outputs.backend_image_tag }} \
+            --frontend-tag ${{ needs.determine-environment.outputs.frontend_image_tag }}
+
+  update-deployment-status:
+    needs: [deploy-to-development, deploy-to-production, determine-environment]
+    if: always()
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Update Deployment Status
         run: |
           if [ "${{ needs.deploy-to-development.result }}" = "success" ] || [ "${{ needs.deploy-to-production.result }}" = "success" ]; then
             echo "✅ Deployment completed successfully"
-            # Update deployment tracking system
+            echo "Environment: ${{ needs.determine-environment.outputs.environment }}"
+            echo "Backend: ${{ needs.determine-environment.outputs.backend_image_tag }}"
+            echo "Frontend: ${{ needs.determine-environment.outputs.frontend_image_tag }}"
+            
+            # Update deployment tracking
+            curl -X POST "https://api.github.com/repos/${{ github.repository }}/deployments" \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "ref": "${{ github.sha }}",
+                "environment": "${{ needs.determine-environment.outputs.environment }}",
+                "description": "Pro-Mata deployment via CI/CD"
+              }' || echo "Failed to update deployment status"
           else
             echo "❌ Deployment failed"
-            # Send failure notifications
+            echo "Dev result: ${{ needs.deploy-to-development.result }}"
+            echo "Prod result: ${{ needs.deploy-to-production.result }}"
           fi

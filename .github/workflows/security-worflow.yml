@@ -416,6 +416,8 @@ jobs:
       - name: 📢 Enviar notificação Discord
         if: env.DISCORD_WEBHOOK_URL != ''
         uses: Ilshidur/action-discord@master
+        with:
+          args: '${{ steps.status.outputs.status_emoji }} Pro-Mata Security Pipeline - Status: ${{ steps.status.outputs.overall_status }}'
         env:
           DISCORD_WEBHOOK: ${{ env.DISCORD_WEBHOOK_URL }}
           DISCORD_EMBEDS: |
@@ -466,7 +468,6 @@ jobs:
         uses: 8398a7/action-slack@v3
         with:
           status: custom
-          webhook_url: ${{ env.SLACK_WEBHOOK_URL }}
           custom_payload: |
             {
               "text": "${{ steps.status.outputs.status_emoji }} Pro-Mata Security Pipeline Failed",

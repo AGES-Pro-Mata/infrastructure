@@ -134,10 +134,10 @@ test_terraform() {
     local terraform_dir
     case $ENVIRONMENT in
         "dev"|"staging")
-            terraform_dir="./terraform/azure"
+            terraform_dir="./environments/$ENVIRONMENT/azure"
             ;;
         "prod")
-            terraform_dir="./terraform/aws"
+            terraform_dir="./environments/$ENVIRONMENT/aws"
             ;;
         *)
             print_error "Unknown environment: $ENVIRONMENT"

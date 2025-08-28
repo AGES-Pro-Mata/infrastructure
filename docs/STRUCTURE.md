@@ -12,23 +12,20 @@ infra/
 │   ├── discord-notify-extended.yml  # Notificações Discord
 │   ├── gitlab-sync.yml         # Sincronização GitLab  
 │   └── notify-pr.yml           # Notificações de PR
-├── terraform/                  # Infraestrutura como Código
-│   ├── modules/
-│   │   └── common/
-│   │       ├── security-rules/
-│   │       ├── ssh-keys/
-│   │       ├── inventory/
-│   │       └── service-config/
-│   ├── aws/                    # Produção (ECS Fargate)
-│   │   ├── main.tf
-│   │   ├── variables.tf
-│   │   ├── outputs.tf
-│   │   └── providers.tf
-│   └── azure/                  # Dev/Staging (Docker Swarm)
-│       ├── main.tf
-│       ├── variables.tf
-│       ├── outputs.tf
-│       └── providers.tf
+├── environments/               # Environment-specific infrastructure
+│   ├── dev/
+│   │   └── azure/              # Development Azure infrastructure  
+│   │       ├── main.tf
+│   │       ├── variables.tf
+│   │       ├── outputs.tf
+│   │       ├── providers.tf
+│   │       ├── cloud-init.yml
+│   │       └── modules/
+│   │           └── common/
+│   ├── staging/
+│   │   └── azure/              # Staging Azure infrastructure
+│   └── prod/
+│       └── aws/                # Production AWS infrastructure (ECS Fargate)
 ├── deployment/
 │   ├── ansible/                # Configuração e Deploy
 │   │   ├── playbooks/

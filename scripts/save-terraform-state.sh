@@ -338,7 +338,7 @@ terraform/
 EOF
         
         git add README.md
-        git config --local user.email "terraform-state@promata.ages.pucrs.br"
+        git config --local user.email "terraform-state@promata.duckdns.org"
         git config --local user.name "Pro-Mata Terraform State"
         git commit -m "Initialize terraform-state branch for ${ENVIRONMENT}"
         git push origin "${GITHUB_BRANCH}"
@@ -462,7 +462,7 @@ EOF
                 exit 1
             }
             
-            git config --local user.email "terraform-state@promata.ages.pucrs.br"
+            git config --local user.email "terraform-state@promata.duckdns.org"
             git config --local user.name "Pro-Mata Terraform State"
             
             if git commit -m "Update Pro-Mata Terraform state for ${ENVIRONMENT}/${TERRAFORM_DIR} - $(date)" -q; then

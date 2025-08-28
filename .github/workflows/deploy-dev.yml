@@ -57,8 +57,7 @@ jobs:
       - name: Save Terraform State
         working-directory: ./terraform/azure
         run: |
-          # Save state to Azure Storage or GitHub
-          ../../save-terraform-state.sh --provider azure --action save --storage github
+          ../../scripts/save-terraform-state.sh --provider azure --action save --storage azure --environment dev
 
   deploy-application:
     needs: deploy-infrastructure

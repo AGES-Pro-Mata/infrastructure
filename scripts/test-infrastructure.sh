@@ -131,14 +131,19 @@ check_directory() {
 
 # Test Terraform configurations
 test_terraform() {
-    if [[ "$SKIP_TERRAFORM" == "true" ]]; then
-        print_warning "Skipping Terraform tests"
-        return 0
-    fi
-    
-    print_status "Testing Terraform configurations..."
-    
-    local terraform_dir="./environments/${ENVIRONMENT}/terraform"
+    local terraform_dir
+    case $ENVIRONMENT in
+        "dev"|"staging")
+            terraform_dir="./terraform/azure"
+            ;;
+        "prod")
+            terraform_dir="./terraform/aws"
+            ;;
+        *)
+            print_error "Unknown environment: $ENVIRONMENT"
+            return 1
+            ;;
+    esac
     
     if [[ ! -d "$terraform_dir" ]]; then
         print_error "Terraform directory not found: $terraform_dir"

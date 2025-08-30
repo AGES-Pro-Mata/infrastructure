@@ -12,14 +12,19 @@ help:
 	@echo "🚀 Main Commands:"
 	@echo "  init                    Initialize complete infrastructure"
 	@echo "  deploy-dev              Deploy dev environment (complete)"
+	@echo "  deploy-automated        🆕 FULLY AUTOMATED deployment pipeline"
 	@echo "  update-dev              Update services"
 	@echo "  destroy-dev             Destroy dev environment"
 	@echo "  status                  Show infrastructure status"
+	@echo "  show-deployment-info    Show deployment URLs and info"
 	@echo ""
 	@echo "🔧 Component Commands:"
 	@echo "  terraform-init          Initialize Terraform"
 	@echo "  terraform-plan          Plan Terraform changes"
 	@echo "  terraform-apply         Apply Terraform changes"
+	@echo "  terraform-apply-automated Apply Terraform (auto SSH keys)"
+	@echo "  generate-inventory      Generate Ansible inventory from Terraform"
+	@echo "  ansible-deploy-complete Complete Ansible deployment"
 	@echo "  swarm-init              Initialize Docker Swarm"
 	@echo "  ansible-configure       Configure with Ansible"
 	@echo "  stacks-deploy           Deploy all stacks"
@@ -45,11 +50,16 @@ help:
 # Initialize complete infrastructure
 init: terraform-init
 
-# Complete deployment pipeline
+# Complete deployment pipeline (ORIGINAL)
 deploy-dev: terraform-apply swarm-init ansible-configure stacks-deploy dns-update health
 	@echo "✅ Complete dev environment deployed!"
 	@echo "🌐 Frontend: https://$(shell cd environments/$(ENV) && grep DOMAIN_NAME .env.$(ENV) | cut -d= -f2)"
 	@echo "🔧 API: https://api.$(shell cd environments/$(ENV) && grep DOMAIN_NAME .env.$(ENV) | cut -d= -f2)"
+
+# FULLY AUTOMATED deployment pipeline
+deploy-automated: terraform-apply-automated generate-inventory ansible-deploy-complete
+	@echo "🎉 FULLY AUTOMATED deployment completed!"
+	@$(MAKE) show-deployment-info
 
 # Update existing deployment
 update-dev:
@@ -72,6 +82,12 @@ terraform-apply: terraform-plan
 	@echo "🚀 Applying Terraform changes..."
 	@cd environments/$(ENV)/azure && terraform apply -var-file="../terraform.tfvars" -auto-approve
 
+# Terraform apply without requiring terraform.tfvars (uses auto-generated SSH keys)
+terraform-apply-automated:
+	@echo "🚀 Applying Terraform changes (automated)..."
+	@cd environments/$(ENV)/azure && terraform init -upgrade || true
+	@cd environments/$(ENV)/azure && terraform apply -auto-approve
+
 terraform-destroy:
 	@echo "💥 Destroying infrastructure..."
 	@cd environments/$(ENV)/azure && terraform destroy -var-file="../terraform.tfvars" -auto-approve
@@ -85,6 +101,28 @@ swarm-init:
 ansible-configure:
 	@echo "🔧 Configuring with Ansible..."
 	@cd ansible && ansible-playbook -i inventory/$(ENV)/hosts.yml playbooks/site.yml
+
+# Generate dynamic Ansible inventory from Terraform outputs
+generate-inventory:
+	@echo "📋 Generating Ansible inventory from Terraform..."
+	@$(SCRIPT_DIR)/generate-ansible-inventory.sh $(ENV)
+
+# Complete automated Ansible deployment
+ansible-deploy-complete: generate-inventory
+	@echo "🚀 Running complete Ansible deployment..."
+	@cd ansible && ansible-playbook -i inventory/$(ENV)/hosts.yml playbooks/deploy-complete.yml
+
+# Show deployment information
+show-deployment-info:
+	@echo "📊 Deployment Information:"
+	@echo "=========================="
+	@cd environments/$(ENV)/azure && \
+	MANAGER_IP=$$(terraform output -raw swarm_manager_public_ip 2>/dev/null || echo "N/A") && \
+	echo "🌐 Frontend:    http://$$MANAGER_IP.nip.io/" && \
+	echo "🔧 Backend API: http://api.$$MANAGER_IP.nip.io/" && \
+	echo "📊 Traefik:    http://$$MANAGER_IP:8080/" && \
+	echo "🖥️  SSH Access: ssh ubuntu@$$MANAGER_IP -i ../.ssh/promata-$(ENV)" && \
+	echo "📍 Manager IP:  $$MANAGER_IP"
 
 # Stack deployment
 stacks-deploy:

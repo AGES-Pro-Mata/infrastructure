@@ -2,7 +2,7 @@ name: Pro-Mata Deployment Trigger
 
 on:
   repository_dispatch:
-    types: [deploy-dev, deploy-prod]
+    types: [deploy-dev, deploy-prod, docker-hub-auto-deploy]
   workflow_dispatch:
     inputs:
       environment:
@@ -39,6 +39,8 @@ jobs:
       backend_image_tag: ${{ steps.env.outputs.backend_image_tag }}
       frontend_image_tag: ${{ steps.env.outputs.frontend_image_tag }}
       cloud_provider: ${{ steps.env.outputs.cloud_provider }}
+      trigger_source: ${{ steps.env.outputs.trigger_source }}
+      updated_image: ${{ steps.env.outputs.updated_image }}
     
     steps:
       - name: Determine Environment and Tags
@@ -56,6 +58,13 @@ jobs:
             echo "environment=prod" >> $GITHUB_OUTPUT
             echo "backend_image_tag=${{ github.event.client_payload.backend_tag }}" >> $GITHUB_OUTPUT
             echo "frontend_image_tag=${{ github.event.client_payload.frontend_tag }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.action }}" = "docker-hub-auto-deploy" ]; then
+            echo "environment=${{ github.event.client_payload.environment }}" >> $GITHUB_OUTPUT
+            echo "backend_image_tag=${{ github.event.client_payload.backend_tag }}" >> $GITHUB_OUTPUT
+            echo "frontend_image_tag=${{ github.event.client_payload.frontend_tag }}" >> $GITHUB_OUTPUT
+            # Add deployment metadata for tracking
+            echo "trigger_source=${{ github.event.client_payload.trigger_source }}" >> $GITHUB_OUTPUT
+            echo "updated_image=${{ github.event.client_payload.updated_image }}" >> $GITHUB_OUTPUT
           fi
           
           # Set cloud provider based on environment
@@ -72,19 +81,19 @@ jobs:
     steps:
       - name: Verify Backend Image Exists
         run: |
-          echo "Checking backend image: ${{ env.DOCKER_REGISTRY }}/norohim/pro-mata-backend:${{ needs.determine-environment.outputs.backend_image_tag }}"
-          docker manifest inspect ${{ env.DOCKER_REGISTRY }}/norohim/pro-mata-backend:${{ needs.determine-environment.outputs.backend_image_tag }} || {
+          echo "Checking backend image: ${{ env.DOCKER_REGISTRY }}/norohim/pro-mata-backend-dev:${{ needs.determine-environment.outputs.backend_image_tag }}"
+          docker manifest inspect ${{ env.DOCKER_REGISTRY }}/norohim/pro-mata-backend-dev:${{ needs.determine-environment.outputs.backend_image_tag }} || {
             echo "Backend image not found. Available tags:"
-            curl -s "https://registry.hub.docker.com/v2/repositories/norohim/pro-mata-backend/tags/" | jq -r '.results[].name' | head -10
+            curl -s "https://registry.hub.docker.com/v2/repositories/norohim/pro-mata-backend-dev/tags/" | jq -r '.results[].name' | head -10
             exit 1
           }
 
       - name: Verify Frontend Image Exists
         run: |
-          echo "Checking frontend image: ${{ env.DOCKER_REGISTRY }}/norohim/pro-mata-frontend:${{ needs.determine-environment.outputs.frontend_image_tag }}"
-          docker manifest inspect ${{ env.DOCKER_REGISTRY }}/norohim/pro-mata-frontend:${{ needs.determine-environment.outputs.frontend_image_tag }} || {
+          echo "Checking frontend image: ${{ env.DOCKER_REGISTRY }}/norohim/pro-mata-frontend-dev:${{ needs.determine-environment.outputs.frontend_image_tag }}"
+          docker manifest inspect ${{ env.DOCKER_REGISTRY }}/norohim/pro-mata-frontend-dev:${{ needs.determine-environment.outputs.frontend_image_tag }} || {
             echo "Frontend image not found. Available tags:"
-            curl -s "https://registry.hub.docker.com/v2/repositories/norohim/pro-mata-frontend/tags/" | jq -r '.results[].name' | head -10
+            curl -s "https://registry.hub.docker.com/v2/repositories/norohim/pro-mata-frontend-dev/tags/" | jq -r '.results[].name' | head -10
             exit 1
           }
 
@@ -152,11 +161,24 @@ jobs:
         run: |
           echo "Deployment completed successfully!"
           chmod +x scripts/notify-deployment.sh
-          ./scripts/notify-deployment.sh \
-            --status success \
-            --environment ${{ needs.determine-environment.outputs.environment }} \
-            --backend-tag ${{ needs.determine-environment.outputs.backend_image_tag }} \
-            --frontend-tag ${{ needs.determine-environment.outputs.frontend_image_tag }}
+          
+          # Determine notification type
+          if [[ "${{ needs.determine-environment.outputs.trigger_source }}" == "docker_hub_webhook" ]]; then
+            echo "🤖 Auto-deployment via Docker Hub webhook completed!"
+            ./scripts/notify-deployment.sh \
+              --status success \
+              --environment ${{ needs.determine-environment.outputs.environment }} \
+              --backend-tag ${{ needs.determine-environment.outputs.backend_image_tag }} \
+              --frontend-tag ${{ needs.determine-environment.outputs.frontend_image_tag }} \
+              --trigger-source "docker_hub_webhook" \
+              --updated-image "${{ needs.determine-environment.outputs.updated_image }}"
+          else
+            ./scripts/notify-deployment.sh \
+              --status success \
+              --environment ${{ needs.determine-environment.outputs.environment }} \
+              --backend-tag ${{ needs.determine-environment.outputs.backend_image_tag }} \
+              --frontend-tag ${{ needs.determine-environment.outputs.frontend_image_tag }}
+          fi
 
       - name: Notify Failure
         if: needs.deploy-to-development.result == 'failure' || needs.deploy-to-production.result == 'failure'
@@ -183,6 +205,12 @@ jobs:
             echo "Backend: ${{ needs.determine-environment.outputs.backend_image_tag }}"
             echo "Frontend: ${{ needs.determine-environment.outputs.frontend_image_tag }}"
             
+            # Add trigger information if available
+            if [[ "${{ needs.determine-environment.outputs.trigger_source }}" == "docker_hub_webhook" ]]; then
+              echo "🤖 Trigger: Docker Hub webhook (auto-deployment)"
+              echo "📦 Updated Image: ${{ needs.determine-environment.outputs.updated_image }}"
+            fi
+            
             # Update deployment tracking
             curl -X POST "https://api.github.com/repos/${{ github.repository }}/deployments" \
               -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
@@ -190,7 +218,7 @@ jobs:
               -d '{
                 "ref": "${{ github.sha }}",
                 "environment": "${{ needs.determine-environment.outputs.environment }}",
-                "description": "Pro-Mata deployment via CI/CD"
+                "description": "Pro-Mata deployment via CI/CD - '${{ needs.determine-environment.outputs.trigger_source || 'manual' }}'"
               }' || echo "Failed to update deployment status"
           else
             echo "❌ Deployment failed"

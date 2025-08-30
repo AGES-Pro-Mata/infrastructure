@@ -44,11 +44,11 @@
 
   post_tasks:
     - name: Deploy configuration files
-      include_tasks: tasks/deploy-configs.yml
+      include_tasks: tasks/ansible_deploy_configs.yml
       tags: [configs]
     
     - name: Deploy scripts
-      include_tasks: tasks/deploy-scripts.yml
+      include_tasks: tasks/deploy-script.yml
       tags: [scripts]
 
 # Swarm Manager Specific Configuration

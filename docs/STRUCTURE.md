@@ -1,116 +1,98 @@
-# 🏗️ Pro-Mata Infrastructure
+# 🏗️ Pro-Mata Infrastructure Architecture
 
-Este repositório armazena artefatos específicos de infraestrutura para o projeto Pro-Mata AGES, incluindo configurações Terraform, playbooks Ansible, Dockerfiles e scripts de CI/CD.
+Technical overview of the Pro-Mata infrastructure components and organization.
 
-## 📁 Estrutura do Projeto
+## 📁 Repository Structure
 
-```plaintext
-infra/
-├── README.md
-├── .github/workflows/           # GitHub Actions (padrão frontend)
-│   ├── ci-cd.yml               # Pipeline principal (DESABILITADO)
-│   ├── discord-notify-extended.yml  # Notificações Discord
-│   ├── gitlab-sync.yml         # Sincronização GitLab  
-│   └── notify-pr.yml           # Notificações de PR
-├── environments/               # Environment-specific infrastructure
-│   ├── dev/
-│   │   └── azure/              # Development Azure infrastructure  
-│   │       ├── main.tf
-│   │       ├── variables.tf
-│   │       ├── outputs.tf
-│   │       ├── providers.tf
-│   │       ├── cloud-init.yml
-│   │       └── modules/
-│   │           └── common/
-│   ├── staging/
-│   │   └── azure/              # Staging Azure infrastructure
-│   └── prod/
-│       └── aws/                # Production AWS infrastructure (ECS Fargate)
-├── deployment/
-│   ├── ansible/                # Configuração e Deploy
-│   │   ├── playbooks/
-│   │   │   ├── ansible.cfg
-│   │   │   ├── swarm_setup.yml
-│   │   │   └── stack.env.j2
-│   │   └── roles/
-│   │       ├── networking/
-│   │       │   └── coredns/
-│   │       └── database/
-│   │           ├── postgresql/
-│   │           ├── pgbouncer/
-│   │           └── pgadmin/
-│   └── swarm/
-│       └── stack.yml.j2
-├── docker/                     # Configurações Docker
-│   ├── backend/
-│   │   ├── Dockerfile.dev
-│   │   ├── Dockerfile.prod
-│   │   └── docker-compose.backend.yml
-│   ├── frontend/
-│   │   ├── Dockerfile.dev
-│   │   ├── Dockerfile.prod
-│   │   └── docker-compose.frontend.yml
-│   └── database/
-│       ├── postgresql/
-│       ├── pgbouncer/
-│       └── pgadmin/
-├── environments/               # Configurações por Ambiente
-│   ├── dev/
-│   │   └── .env.dev           # Azure East US 2
-│   ├── staging/
-│   │   └── .env.staging       # Azure East US 2  
-│   ├── prod/
-│   │   └── .env.prod          # AWS US East 1
-│   └── local/
-│       └── .env.local
-├── monitoring/                 # Observabilidade
-│   ├── prometheus/
-│   ├── grafana/
-│   └── logs/
-├── scripts/                    # Scripts de Automação
-│   ├── sync-infrastructure.py  # Sincronização GitLab
-│   ├── notify-deployment.sh    # Notificações Discord
-│   ├── rollback.sh            # Rollback automatizado
-│   └── test-infrastructure.sh  # Testes de infraestrutura
-└── docs/
-    ├── SETUP.md
-    └── STRUCTURE.md
+```
+infrastructure/
+├── environments/          # Environment-specific configs
+│   ├── dev/azure/        # Development (Azure)
+│   └── prod/aws/         # Production (AWS)
+├── terraform/            # Infrastructure as Code
+├── ansible/              # Configuration management  
+├── docker/stacks/        # Application stacks
+├── scripts/              # Automation scripts
+└── docs/                # Documentation
 ```
 
-## 🌐 Arquitetura de Ambientes
+## 🌐 Environment Architecture
 
-### 🧪 **Development & Staging** (Azure East US 2)
+### Development (Azure East US 2)
+- **Compute**: Docker Swarm on Standard_B2s VMs
+- **Network**: VNet 10.1.0.0/16 with NSGs
+- **Storage**: Premium SSD managed disks
+- **DNS**: DuckDNS (promata-dev.duckdns.org)
+- **TLS**: Let's Encrypt via Traefik
+- **Database**: PostgreSQL with PgBouncer pooling
+- **Monitoring**: Prometheus + Grafana
 
-- **Plataforma**: Azure Container Instances + Docker Swarm
-- **Compute**: Standard_B2s/B2ms VMs
-- **Rede**: VNet 10.1.0.0/16 (dev), 10.2.0.0/16 (staging)
-- **Armazenamento**: Premium SSD
-- **Monitoramento**: Azure Monitor
+### Production (AWS US East 1) 
+- **Compute**: ECS Fargate (512 CPU / 1024 Memory)
+- **Network**: VPC 10.0.0.0/16 with public/private subnets
+- **Load Balancer**: Application Load Balancer
+- **DNS**: Route 53 with ACM certificates
+- **Database**: RDS PostgreSQL Multi-AZ
+- **Monitoring**: CloudWatch + Container Insights
 
-### 🌟 **Production** (AWS US East 1)
+## 🔧 Component Stack
 
-- **Plataforma**: Amazon ECS Fargate
-- **Compute**: Fargate 512 CPU / 1024 Memory
-- **Rede**: VPC 10.0.0.0/16 com subnets privadas/públicas
-- **Balanceamento**: Application Load Balancer
-- **Monitoramento**: CloudWatch + Container Insights
+### Core Services
+- **Frontend**: React application (Nginx)
+- **Backend**: Node.js API server
+- **Database**: PostgreSQL with streaming replication
+- **Proxy**: Traefik (dev) / ALB (prod)
+- **Cache**: Redis for session storage
 
-## 🔧 Configuração de Infraestrutura
+### Infrastructure Components
+- **Terraform**: Infrastructure provisioning
+- **Ansible**: Configuration management (dev only)
+- **Docker Swarm**: Container orchestration (dev)
+- **ECS Fargate**: Container service (prod)
 
-### Terraform Modules
+### Monitoring & Security
+- **Metrics**: Prometheus (dev) / CloudWatch (prod)
+- **Dashboards**: Grafana (dev) / CloudWatch (prod)
+- **Logs**: Centralized via Docker/ECS
+- **Secrets**: Azure Key Vault / AWS Secrets Manager
+- **TLS**: Automated certificate management
 
-- **`terraform/azure/`**: Infraestrutura de desenvolvimento e staging
-- **`terraform/aws/`**: Infraestrutura de produção
-- **`terraform/modules/common/`**: Módulos reutilizáveis
+## 🔄 Deployment Pipeline
 
-### Ansible Roles
+### Development Flow
+1. **Infrastructure**: Terraform provisions Azure resources
+2. **Configuration**: Ansible configures VMs and services
+3. **Applications**: Docker Swarm deploys service stacks
+4. **DNS**: DuckDNS updates with public IP
+5. **Health**: Automated health checks verify deployment
 
-- **`deployment/ansible/roles/`**: Configuração automática de serviços
-- **`deployment/swarm/`**: Configuração do Docker Swarm para Azure
+### Production Flow  
+1. **Infrastructure**: Terraform provisions AWS resources
+2. **Applications**: ECS deploys containerized services
+3. **DNS**: Route 53 manages domain routing
+4. **Health**: ALB health checks ensure availability
 
-### Environment Variables
+## 🛡️ Security Model
 
-- **`environments/dev/`**: Configurações de desenvolvimento
-- **`environments/staging/`**: Configurações de staging  
-- **`environments/prod/`**: Configurações de produção
-- **`environments/local/`**: Desenvolvimento local
+### Network Security
+- **Azure**: NSGs restrict traffic to required ports
+- **AWS**: Security groups with least-privilege access
+- **TLS**: End-to-end encryption for all services
+
+### Secret Management
+- **Development**: Azure Key Vault integration
+- **Production**: AWS Secrets Manager
+- **CI/CD**: GitHub Secrets for automation
+
+### Access Control
+- **SSH**: Key-based authentication only
+- **APIs**: JWT-based authentication
+- **Admin**: Multi-factor authentication required
+
+---
+
+**Architecture designed for**:
+- **Scalability**: Easy horizontal scaling
+- **Reliability**: High availability and fault tolerance  
+- **Security**: Defense in depth approach
+- **Maintainability**: Infrastructure as Code practices

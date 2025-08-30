@@ -105,8 +105,8 @@ generate_secrets() {
             local secret_value
             case "$secret_name" in
                 "traefik-auth-hash")
-                    # Generate htpasswd hash for admin:ProMata2024!
-                    secret_value=$(python3 -c "import crypt; print(crypt.crypt('ProMata2024!', crypt.mksalt(crypt.METHOD_SHA512)))")
+                    # Generate htpasswd hash for admin:ProMata2025!
+                    secret_value=$(python3 -c "import crypt; print(crypt.crypt('ProMata2025!', crypt.mksalt(crypt.METHOD_SHA512)))")
                     secret_value="admin:$secret_value"
                     ;;
                 "jwt-secret")

@@ -58,23 +58,23 @@ update-dev:
 # Terraform commands
 terraform-init:
 	@echo "🏗️  Initializing Terraform with Azure Backend..."
-	@if [ ! -f "terraform/environments/$(ENV)/backend.tf" ]; then \
+	@if [ ! -f "environments/$(ENV)/backend.tf" ]; then \
 		echo "Setting up Azure Backend for Terraform state..."; \
-		chmod +x terraform/backend-setup.sh && terraform/backend-setup.sh; \
+		chmod +x environments/$(ENV)/azure/backend-setup.sh && environments/$(ENV)/azure/backend-setup.sh; \
 	fi
-	@cd terraform/environments/$(ENV) && terraform init
+	@cd environments/$(ENV)/azure && terraform init
 
 terraform-plan:
 	@echo "📋 Planning Terraform changes..."
-	@cd terraform/environments/$(ENV) && terraform plan -var-file="../../../environments/$(ENV)/terraform.tfvars"
+	@cd environments/$(ENV)/azure && terraform plan -var-file="../terraform.tfvars"
 
 terraform-apply: terraform-plan
 	@echo "🚀 Applying Terraform changes..."
-	@cd terraform/environments/$(ENV) && terraform apply -var-file="../../../environments/$(ENV)/terraform.tfvars" -auto-approve
+	@cd environments/$(ENV)/azure && terraform apply -var-file="../terraform.tfvars" -auto-approve
 
 terraform-destroy:
 	@echo "💥 Destroying infrastructure..."
-	@cd terraform/environments/$(ENV) && terraform destroy -var-file="../../../environments/$(ENV)/terraform.tfvars" -auto-approve
+	@cd environments/$(ENV)/azure && terraform destroy -var-file="../terraform.tfvars" -auto-approve
 
 # Docker Swarm commands
 swarm-init:
@@ -153,15 +153,15 @@ restore:
 # Development helpers
 shell:
 	@echo "🔧 Connecting to swarm manager..."
-	@cd terraform/environments/$(ENV) && \
-	MANAGER_IP=$(terraform output -raw swarm_manager_public_ip) && \
-	ssh -o StrictHostKeyChecking=no promata@$MANAGER_IP
+	@cd environments/$(ENV)/azure && \
+	MANAGER_IP=$$(terraform output -raw swarm_manager_public_ip) && \
+	ssh -o StrictHostKeyChecking=no promata@$$MANAGER_IP
 
 tunnel:
 	@echo "🚇 Creating SSH tunnel for development..."
-	@cd terraform/environments/$(ENV) && \
-	MANAGER_IP=$(terraform output -raw swarm_manager_public_ip) && \
-	ssh -N -L 8080:localhost:8080 -L 5432:localhost:5432 promata@$MANAGER_IP
+	@cd environments/$(ENV)/azure && \
+	MANAGER_IP=$$(terraform output -raw swarm_manager_public_ip) && \
+	ssh -N -L 8080:localhost:8080 -L 5432:localhost:5432 promata@$$MANAGER_IP
 
 # Emergency operations
 rollback:

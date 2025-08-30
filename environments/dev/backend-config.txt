@@ -1,0 +1,16 @@
+# Terraform Backend Configuration - Pro-Mata Infrastructure
+# Use these values for terraform init
+
+Resource Group: rg-promata-terraform-state
+Storage Account: promatatfstate66108
+Container: tfstate
+State File Key: dev/terraform.tfstate
+
+# Commands to initialize from any machine:
+terraform init \
+  -backend-config="resource_group_name=rg-promata-terraform-state" \
+  -backend-config="storage_account_name=promatatfstate66108" \
+  -backend-config="container_name=tfstate" \
+  -backend-config="key=dev/terraform.tfstate"
+
+# Or simply run: terraform init (if backend.tf exists)

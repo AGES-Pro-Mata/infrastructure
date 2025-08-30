@@ -1,0 +1,144 @@
+# PostgreSQL HA + PgBouncer Stack - Pro-Mata Infrastructure
+
+version: "3.8"
+
+services:
+  # Database Initialization with Prisma Migrations (sample)
+  db-migrations:
+    image: node:18-alpine
+    environment:
+      - DATABASE_URL=postgresql://{{ postgres_user }}:{{ postgres_password }}@postgres-primary:5432/{{ postgres_db }}
+    networks:
+      - promata_database
+    depends_on:
+      - postgres-primary
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      restart_policy:
+        condition: none
+    command: >
+      sh -c "
+        apk add --no-cache postgresql-client &&
+        npm install -g prisma @prisma/client &&
+        cat > prisma/schema.prisma << 'EOF'
+        generator client {
+          provider = \"prisma-client-js\"
+        }
+        datasource db {
+          provider = \"postgresql\"
+          url      = env(\"DATABASE_URL\")
+        }
+        model User {
+          id        Int      @id @default(autoincrement())
+          email     String   @unique
+          name      String?
+          createdAt DateTime @default(now())
+          updatedAt DateTime @updatedAt
+          posts     Post[]
+        }
+        model Post {
+          id        Int      @id @default(autoincrement())
+          title     String
+          content   String?
+          published Boolean  @default(false)
+          author    User     @relation(fields: [authorId], references: [id])
+          authorId  Int
+          createdAt DateTime @default(now())
+          updatedAt DateTime @updatedAt
+        }
+        EOF
+        && mkdir -p prisma
+        && prisma generate &&
+        prisma db push --accept-data-loss
+      "
+
+  # PostgreSQL Primary (Master)
+  postgres-primary:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB={{ postgres_db }}
+      - POSTGRES_USER={{ postgres_user }}
+      - POSTGRES_PASSWORD={{ postgres_password }}
+      - POSTGRES_REPLICATION_USER={{ postgres_replica_user }}
+      - POSTGRES_REPLICATION_PASSWORD={{ postgres_replica_password }}
+      - PGUSER={{ postgres_user }}
+      
+    volumes:
+      - postgres_primary_data:/var/lib/postgresql/data
+    
+    networks:
+      - promata_database
+    
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.labels.database.primary == true]
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 3
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+    
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U {{ postgres_user }} -d {{ postgres_db }}"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # PgBouncer - Connection Pooling & Load Balancing
+  pgbouncer:
+    image: pgbouncer/pgbouncer:latest
+    environment:
+      - DATABASES_HOST=postgres-primary
+      - DATABASES_PORT=5432
+      - DATABASES_USER={{ postgres_user }}
+      - DATABASES_PASSWORD={{ postgres_password }}
+      - DATABASES_DBNAME={{ postgres_db }}
+      - POOL_MODE={{ pgbouncer_pool_mode }}
+      - MAX_CLIENT_CONN={{ pgbouncer_max_client_conn }}
+      - DEFAULT_POOL_SIZE={{ pgbouncer_pool_size }}
+      - ADMIN_USERS={{ postgres_user }}
+      - STATS_USERS={{ postgres_user }}
+    
+    networks:
+      - promata_database
+      - promata_internal
+    
+    depends_on:
+      - postgres-primary
+    
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
+    
+    healthcheck:
+      test: ["CMD-SHELL", "psql -h localhost -p 6432 -U {{ postgres_user }} -d pgbouncer -c 'SHOW STATS'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  postgres_primary_data:
+    driver: local
+
+networks:
+  promata_database:
+    external: true
+  promata_internal:
+    external: true

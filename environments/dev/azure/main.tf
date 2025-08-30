@@ -12,6 +12,10 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.1"
     }
+    tls = {
+      source  = "hashicorp/tls"
+      version = "~> 4.0"
+    }
   }
   
 # Backend configuration disabled for initial validation
@@ -44,6 +48,12 @@ provider "azurerm" {
 
 # Data sources
 data "azurerm_client_config" "current" {}
+
+# Generate SSH key pair for VMs
+resource "tls_private_key" "promata_ssh" {
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
 
 # Resource Group
 resource "azurerm_resource_group" "dev" {
@@ -215,7 +225,7 @@ resource "azurerm_linux_virtual_machine" "manager" {
   
   admin_ssh_key {
     username   = "ubuntu"
-    public_key = var.ssh_public_key
+    public_key = tls_private_key.promata_ssh.public_key_openssh
   }
   
   os_disk {

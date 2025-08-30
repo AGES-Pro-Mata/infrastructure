@@ -1,0 +1,211 @@
+# Complete Pro-Mata Deployment Playbook
+# Handles: Docker installation, Swarm setup, Stack deployment, DNS updates
+---
+- name: Complete Pro-Mata Infrastructure Setup
+  hosts: all
+  gather_facts: true
+  become: true
+  
+  vars:
+    # Docker Configuration
+    docker_packages:
+      - docker.io
+      - docker-compose-plugin
+    
+    # Application Configuration  
+    backend_image: "norohim/pro-mata-backend-dev:latest"
+    frontend_image: "norohim/pro-mata-frontend-dev:latest"
+    backend_replicas: 1
+    frontend_replicas: 1
+    
+    # Database Configuration
+    postgres_db: "promata_dev"
+    postgres_user: "promata"
+    postgres_password: "SecurePassword123"
+    postgres_replica_user: "replicator"
+    postgres_replica_password: "ReplicaPassword123"
+    
+    # Other Configuration
+    jwt_secret: "your-super-secret-jwt-key-here-make-it-long-and-random"
+    traefik_auth_users: "admin:$2y$10$X1.yJ5kVfJPLZqVz8qhZoOJ9YLz2Kz5x3nP8vFqV7wM5l1Y2w4s6a"
+
+  pre_tasks:
+    - name: Update system packages
+      apt:
+        update_cache: yes
+        upgrade: safe
+      tags: [system]
+    
+    - name: Create promata directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0755'
+      loop:
+        - /opt/promata
+        - /opt/promata/stacks
+        - /opt/promata/configs
+        - /opt/promata/scripts
+        - /var/log/promata
+      tags: [directories]
+
+  tasks:
+    # ============= DOCKER INSTALLATION =============
+    - name: Install Docker packages
+      apt:
+        name: "{{ docker_packages }}"
+        state: present
+      tags: [docker]
+    
+    - name: Enable and start Docker service
+      systemd:
+        name: docker
+        enabled: yes
+        state: started
+      tags: [docker]
+    
+    - name: Add user to docker group
+      user:
+        name: "{{ ansible_user }}"
+        groups: docker
+        append: yes
+      tags: [docker]
+    
+    - name: Configure Docker daemon for Swarm mode
+      copy:
+        content: |
+          {
+            "log-driver": "json-file",
+            "log-opts": {
+              "max-size": "10m",
+              "max-file": "3"
+            }
+          }
+        dest: /etc/docker/daemon.json
+        mode: '0644'
+      notify: restart docker
+      tags: [docker]
+
+    # ============= DOCKER SWARM SETUP =============
+    - name: Initialize Docker Swarm on manager
+      docker_swarm:
+        state: present
+        advertise_addr: "{{ private_ip }}"
+        listen_addr: "{{ private_ip }}:2377"
+      register: swarm_info
+      when: node_role == 'manager'
+      tags: [swarm]
+    
+    - name: Create Docker networks
+      docker_network:
+        name: "{{ item.name }}"
+        driver: "{{ item.driver }}"
+        attachable: yes
+        scope: swarm
+      loop:
+        - { name: "promata_public", driver: "overlay" }
+        - { name: "promata_internal", driver: "overlay" }
+        - { name: "promata_database", driver: "overlay" }
+      when: node_role == 'manager'
+      tags: [swarm, networks]
+
+    # ============= STACK DEPLOYMENT =============
+    - name: Create environment file for stacks
+      template:
+        src: stack.env.j2
+        dest: /opt/promata/.env
+        mode: '0600'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+      tags: [stacks]
+    
+    - name: Deploy Docker stack files
+      template:
+        src: "{{ item }}"
+        dest: "/opt/promata/stacks/{{ item | basename | regex_replace('\\.j2$', '') }}"
+        mode: '0644'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+      loop:
+        - simple-stack.yml.j2
+      when: node_role == 'manager'
+      tags: [stacks]
+    
+    - name: Deploy Pro-Mata stack
+      docker_stack:
+        name: promata
+        compose:
+          - /opt/promata/stacks/simple-stack.yml
+        state: present
+      environment:
+        DOMAIN_NAME: "{{ domain_name }}"
+        BACKEND_IMAGE: "{{ backend_image }}"
+        FRONTEND_IMAGE: "{{ frontend_image }}"
+        BACKEND_REPLICAS: "{{ backend_replicas }}"
+        FRONTEND_REPLICAS: "{{ frontend_replicas }}"
+        POSTGRES_DB: "{{ postgres_db }}"
+        POSTGRES_USER: "{{ postgres_user }}"
+        POSTGRES_PASSWORD: "{{ postgres_password }}"
+        JWT_SECRET: "{{ jwt_secret }}"
+      when: node_role == 'manager'
+      tags: [stacks, deploy]
+    
+    # ============= VERIFICATION =============
+    - name: Wait for stack to be ready
+      pause:
+        seconds: 30
+      when: node_role == 'manager'
+      tags: [verify]
+    
+    - name: Check Docker services
+      command: docker service ls
+      register: docker_services
+      when: node_role == 'manager'
+      tags: [verify]
+    
+    - name: Display service status
+      debug:
+        msg: "{{ docker_services.stdout_lines }}"
+      when: node_role == 'manager'
+      tags: [verify]
+    
+    - name: Test frontend access
+      uri:
+        url: "http://{{ domain_name }}/"
+        method: GET
+        timeout: 10
+      register: frontend_test
+      ignore_errors: yes
+      when: node_role == 'manager'
+      tags: [verify]
+    
+    - name: Test backend access
+      uri:
+        url: "http://api.{{ domain_name }}/"
+        method: GET
+        timeout: 10
+      register: backend_test
+      ignore_errors: yes
+      when: node_role == 'manager'
+      tags: [verify]
+    
+    - name: Display deployment summary
+      debug:
+        msg:
+          - "🎉 Pro-Mata deployment completed!"
+          - "🌐 Frontend: http://{{ domain_name }}/"
+          - "🔧 Backend API: http://api.{{ domain_name }}/"
+          - "📊 Traefik Dashboard: http://{{ domain_name }}:8080/"
+          - "📍 Manager IP: {{ manager_public_ip }}"
+          - "Frontend Status: {{ 'OK' if frontend_test.status == 200 else 'ERROR' }}"
+          - "Backend Status: {{ 'OK' if backend_test.status == 200 else 'ERROR' }}"
+      when: node_role == 'manager'
+      tags: [verify]
+
+  handlers:
+    - name: restart docker
+      systemd:
+        name: docker
+        state: restarted

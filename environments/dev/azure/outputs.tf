@@ -90,3 +90,50 @@ output "infrastructure_summary" {
     storage_account      = azurerm_storage_account.dev.name
   }
 }
+
+# SSH Key outputs for Ansible
+output "ssh_private_key" {
+  description = "Private SSH key for Ansible to connect to VMs"
+  value       = tls_private_key.promata_ssh.private_key_pem
+  sensitive   = true
+}
+
+output "ssh_public_key" {
+  description = "Public SSH key used for VMs"
+  value       = tls_private_key.promata_ssh.public_key_openssh
+}
+
+# Complete Ansible inventory as JSON
+output "ansible_inventory" {
+  description = "Complete Ansible inventory configuration"
+  value = {
+    all = {
+      vars = {
+        ansible_user                 = "ubuntu"
+        ansible_ssh_common_args      = "-o StrictHostKeyChecking=no"
+        env                         = "dev"
+        domain_name                 = "${azurerm_public_ip.manager.ip_address}.nip.io"
+        manager_public_ip           = azurerm_public_ip.manager.ip_address
+        manager_private_ip          = azurerm_network_interface.manager.private_ip_address
+      }
+      children = {
+        promata_dev = {
+          children = {
+            managers = {
+              hosts = {
+                swarm-manager = {
+                  ansible_host = azurerm_public_ip.manager.ip_address
+                  private_ip   = azurerm_network_interface.manager.private_ip_address
+                  node_role    = "manager"
+                }
+              }
+            }
+            workers = {
+              hosts = {}
+            }
+          }
+        }
+      }
+    }
+  }
+}

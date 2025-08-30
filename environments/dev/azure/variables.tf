@@ -25,9 +25,9 @@ variable "project_name" {
 }
 
 variable "vm_size" {
-  description = "Size of the Azure VM"
+  description = "Size of the Azure VM (equivalent to AWS t2.medium)"
   type        = string
-  default     = "Standard_B2ms"
+  default     = "Standard_B2s"
 }
 
 variable "ssh_public_key" {

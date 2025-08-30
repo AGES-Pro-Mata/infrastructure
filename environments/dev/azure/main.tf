@@ -8,15 +8,38 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "~> 3.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.1"
+    }
   }
   
-  backend "azurerm" {
-    # Configuration will be provided via backend-setup.sh
-  }
+# Backend configuration disabled for initial validation
+  # Run backend-setup.sh to create backend.tf file
+  # backend "azurerm" {
+  #   # Backend configuration will be loaded from backend-setup.sh
+  #   # resource_group_name  = "rg-promata-tfstate"
+  #   # storage_account_name = "promatatfstate"
+  #   # container_name       = "tfstate"
+  #   # key                  = "dev.terraform.tfstate"
+  # }
 }
 
 provider "azurerm" {
-  features {}
+  features {
+    resource_group {
+      prevent_deletion_if_contains_resources = false
+    }
+    
+    virtual_machine {
+      delete_os_disk_on_deletion = true
+    }
+    
+    key_vault {
+      purge_soft_delete_on_destroy    = true
+      recover_soft_deleted_key_vaults = true
+    }
+  }
 }
 
 # Data sources
@@ -229,6 +252,6 @@ resource "azurerm_storage_account" "dev" {
 # Container for backups
 resource "azurerm_storage_container" "backups" {
   name                  = "backups"
-  storage_account_id    = azurerm_storage_account.dev.id
+  storage_account_name  = azurerm_storage_account.dev.name
   container_access_type = "private"
 }

@@ -131,7 +131,7 @@ configure_protection() {
 generate_backend_config() {
     info "📝 Generating Terraform backend configuration..."
     
-    local config_file="./environments/dev/backend.tf"
+    local config_file="../backend.tf"
     local backend_config_file="./backend-config.txt"
     
     # Create backend.tf file
@@ -179,7 +179,7 @@ EOF
 test_backend_access() {
     info "🧪 Testing backend access..."
     
-    cd "$(dirname "$0")/environments/dev" || error "Failed to change directory"
+    cd "$(dirname "$0")/.." || error "Failed to change directory"
     
     # Initialize with new backend (this will prompt for migration if local state exists)
     if terraform init -input=false >/dev/null 2>&1; then
@@ -305,7 +305,7 @@ clean_backend() {
         --no-wait
     
     # Remove local backend configuration
-    rm -f ./environments/dev/backend.tf
+    rm -f ../backend.tf
     rm -f ./backend-config.txt
     
     log "✅ Backend cleanup initiated (may take a few minutes to complete)"

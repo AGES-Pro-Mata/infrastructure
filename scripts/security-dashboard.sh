@@ -558,15 +558,31 @@ function updateDashboardWithRealData() {
             
             data.alerts.alerts.slice(0, 5).forEach(alert => {
                 const alertDiv = document.createElement('div');
-                alertDiv.className = \`alert-item \${alert.severity}\`;
-                alertDiv.innerHTML = \`
-                    <div class=\"alert-severity \${alert.severity}\">\${alert.severity.toUpperCase()}</div>
-                    <div class=\"alert-message\">
-                        <strong>\${alert.message}</strong><br>
-                        \${alert.recommendation}
-                    </div>
-                    <div class=\"alert-time\">há \${getTimeAgo(alert.timestamp)}</div>
-                \`;
+                alertDiv.className = `alert-item ${alert.severity}`;
+
+                // Severity
+                const severityDiv = document.createElement('div');
+                severityDiv.className = `alert-severity ${alert.severity}`;
+                severityDiv.textContent = alert.severity.toUpperCase();
+                alertDiv.appendChild(severityDiv);
+
+                // Message and recommendation
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'alert-message';
+                const strong = document.createElement('strong');
+                strong.textContent = alert.message;
+                messageDiv.appendChild(strong);
+                messageDiv.appendChild(document.createElement('br'));
+                const recommendationSpan = document.createElement('span');
+                recommendationSpan.textContent = alert.recommendation;
+                messageDiv.appendChild(recommendationSpan);
+                alertDiv.appendChild(messageDiv);
+
+                // Time
+                const timeDiv = document.createElement('div');
+                timeDiv.className = 'alert-time';
+                timeDiv.textContent = `há ${getTimeAgo(alert.timestamp)}`;
+                alertDiv.appendChild(timeDiv);
                 alertsContainer.appendChild(alertDiv);
             });
         }

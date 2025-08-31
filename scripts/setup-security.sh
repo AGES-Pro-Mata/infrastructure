@@ -223,7 +223,7 @@ load_secrets_from_keyvault() {
 # Database secrets
 POSTGRES_PASSWORD=$(az keyvault secret show --vault-name "$KEY_VAULT_NAME" --name "postgres-password" --query value -o tsv)
 POSTGRES_REPLICA_PASSWORD=$(az keyvault secret show --vault-name "$KEY_VAULT_NAME" --name "postgres-replica-password" --query value -o tsv)
-PGADMIN_PASSWORD=$(az keyvault secret show --vault-name "$KEY_VAULT_NAME" --name "pgladmin-password" --query value -o tsv)
+PGADMIN_PASSWORD=$(az keyvault secret show --vault-name "$KEY_VAULT_NAME" --name "pgadmin-password" --query value -o tsv)
 
 # Application secrets
 JWT_SECRET=$(az keyvault secret show --vault-name "$KEY_VAULT_NAME" --name "jwt-secret" --query value -o tsv)

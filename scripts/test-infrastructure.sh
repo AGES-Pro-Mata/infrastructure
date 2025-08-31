@@ -122,8 +122,12 @@ execute_test() {
 
 # Check if we're in the right directory
 check_directory() {
-    if [[ ! -d ".github/workflows" ]] || ! find .github/workflows -type f | grep -q .; then
-        print_error "Not in infrastructure repository root (no workflow files found in .github/workflows/)"
+    if [[ ! -d ".github/workflows" ]]; then
+        print_error "Not in infrastructure repository root (.github/workflows directory not found)"
+        exit 1
+    fi
+    if ! find .github/workflows -type f | grep -q .; then
+        print_error "No workflow files found in .github/workflows/"
         exit 1
     fi
     print_success "Infrastructure repository detected"

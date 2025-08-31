@@ -1,0 +1,510 @@
+name: Pro-Mata Security Pipeline
+
+on:
+  push:
+    branches: [main, develop, staging]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    # Execução diária às 2h (UTC)
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Ambiente para executar testes de segurança'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+      scan_type:
+        description: 'Tipo de scan de segurança'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - containers
+          - images
+          - dependencies
+          - network
+          - infrastructure
+      force_rotation:
+        description: 'Forçar rotação de secrets'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  ENVIRONMENT: ${{ github.ref == 'refs/heads/main' && 'prod' || github.ref == 'refs/heads/staging' && 'staging' || 'dev' }}
+  DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+  SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+  id-token: write
+
+jobs:
+  # Job 1: Validação inicial e testes básicos
+  validate:
+    name: 🔍 Validação de Segurança
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    outputs:
+      environment: ${{ steps.setup.outputs.environment }}
+      should_deploy: ${{ steps.setup.outputs.should_deploy }}
+      
+    steps:
+      - name: 📥 Checkout código
+        uses: actions/checkout@v4
+        
+      - name: 🔧 Setup ambiente
+        id: setup
+        run: |
+          # Determinar ambiente baseado no branch
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "environment=prod" >> $GITHUB_OUTPUT
+            echo "should_deploy=true" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == "refs/heads/staging" ]]; then
+            echo "environment=staging" >> $GITHUB_OUTPUT
+            echo "should_deploy=true" >> $GITHUB_OUTPUT
+          else
+            echo "environment=dev" >> $GITHUB_OUTPUT
+            echo "should_deploy=false" >> $GITHUB_OUTPUT
+          fi
+          
+          # Override com input manual se disponível
+          if [[ "${{ github.event.inputs.environment }}" != "" ]]; then
+            echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
+          fi
+          
+      - name: 🛠️ Instalar dependências de segurança
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq curl openssl
+          
+          # Instalar Trivy para scan de containers
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+          echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install -y trivy
+          
+      - name: 🧪 Executar testes de segurança básicos
+        run: |
+          chmod +x scripts/*.sh
+          ./scripts/test-security.sh --environment ${{ steps.setup.outputs.environment }} --type unit --quick
+          
+      - name: 📊 Validar estrutura de arquivos
+        run: |
+          echo "🔍 Verificando estrutura de arquivos de segurança..."
+          
+          required_files=(
+            "scripts/security-scan.sh"
+            "scripts/security-audit.sh"
+            "scripts/security-monitor.sh"
+            "scripts/rotate-secrets.sh"
+            "scripts/init-security.sh"
+            "Makefile"
+          )
+          
+          missing_files=()
+          for file in "${required_files[@]}"; do
+            if [[ ! -f "$file" ]]; then
+              missing_files+=("$file")
+            fi
+          done
+          
+          if [[ ${#missing_files[@]} -gt 0 ]]; then
+            echo "::error::Arquivos de segurança ausentes: ${missing_files[*]}"
+            exit 1
+          fi
+          
+          echo "✅ Estrutura de arquivos validada"
+
+  # Job 2: Scan de vulnerabilidades
+  security_scan:
+    name: 🔐 Scan de Segurança
+    runs-on: ubuntu-latest
+    needs: validate
+    timeout-minutes: 30
+    
+    strategy:
+      matrix:
+        scan_type: [dependencies, containers, network]
+      fail-fast: false
+      
+    steps:
+      - name: 📥 Checkout código
+        uses: actions/checkout@v4
+        
+      - name: 🔧 Setup Node.js (para scan de dependências)
+        if: matrix.scan_type == 'dependencies'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          
+      - name: 🛠️ Instalar dependências
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq curl openssl docker.io
+          
+          # Instalar ferramentas específicas por tipo de scan
+          if [[ "${{ matrix.scan_type }}" == "containers" ]]; then
+            # Instalar Trivy
+            wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+            echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
+            sudo apt-get update
+            sudo apt-get install -y trivy
+          elif [[ "${{ matrix.scan_type }}" == "dependencies" ]]; then
+            # Instalar Safety para Python
+            pip3 install safety
+          fi
+          
+      - name: 📦 Instalar dependências do projeto
+        if: matrix.scan_type == 'dependencies'
+        run: |
+          if [[ -f "package.json" ]]; then
+            npm ci
+          fi
+          
+      - name: 🔍 Executar scan de segurança
+        run: |
+          chmod +x scripts/security-scan.sh
+          
+          scan_type="${{ matrix.scan_type }}"
+          if [[ "${{ github.event.inputs.scan_type }}" != "" ]] && [[ "${{ github.event.inputs.scan_type }}" != "all" ]]; then
+            scan_type="${{ github.event.inputs.scan_type }}"
+          fi
+          
+          ./scripts/security-scan.sh \
+            --environment ${{ needs.validate.outputs.environment }} \
+            --type "$scan_type" \
+            --format sarif \
+            --ci-mode
+            
+      - name: 📤 Upload SARIF results
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: reports/security-scan/security-scan-results.sarif
+          category: "security-${{ matrix.scan_type }}"
+        continue-on-error: true
+        
+      - name: 📊 Upload scan reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-scan-${{ matrix.scan_type }}-${{ needs.validate.outputs.environment }}
+          path: |
+            reports/security-scan/
+            logs/security-scan-*.log
+          retention-days: 30
+
+  # Job 3: Auditoria de conformidade
+  security_audit:
+    name: 📋 Auditoria de Segurança  
+    runs-on: ubuntu-latest
+    needs: validate
+    timeout-minutes: 15
+    
+    steps:
+      - name: 📥 Checkout código
+        uses: actions/checkout@v4
+        
+      - name: 🛠️ Instalar dependências
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq curl openssl
+          
+      - name: 🔍 Executar auditoria de conformidade
+        run: |
+          chmod +x scripts/security-audit.sh
+          ./scripts/security-audit.sh \
+            --compliance-check \
+            --environment ${{ needs.validate.outputs.environment }} \
+            --format json
+            
+      - name: 📊 Gerar relatório de auditoria
+        if: always()
+        run: |
+          chmod +x scripts/security-audit.sh
+          ./scripts/security-audit.sh \
+            --generate-report \
+            --format html \
+            --environment ${{ needs.validate.outputs.environment }}
+            
+      - name: 📤 Upload relatórios de auditoria
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-audit-${{ needs.validate.outputs.environment }}
+          path: |
+            reports/security/
+            logs/security-audit-*.log
+          retention-days: 30
+
+  # Job 4: Testes de integração de segurança
+  integration_tests:
+    name: 🧪 Testes de Integração
+    runs-on: ubuntu-latest
+    needs: validate
+    timeout-minutes: 20
+    
+    steps:
+      - name: 📥 Checkout código
+        uses: actions/checkout@v4
+        
+      - name: 🛠️ Setup ambiente de teste
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq curl openssl docker.io
+          
+          # Inicializar sistema de segurança para testes
+          chmod +x scripts/*.sh
+          ./scripts/init-security.sh --environment dev --skip-deps
+          
+      - name: 🧪 Executar testes de integração
+        run: |
+          ./scripts/test-security.sh \
+            --environment dev \
+            --type integration \
+            --verbose
+            
+      - name: 🧪 Executar testes end-to-end
+        run: |
+          ./scripts/test-security.sh \
+            --environment dev \
+            --type e2e \
+            --verbose
+            
+      - name: 📊 Upload resultados dos testes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results
+          path: |
+            test-results/
+            logs/security-tests-*.log
+          retention-days: 30
+
+  # Job 5: Rotação de secrets (apenas em branches principais)
+  secret_rotation:
+    name: 🔄 Rotação de Secrets
+    runs-on: ubuntu-latest
+    needs: [validate, security_scan, security_audit]
+    if: |
+      (needs.validate.outputs.should_deploy == 'true' || github.event.inputs.force_rotation == 'true') &&
+      (github.event_name == 'schedule' || github.event.inputs.force_rotation == 'true')
+    timeout-minutes: 15
+    environment: ${{ needs.validate.outputs.environment }}
+    
+    steps:
+      - name: 📥 Checkout código
+        uses: actions/checkout@v4
+        
+      - name: 🔧 Setup Cloud CLI
+        run: |
+          # Setup baseado no ambiente
+          if [[ "${{ needs.validate.outputs.environment }}" == "prod" ]]; then
+            # Setup AWS CLI
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+            unzip awscliv2.zip
+            sudo ./aws/install
+          else
+            # Setup Azure CLI
+            curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+          fi
+          
+      - name: 🔐 Configurar credenciais cloud
+        run: |
+          if [[ "${{ needs.validate.outputs.environment }}" == "prod" ]]; then
+            # Configurar AWS
+            aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
+            aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            aws configure set region us-east-1
+          else
+            # Configurar Azure
+            az login --service-principal \
+              -u ${{ secrets.AZURE_CLIENT_ID }} \
+              -p ${{ secrets.AZURE_CLIENT_SECRET }} \
+              --tenant ${{ secrets.AZURE_TENANT_ID }}
+          fi
+          
+      - name: 🔄 Executar rotação de secrets
+        run: |
+          chmod +x scripts/rotate-secrets.sh
+          
+          # Rotação baseada em agenda ou forçada
+          if [[ "${{ github.event.inputs.force_rotation }}" == "true" ]]; then
+            ./scripts/rotate-secrets.sh \
+              --environment ${{ needs.validate.outputs.environment }} \
+              --force \
+              rotate-all
+          else
+            # Rotação seletiva baseada em políticas
+            ./scripts/rotate-secrets.sh \
+              --environment ${{ needs.validate.outputs.environment }} \
+              rotate-db
+          fi
+
+  # Job 6: Backup de segurança
+  security_backup:
+    name: 💾 Backup de Segurança
+    runs-on: ubuntu-latest
+    needs: [validate, security_scan, security_audit]
+    if: github.event_name == 'schedule' || needs.validate.outputs.should_deploy == 'true'
+    timeout-minutes: 10
+    environment: ${{ needs.validate.outputs.environment }}
+    
+    steps:
+      - name: 📥 Checkout código
+        uses: actions/checkout@v4
+        
+      - name: 💾 Executar backup
+        run: |
+          chmod +x scripts/backup-recovery.sh
+          ./scripts/backup-recovery.sh \
+            backup \
+            --environment ${{ needs.validate.outputs.environment }} \
+            --type full
+            
+      - name: 📤 Upload backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-backup-${{ needs.validate.outputs.environment }}-${{ github.run_number }}
+          path: backups/
+          retention-days: 90
+
+  # Job 7: Notificações
+  notify:
+    name: 📢 Notificações
+    runs-on: ubuntu-latest
+    needs: [validate, security_scan, security_audit, integration_tests]
+    if: always()
+    timeout-minutes: 5
+    
+    steps:
+      - name: 📊 Determinar status geral
+        id: status
+        run: |
+          # Verificar status dos jobs anteriores
+          validate_status="${{ needs.validate.result }}"
+          scan_status="${{ needs.security_scan.result }}"
+          audit_status="${{ needs.security_audit.result }}"
+          tests_status="${{ needs.integration_tests.result }}"
+          
+          if [[ "$validate_status" == "failure" ]] || [[ "$scan_status" == "failure" ]] || [[ "$audit_status" == "failure" ]] || [[ "$tests_status" == "failure" ]]; then
+            echo "overall_status=failure" >> $GITHUB_OUTPUT
+            echo "status_emoji=❌" >> $GITHUB_OUTPUT
+            echo "status_color=15158332" >> $GITHUB_OUTPUT
+          elif [[ "$validate_status" == "cancelled" ]] || [[ "$scan_status" == "cancelled" ]] || [[ "$audit_status" == "cancelled" ]] || [[ "$tests_status" == "cancelled" ]]; then
+            echo "overall_status=cancelled" >> $GITHUB_OUTPUT
+            echo "status_emoji=⏹️" >> $GITHUB_OUTPUT
+            echo "status_color=7506394" >> $GITHUB_OUTPUT
+          else
+            echo "overall_status=success" >> $GITHUB_OUTPUT
+            echo "status_emoji=✅" >> $GITHUB_OUTPUT
+            echo "status_color=3066993" >> $GITHUB_OUTPUT
+          fi
+          
+      - name: 📢 Enviar notificação Discord
+        if: env.DISCORD_WEBHOOK_URL != ''
+        uses: Ilshidur/action-discord@master
+        with:
+          args: '${{ steps.status.outputs.status_emoji }} Pro-Mata Security Pipeline - Status: ${{ steps.status.outputs.overall_status }}'
+        env:
+          DISCORD_WEBHOOK: ${{ env.DISCORD_WEBHOOK_URL }}
+          DISCORD_EMBEDS: |
+            [{
+              "title": "${{ steps.status.outputs.status_emoji }} Pro-Mata Security Pipeline",
+              "description": "Pipeline de segurança executado para ambiente **${{ needs.validate.outputs.environment }}**",
+              "color": ${{ steps.status.outputs.status_color }},
+              "fields": [
+                {
+                  "name": "Status",
+                  "value": "${{ steps.status.outputs.overall_status }}",
+                  "inline": true
+                },
+                {
+                  "name": "Branch",
+                  "value": "${{ github.ref_name }}",
+                  "inline": true
+                },
+                {
+                  "name": "Commit",
+                  "value": "[${{ github.sha }}](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})",
+                  "inline": true
+                },
+                {
+                  "name": "Validação",
+                  "value": "${{ needs.validate.result == 'success' && '✅' || needs.validate.result == 'failure' && '❌' || '⏹️' }}",
+                  "inline": true
+                },
+                {
+                  "name": "Scan",
+                  "value": "${{ needs.security_scan.result == 'success' && '✅' || needs.security_scan.result == 'failure' && '❌' || '⏹️' }}",
+                  "inline": true
+                },
+                {
+                  "name": "Auditoria",
+                  "value": "${{ needs.security_audit.result == 'success' && '✅' || needs.security_audit.result == 'failure' && '❌' || '⏹️' }}",
+                  "inline": true
+                }
+              ],
+              "timestamp": "${{ github.event.head_commit.timestamp }}",
+              "footer": {
+                "text": "Pro-Mata Security System"
+              }
+            }]
+            
+      - name: 📢 Enviar notificação Slack
+        if: env.SLACK_WEBHOOK_URL != '' && steps.status.outputs.overall_status == 'failure'
+        uses: 8398a7/action-slack@v3
+        with:
+          status: custom
+          custom_payload: |
+            {
+              "text": "${{ steps.status.outputs.status_emoji }} Pro-Mata Security Pipeline Failed",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Pro-Mata Security Pipeline Failed*\n\n*Environment:* ${{ needs.validate.outputs.environment }}\n*Branch:* ${{ github.ref_name }}\n*Commit:* <${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|${{ github.sha }}>"
+                  }
+                }
+              ]
+            }
+
+  # Job 8: Limpeza e manutenção
+  cleanup:
+    name: 🧹 Limpeza
+    runs-on: ubuntu-latest
+    needs: [notify]
+    if: always() && (github.event_name == 'schedule' || github.ref == 'refs/heads/main')
+    timeout-minutes: 5
+    
+    steps:
+      - name: 📥 Checkout código
+        uses: actions/checkout@v4
+        
+      - name: 🧹 Executar limpeza
+        run: |
+          chmod +x scripts/backup-recovery.sh
+          # Limpar backups antigos (manter últimos 10)
+          ./scripts/backup-recovery.sh cleanup --retention 10
+          
+      - name: 📊 Estatísticas do pipeline
+        run: |
+          echo "## 📊 Estatísticas do Pipeline" >> $GITHUB_STEP_SUMMARY
+          echo "- **Ambiente**: ${{ needs.validate.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Evento**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ${{ needs.notify.outputs.overall_status || 'unknown' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Duração**: ${{ github.event.head_commit.timestamp }}" >> $GITHUB_STEP_SUMMARY

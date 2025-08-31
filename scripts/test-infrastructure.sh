@@ -122,8 +122,12 @@ execute_test() {
 
 # Check if we're in the right directory
 check_directory() {
-    if [[ ! -f ".github/workflows/infrastructure-deployment.yml" ]]; then
-        print_error "Not in infrastructure repository root"
+    if [[ ! -d ".github/workflows" ]]; then
+        print_error "Not in infrastructure repository root (.github/workflows directory not found)"
+        exit 1
+    fi
+    if ! find .github/workflows -type f | grep -q .; then
+        print_error "No workflow files found in .github/workflows/"
         exit 1
     fi
     print_success "Infrastructure repository detected"
@@ -131,14 +135,19 @@ check_directory() {
 
 # Test Terraform configurations
 test_terraform() {
-    if [[ "$SKIP_TERRAFORM" == "true" ]]; then
-        print_warning "Skipping Terraform tests"
-        return 0
-    fi
-    
-    print_status "Testing Terraform configurations..."
-    
-    local terraform_dir="./environments/${ENVIRONMENT}/terraform"
+    local terraform_dir
+    case $ENVIRONMENT in
+        "dev"|"staging")
+            terraform_dir="./environments/$ENVIRONMENT/azure"
+            ;;
+        "prod")
+            terraform_dir="./environments/$ENVIRONMENT/aws"
+            ;;
+        *)
+            print_error "Unknown environment: $ENVIRONMENT"
+            return 1
+            ;;
+    esac
     
     if [[ ! -d "$terraform_dir" ]]; then
         print_error "Terraform directory not found: $terraform_dir"
@@ -211,16 +220,16 @@ test_endpoints() {
     # Determine URLs based on environment
     case "$ENVIRONMENT" in
         "dev")
-            frontend_url="https://dev.promata.ages.pucrs.br"
-            api_url="https://api-dev.promata.ages.pucrs.br"
+            frontend_url="https://dev.promata.duckdns.org"
+            api_url="https://api-dev.promata.duckdns.org"
             ;;
         "staging")
-            frontend_url="https://staging.promata.ages.pucrs.br"
-            api_url="https://api-staging.promata.ages.pucrs.br"
+            frontend_url="https://staging.promata.duckdns.org"
+            api_url="https://api-staging.promata.duckdns.org"
             ;;
         "prod")
-            frontend_url="https://promata.ages.pucrs.br"
-            api_url="https://api.promata.ages.pucrs.br"
+            frontend_url="https://promata.duckdns.org"
+            api_url="https://api.promata.duckdns.org"
             ;;
         *)
             print_error "Unknown environment: $ENVIRONMENT"

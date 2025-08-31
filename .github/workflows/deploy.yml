@@ -1,0 +1,148 @@
+# .github/workflows/deploy.yml
+name: Deploy Infrastructure with Make
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+        - dev
+        - staging
+        - prod
+      action:
+        description: 'Action to perform'
+        required: true
+        default: 'deploy'
+        type: choice
+        options:
+        - deploy
+        - update
+        - destroy
+        - health
+        - status
+
+  push:
+    branches: [main]
+    paths: ['environments/prod/**', 'terraform/**', 'ansible/**']
+
+  push:
+    branches: [develop]
+    paths: ['environments/dev/**', 'terraform/**', 'ansible/**']
+
+env:
+  ENV: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'prod' || 'dev') }}
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Tools
+        run: |
+          curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
+          sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
+          sudo apt-get update && sudo apt-get install -y terraform ansible make
+
+      - name: Validate Configuration
+        run: make terraform-validate ENV=${{ env.ENV }}
+
+  deploy:
+    needs: validate
+    runs-on: ubuntu-latest
+    if: github.event.inputs.action != 'destroy'
+    environment: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'development') }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Tools
+        run: |
+          curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
+          sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
+          sudo apt-get update && sudo apt-get install -y terraform ansible make docker.io
+
+      # - name: Azure Login
+      #   uses: azure/login@v1
+      #   with:
+      #     creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Load Secrets
+        env:
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_REPLICA_PASSWORD: ${{ secrets.POSTGRES_REPLICA_PASSWORD }}
+          PGLADMIN_PASSWORD: ${{ secrets.PGLADMIN_PASSWORD }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          TRAEFIK_AUTH_USERS: ${{ secrets.TRAEFIK_AUTH_USERS }}
+          GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
+          TF_VAR_ssh_public_key: ${{ secrets.SSH_PUBLIC_KEY }}
+        run: |
+          # Criar arquivo de secrets para o ambiente
+          mkdir -p environments/${{ env.ENV }}
+          cat > environments/${{ env.ENV }}/.env.secrets << EOF
+          export POSTGRES_PASSWORD='${{ secrets.POSTGRES_PASSWORD }}'
+          export POSTGRES_REPLICA_PASSWORD='${{ secrets.POSTGRES_REPLICA_PASSWORD }}'
+          export PGLADMIN_PASSWORD='${{ secrets.PGLADMIN_PASSWORD }}'
+          export JWT_SECRET='${{ secrets.JWT_SECRET }}'
+          export TRAEFIK_AUTH_USERS='${{ secrets.TRAEFIK_AUTH_USERS }}'
+          export GRAFANA_ADMIN_PASSWORD='${{ secrets.GRAFANA_ADMIN_PASSWORD }}'
+          export DUCKDNS_TOKEN='${{ secrets.DUCKDNS_TOKEN }}'
+          export TF_VAR_ssh_public_key='${{ secrets.SSH_PUBLIC_KEY }}'
+          EOF
+
+      - name: Execute Action
+        run: |
+          case "${{ github.event.inputs.action || 'deploy' }}" in
+            "deploy")
+              make deploy-automated ENV=${{ env.ENV }}
+              ;;
+            "update")
+              make update-dev ENV=${{ env.ENV }}
+              ;;
+            "health")
+              make health ENV=${{ env.ENV }}
+              ;;
+            "status")
+              make status ENV=${{ env.ENV }}
+              ;;
+            *)
+              echo "Unknown action: ${{ github.event.inputs.action }}"
+              exit 1
+              ;;
+          esac
+
+      - name: Show Results
+        run: make show-deployment-info ENV=${{ env.ENV }}
+
+  destroy:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.action == 'destroy'
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Tools
+        run: |
+          curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
+          sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
+          sudo apt-get update && sudo apt-get install -y terraform make
+
+      # - name: Azure Login
+      #   uses: azure/login@v1
+      #   with:
+      #     creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Destroy Infrastructure
+        env:
+          TF_VAR_ssh_public_key: ${{ secrets.SSH_PUBLIC_KEY }}
+        run: make destroy-${{ env.ENV }}
+
+---

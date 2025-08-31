@@ -90,7 +90,8 @@ terraform-apply-automated:
 
 terraform-destroy:
 	@echo "💥 Destroying infrastructure..."
-	@cd environments/$(ENV)/azure && terraform destroy -var-file="../terraform.tfvars" -auto-approve
+	@cd environments/$(ENV)/azure && terraform init -upgrade || true
+	@cd environments/$(ENV)/azure && terraform destroy -auto-approve
 
 # Docker Swarm commands
 swarm-init:
@@ -135,7 +136,11 @@ stacks-update:
 
 stacks-destroy:
 	@echo "🗑️  Removing stacks..."
-	@docker stack rm promata-proxy promata-app promata-database || true
+	@if docker node ls >/dev/null 2>&1; then \
+		docker stack rm promata-proxy promata-app promata-database || true; \
+	else \
+		echo "⚠️  Docker Swarm not available locally (stacks likely on remote infrastructure)"; \
+	fi
 
 # DNS and network
 dns-update:

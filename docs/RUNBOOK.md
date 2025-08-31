@@ -10,14 +10,14 @@ Streamlined deployment guide for Pro-Mata infrastructure.
 ## 🚀 Quick Deployment
 
 ### Local Setup
+
 ```bash
 cp environments/dev/.env.dev.example environments/dev/.env.dev
-# Edit: Azure subscription, domain configuration, passwords, SSH key
 
-make deploy-dev  # Full deployment
 ```
 
 ### GitHub Actions
+
 1. Configure repository secrets (Azure auth, app secrets, SSH keys)
 2. Push to `feature/dev-environment` or manually trigger workflow
 3. Monitor in Actions tab
@@ -71,7 +71,6 @@ docker stack deploy -c COMPOSE_FILE STACK_NAME
 
 # Complete cleanup
 make destroy-dev
-make deploy-dev
 ```
 
 ## 🔒 Security Notes

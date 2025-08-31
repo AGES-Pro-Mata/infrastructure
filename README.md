@@ -58,13 +58,11 @@ graph TB
 - Azure CLI (dev) or AWS CLI (prod)
 
 ### Deploy
+
 ```bash
 # Setup environment
 cp environments/dev/.env.dev.example environments/dev/.env.dev
 # Edit configuration
-
-# Deploy complete infrastructure
-make deploy-dev
 
 # Or step by step
 make terraform-apply ansible-configure stacks-deploy
@@ -99,8 +97,8 @@ cp environments/dev/.env.dev.example environments/dev/.env.dev
 Key variables: Azure subscription, domain, database passwords, image tags.
 
 ### Available Commands
+
 Run `make help` to see all available commands including:
-- `make deploy-dev` - Full deployment
 - `make status` - Infrastructure status  
 - `make health` - Health checks
 - `make logs SERVICE=name` - Service logs
@@ -122,9 +120,9 @@ scripts/health-check.sh       # Service health
 ```
 
 ### Full Deployment Test
+
 ```bash
 make terraform-plan   # Validate infrastructure
-make deploy-dev      # Deploy complete stack
 make status          # Verify deployment
 ```
 

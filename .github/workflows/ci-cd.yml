@@ -1,227 +1,360 @@
-name: Pro-Mata Deployment Trigger
+name: Deploy Pro-Mata Infrastructure
 
 on:
   repository_dispatch:
-    types: [deploy, docker-hub-auto-deploy]
+    types: 
+      # Triggers from Frontend
+      - deploy-dev-frontend
+      - deploy-prod-frontend
+      
+      # Triggers from Backend
+      - deploy-dev-backend
+      - deploy-prod-backend
+      
+      # Manual triggers
+      - deploy-manual
+      
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Target environment'
+        description: 'Target Environment'
         required: true
-        default: 'dev'
         type: choice
-        options:
-          - dev
-          - prod
-      backend_image_tag:
-        description: 'Backend image tag'
-        required: true
-        default: 'latest'
-      frontend_image_tag:
-        description: 'Frontend image tag'
-        required: true
-        default: 'latest'
-      force_infrastructure_update:
-        description: 'Force infrastructure update'
+        options: ['dev', 'prod']
+        default: 'dev'
+      component:
+        description: 'Component to deploy'
         required: false
-        default: false
+        type: choice
+        options: ['all', 'frontend', 'backend', 'infrastructure']
+        default: 'all'
+      force_rebuild:
+        description: 'Force infrastructure rebuild'
+        required: false
         type: boolean
+        default: false
 
 env:
-  DOCKER_REGISTRY: docker.io
-  DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+  TERRAFORM_VERSION: '1.8.0'
+  ANSIBLE_VERSION: '8.5.0'
 
 jobs:
-  determine-environment:
+  # Job 1: Determinar ambiente e configurações
+  determine-config:
+    name: 🔍 Determine Environment Configuration
     runs-on: ubuntu-latest
     outputs:
-      environment: ${{ steps.env.outputs.environment }}
-      backend_image_tag: ${{ steps.env.outputs.backend_image_tag }}
-      frontend_image_tag: ${{ steps.env.outputs.frontend_image_tag }}
-      cloud_provider: ${{ steps.env.outputs.cloud_provider }}
-      trigger_source: ${{ steps.env.outputs.trigger_source }}
-      updated_image: ${{ steps.env.outputs.updated_image }}
-    
+      environment: ${{ steps.config.outputs.environment }}
+      cloud_provider: ${{ steps.config.outputs.cloud_provider }}
+      backend_image: ${{ steps.config.outputs.backend_image }}
+      frontend_image: ${{ steps.config.outputs.frontend_image }}
+      triggered_by: ${{ steps.config.outputs.triggered_by }}
+      deploy_component: ${{ steps.config.outputs.deploy_component }}
+      resource_group: ${{ steps.config.outputs.resource_group }}
+      region: ${{ steps.config.outputs.region }}
+      
     steps:
-      - name: Determine Environment and Tags
-        id: env
+      - name: Parse Event and Set Configuration
+        id: config
         run: |
+          # Determinar ambiente baseado no evento
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
-            echo "backend_image_tag=${{ github.event.inputs.backend_image_tag }}" >> $GITHUB_OUTPUT
-            echo "frontend_image_tag=${{ github.event.inputs.frontend_image_tag }}" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event.action }}" = "deploy" ]; then
-            echo "environment=dev" >> $GITHUB_OUTPUT
-            echo "backend_image_tag=${{ github.event.client_payload.backend_tag }}" >> $GITHUB_OUTPUT
-            echo "frontend_image_tag=${{ github.event.client_payload.frontend_tag }}" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event.action }}" = "deploy-prod" ]; then
-            echo "environment=prod" >> $GITHUB_OUTPUT
-            echo "backend_image_tag=${{ github.event.client_payload.backend_tag }}" >> $GITHUB_OUTPUT
-            echo "frontend_image_tag=${{ github.event.client_payload.frontend_tag }}" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event.action }}" = "docker-hub-auto-deploy" ]; then
-            echo "environment=${{ github.event.client_payload.environment }}" >> $GITHUB_OUTPUT
-            echo "backend_image_tag=${{ github.event.client_payload.backend_tag }}" >> $GITHUB_OUTPUT
-            echo "frontend_image_tag=${{ github.event.client_payload.frontend_tag }}" >> $GITHUB_OUTPUT
-            # Add deployment metadata for tracking
-            echo "trigger_source=${{ github.event.client_payload.trigger_source }}" >> $GITHUB_OUTPUT
-            echo "updated_image=${{ github.event.client_payload.updated_image }}" >> $GITHUB_OUTPUT
-          fi
-          
-          # Set cloud provider based on environment
-          if [ "$(echo $GITHUB_OUTPUT | grep environment= | cut -d= -f2)" = "dev" ]; then
-            echo "cloud_provider=azure" >> $GITHUB_OUTPUT
+            ENV="${{ github.event.inputs.environment }}"
+            COMPONENT="${{ github.event.inputs.component }}"
+            TRIGGERED_BY="manual"
           else
-            echo "cloud_provider=aws" >> $GITHUB_OUTPUT
-          fi
-
-  check-images:
-    needs: determine-environment
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Verify Backend Image Exists
-        run: |
-          echo "Checking backend image: ${{ env.DOCKER_REGISTRY }}/norohim/pro-mata-backend-dev:${{ needs.determine-environment.outputs.backend_image_tag }}"
-          docker manifest inspect ${{ env.DOCKER_REGISTRY }}/norohim/pro-mata-backend-dev:${{ needs.determine-environment.outputs.backend_image_tag }} || {
-            echo "Backend image not found. Available tags:"
-            curl -s "https://registry.hub.docker.com/v2/repositories/norohim/pro-mata-backend-dev/tags/" | jq -r '.results[].name' | head -10
-            exit 1
-          }
-
-      - name: Verify Frontend Image Exists
-        run: |
-          echo "Checking frontend image: ${{ env.DOCKER_REGISTRY }}/norohim/pro-mata-frontend-dev:${{ needs.determine-environment.outputs.frontend_image_tag }}"
-          docker manifest inspect ${{ env.DOCKER_REGISTRY }}/norohim/pro-mata-frontend-dev:${{ needs.determine-environment.outputs.frontend_image_tag }} || {
-            echo "Frontend image not found. Available tags:"
-            curl -s "https://registry.hub.docker.com/v2/repositories/norohim/pro-mata-frontend-dev/tags/" | jq -r '.results[].name' | head -10
-            exit 1
-          }
-
-  deploy-to-development:
-    needs: [determine-environment, check-images]
-    if: needs.determine-environment.outputs.environment == 'dev'
-    uses: ./.github/workflows/deploy.yml
-    with:
-      backend_image_tag: ${{ needs.determine-environment.outputs.backend_image_tag }}
-      frontend_image_tag: ${{ needs.determine-environment.outputs.frontend_image_tag }}
-    secrets:
-      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-      AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
-      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY_DEV }}
-
-  deploy-to-production:
-    needs: [determine-environment, check-images]
-    if: needs.determine-environment.outputs.environment == 'prod'
-    uses: ./.github/workflows/deploy-prod.yml
-    with:
-      backend_image_tag: ${{ needs.determine-environment.outputs.backend_image_tag }}
-      frontend_image_tag: ${{ needs.determine-environment.outputs.frontend_image_tag }}
-    secrets:
-      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY_PROD }}
-
-  rollback-on-failure:
-    needs: [deploy-to-development, deploy-to-production, determine-environment]
-    if: failure()
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout Infrastructure Code
-        uses: actions/checkout@v4
-
-      - name: Rollback Development
-        if: needs.deploy-to-development.result == 'failure'
-        run: |
-          echo "Rolling back development deployment..."
-          chmod +x scripts/rollback.sh
-          ./scripts/rollback.sh --environment dev --provider azure
-
-      - name: Rollback Production  
-        if: needs.deploy-to-production.result == 'failure'
-        run: |
-          echo "Rolling back production deployment..."
-          chmod +x scripts/rollback.sh
-          ./scripts/rollback.sh --environment prod --provider aws
-
-  notify-deployment:
-    needs: [deploy-to-development, deploy-to-production, determine-environment]
-    if: always()
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout Infrastructure Code
-        uses: actions/checkout@v4
-
-      - name: Notify Success
-        if: needs.deploy-to-development.result == 'success' || needs.deploy-to-production.result == 'success'
-        run: |
-          echo "Deployment completed successfully!"
-          chmod +x scripts/notify-deployment.sh
-          
-          # Determine notification type
-          if [[ "${{ needs.determine-environment.outputs.trigger_source }}" == "docker_hub_webhook" ]]; then
-            echo "🤖 Auto-deployment via Docker Hub webhook completed!"
-            ./scripts/notify-deployment.sh \
-              --status success \
-              --environment ${{ needs.determine-environment.outputs.environment }} \
-              --backend-tag ${{ needs.determine-environment.outputs.backend_image_tag }} \
-              --frontend-tag ${{ needs.determine-environment.outputs.frontend_image_tag }} \
-              --trigger-source "docker_hub_webhook" \
-              --updated-image "${{ needs.determine-environment.outputs.updated_image }}"
-          else
-            ./scripts/notify-deployment.sh \
-              --status success \
-              --environment ${{ needs.determine-environment.outputs.environment }} \
-              --backend-tag ${{ needs.determine-environment.outputs.backend_image_tag }} \
-              --frontend-tag ${{ needs.determine-environment.outputs.frontend_image_tag }}
-          fi
-
-      - name: Notify Failure
-        if: needs.deploy-to-development.result == 'failure' || needs.deploy-to-production.result == 'failure'
-        run: |
-          echo "Deployment failed!"
-          chmod +x scripts/notify-deployment.sh
-          ./scripts/notify-deployment.sh \
-            --status failure \
-            --environment ${{ needs.determine-environment.outputs.environment }} \
-            --backend-tag ${{ needs.determine-environment.outputs.backend_image_tag }} \
-            --frontend-tag ${{ needs.determine-environment.outputs.frontend_image_tag }}
-
-  update-deployment-status:
-    needs: [deploy-to-development, deploy-to-production, determine-environment]
-    if: always()
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Update Deployment Status
-        run: |
-          if [ "${{ needs.deploy-to-development.result }}" = "success" ] || [ "${{ needs.deploy-to-production.result }}" = "success" ]; then
-            echo "✅ Deployment completed successfully"
-            echo "Environment: ${{ needs.determine-environment.outputs.environment }}"
-            echo "Backend: ${{ needs.determine-environment.outputs.backend_image_tag }}"
-            echo "Frontend: ${{ needs.determine-environment.outputs.frontend_image_tag }}"
+            # Parse do repository_dispatch
+            EVENT_TYPE="${{ github.event.action }}"
+            echo "Event type: $EVENT_TYPE"
             
-            # Add trigger information if available
-            if [[ "${{ needs.determine-environment.outputs.trigger_source }}" == "docker_hub_webhook" ]]; then
-              echo "🤖 Trigger: Docker Hub webhook (auto-deployment)"
-              echo "📦 Updated Image: ${{ needs.determine-environment.outputs.updated_image }}"
+            if [[ "$EVENT_TYPE" == *"dev"* ]]; then
+              ENV="dev"
+            elif [[ "$EVENT_TYPE" == *"prod"* ]]; then
+              ENV="prod"
+            else
+              ENV="dev" # default
             fi
             
-            # Update deployment tracking
-            curl -X POST "https://api.github.com/repos/${{ github.repository }}/deployments" \
-              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              -H "Content-Type: application/json" \
-              -d '{
-                "ref": "${{ github.sha }}",
-                "environment": "${{ needs.determine-environment.outputs.environment }}",
-                "description": "Pro-Mata deployment via CI/CD - '${{ needs.determine-environment.outputs.trigger_source || 'manual' }}'"
-              }' || echo "Failed to update deployment status"
+            if [[ "$EVENT_TYPE" == *"frontend"* ]]; then
+              COMPONENT="frontend"
+              TRIGGERED_BY="frontend"
+            elif [[ "$EVENT_TYPE" == *"backend"* ]]; then
+              COMPONENT="backend"
+              TRIGGERED_BY="backend"
+            else
+              COMPONENT="all"
+              TRIGGERED_BY="manual"
+            fi
+          fi
+          
+          echo "environment=$ENV" >> $GITHUB_OUTPUT
+          echo "deploy_component=$COMPONENT" >> $GITHUB_OUTPUT
+          echo "triggered_by=$TRIGGERED_BY" >> $GITHUB_OUTPUT
+          
+          # Configurações por ambiente
+          if [ "$ENV" = "prod" ]; then
+            echo "cloud_provider=aws" >> $GITHUB_OUTPUT
+            echo "backend_image=norohim/pro-mata-backend:latest" >> $GITHUB_OUTPUT
+            echo "frontend_image=norohim/pro-mata-frontend:latest" >> $GITHUB_OUTPUT
+            echo "resource_group=promata-prod-rg" >> $GITHUB_OUTPUT
+            echo "region=us-east-1" >> $GITHUB_OUTPUT
           else
-            echo "❌ Deployment failed"
-            echo "Dev result: ${{ needs.deploy-to-development.result }}"
-            echo "Prod result: ${{ needs.deploy-to-production.result }}"
+            echo "cloud_provider=azure" >> $GITHUB_OUTPUT
+            echo "backend_image=norohim/pro-mata-backend-dev:latest" >> $GITHUB_OUTPUT
+            echo "frontend_image=norohim/pro-mata-frontend-dev:latest" >> $GITHUB_OUTPUT
+            echo "resource_group=promata-dev-rg" >> $GITHUB_OUTPUT
+            echo "region=eastus2" >> $GITHUB_OUTPUT
+          fi
+          
+          echo "🎯 Configuration determined:"
+          echo "Environment: $ENV"
+          echo "Component: $COMPONENT"
+          echo "Triggered by: $TRIGGERED_BY"
+
+  # Job 2: Verificar imagens Docker
+  verify-images:
+    name: 🔍 Verify Docker Images
+    runs-on: ubuntu-latest
+    needs: determine-config
+    steps:
+      - name: Verify Backend Image
+        if: contains(needs.determine-config.outputs.deploy_component, 'backend') || needs.determine-config.outputs.deploy_component == 'all'
+        run: |
+          echo "🐳 Checking backend image: ${{ needs.determine-config.outputs.backend_image }}"
+          docker manifest inspect ${{ needs.determine-config.outputs.backend_image }} || {
+            echo "❌ Backend image not found!"
+            exit 1
+          }
+          echo "✅ Backend image verified"
+
+      - name: Verify Frontend Image
+        if: contains(needs.determine-config.outputs.deploy_component, 'frontend') || needs.determine-config.outputs.deploy_component == 'all'
+        run: |
+          echo "🐳 Checking frontend image: ${{ needs.determine-config.outputs.frontend_image }}"
+          docker manifest inspect ${{ needs.determine-config.outputs.frontend_image }} || {
+            echo "❌ Frontend image not found!"
+            exit 1
+          }
+          echo "✅ Frontend image verified"
+
+  # Job 3: Deploy Azure (Dev)
+  deploy-azure:
+    name: 🌩️ Deploy to Azure (Dev)
+    runs-on: ubuntu-latest
+    needs: [determine-config, verify-images]
+    if: needs.determine-config.outputs.cloud_provider == 'azure'
+    
+    steps:
+      - name: Checkout Infrastructure
+        uses: actions/checkout@v4
+
+      - name: Setup Tools
+        run: |
+          # Install Terraform
+          wget https://releases.hashicorp.com/terraform/${{ env.TERRAFORM_VERSION }}/terraform_${{ env.TERRAFORM_VERSION }}_linux_amd64.zip
+          unzip terraform_${{ env.TERRAFORM_VERSION }}_linux_amd64.zip
+          sudo mv terraform /usr/local/bin/
+          
+          # Install Ansible
+          sudo apt-get update
+          sudo apt-get install -y python3-pip
+          pip3 install ansible==${{ env.ANSIBLE_VERSION }}
+          
+          # Install Make
+          sudo apt-get install -y make
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Setup Ansible Vault
+        run: |
+          echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > ~/.ansible-vault-password
+          chmod 600 ~/.ansible-vault-password
+          echo "vault_password_file = ~/.ansible-vault-password" >> ~/.ansible.cfg
+
+      - name: Create Environment File
+        run: |
+          cat > environments/${{ needs.determine-config.outputs.environment }}/.env.${{ needs.determine-config.outputs.environment }} << EOF
+          # Azure Configuration
+          AZURE_SUBSCRIPTION_ID=${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          AZURE_RESOURCE_GROUP=${{ needs.determine-config.outputs.resource_group }}
+          AZURE_LOCATION=${{ needs.determine-config.outputs.region }}
+          
+          # Domain Configuration
+          DOMAIN_NAME=${{ needs.determine-config.outputs.environment == 'prod' && 'promata.com.br' || 'promata-dev.com.br' }}
+          
+          # Application Images
+          BACKEND_IMAGE=${{ needs.determine-config.outputs.backend_image }}
+          FRONTEND_IMAGE=${{ needs.determine-config.outputs.frontend_image }}
+          BACKEND_REPLICAS=${{ needs.determine-config.outputs.environment == 'prod' && '3' || '2' }}
+          FRONTEND_REPLICAS=${{ needs.determine-config.outputs.environment == 'prod' && '3' || '2' }}
+          
+          # Infrastructure
+          TF_VAR_ssh_public_key="${{ secrets.SSH_PUBLIC_KEY }}"
+          
+          # Deployment metadata
+          TRIGGERED_BY=${{ needs.determine-config.outputs.triggered_by }}
+          DEPLOY_COMPONENT=${{ needs.determine-config.outputs.deploy_component }}
+          DEPLOYMENT_TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          EOF
+
+      - name: Deploy Infrastructure
+        run: |
+          echo "🚀 Starting deployment..."
+          echo "Environment: ${{ needs.determine-config.outputs.environment }}"
+          echo "Component: ${{ needs.determine-config.outputs.deploy_component }}"
+          echo "Triggered by: ${{ needs.determine-config.outputs.triggered_by }}"
+          
+          # Deploy baseado no componente
+          if [ "${{ needs.determine-config.outputs.deploy_component }}" = "all" ] || [ "${{ github.event.inputs.force_rebuild }}" = "true" ]; then
+            echo "🏗️ Full infrastructure deployment"
+            make deploy-automated ENV=${{ needs.determine-config.outputs.environment }}
+          else
+            echo "📦 Application-only deployment"
+            make stacks-deploy ENV=${{ needs.determine-config.outputs.environment }}
+          fi
+        timeout-minutes: 45
+
+      - name: Health Checks
+        run: |
+          echo "🏥 Running health checks..."
+          make health ENV=${{ needs.determine-config.outputs.environment }}
+        timeout-minutes: 10
+
+  # Job 4: Deploy AWS (Prod)
+  deploy-aws:
+    name: ☁️ Deploy to AWS (Prod)
+    runs-on: ubuntu-latest
+    needs: [determine-config, verify-images]
+    if: needs.determine-config.outputs.cloud_provider == 'aws'
+    
+    steps:
+      - name: Checkout Infrastructure
+        uses: actions/checkout@v4
+
+      - name: Setup Tools
+        run: |
+          # Install Terraform
+          wget https://releases.hashicorp.com/terraform/${{ env.TERRAFORM_VERSION }}/terraform_${{ env.TERRAFORM_VERSION }}_linux_amd64.zip
+          unzip terraform_${{ env.TERRAFORM_VERSION }}_linux_amd64.zip
+          sudo mv terraform /usr/local/bin/
+          
+          # Install AWS CLI
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip awscliv2.zip
+          sudo ./aws/install
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ needs.determine-config.outputs.region }}
+
+      - name: Create Environment File
+        run: |
+          cat > environments/${{ needs.determine-config.outputs.environment }}/.env.${{ needs.determine-config.outputs.environment }} << EOF
+          # AWS Configuration
+          AWS_REGION=${{ needs.determine-config.outputs.region }}
+          AWS_ACCOUNT_ID=${{ secrets.AWS_ACCOUNT_ID }}
+          
+          # Domain Configuration
+          DOMAIN_NAME=promata.com.br
+          
+          # Application Images
+          BACKEND_IMAGE=${{ needs.determine-config.outputs.backend_image }}
+          FRONTEND_IMAGE=${{ needs.determine-config.outputs.frontend_image }}
+          BACKEND_REPLICAS=3
+          FRONTEND_REPLICAS=3
+          
+          # Deployment metadata
+          TRIGGERED_BY=${{ needs.determine-config.outputs.triggered_by }}
+          DEPLOY_COMPONENT=${{ needs.determine-config.outputs.deploy_component }}
+          DEPLOYMENT_TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          EOF
+
+      - name: Deploy to ECS
+        run: |
+          echo "🚀 Deploying to AWS ECS..."
+          make deploy-aws ENV=${{ needs.determine-config.outputs.environment }}
+        timeout-minutes: 30
+
+  # Job 5: Deployment Summary e Notifications
+  deployment-summary:
+    name: 📋 Deployment Summary
+    runs-on: ubuntu-latest
+    needs: [determine-config, deploy-azure, deploy-aws]
+    if: always()
+    
+    steps:
+      - name: Checkout Infrastructure
+        uses: actions/checkout@v4
+
+      - name: Generate Deployment Report
+        run: |
+          echo "## 🎉 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Environment** | ${{ needs.determine-config.outputs.environment }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Cloud Provider** | ${{ needs.determine-config.outputs.cloud_provider }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Triggered By** | ${{ needs.determine-config.outputs.triggered_by }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Component** | ${{ needs.determine-config.outputs.deploy_component }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Backend Image** | ${{ needs.determine-config.outputs.backend_image }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Frontend Image** | ${{ needs.determine-config.outputs.frontend_image }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Status** | ${{ (needs.deploy-azure.result == 'success' || needs.deploy-aws.result == 'success') && '✅ SUCCESS' || '❌ FAILED' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # URLs de acesso baseadas no ambiente
+          if [ "${{ needs.determine-config.outputs.environment }}" = "prod" ]; then
+            echo "### 🌐 Production URLs" >> $GITHUB_STEP_SUMMARY
+            echo "- **Frontend**: https://promata.com.br" >> $GITHUB_STEP_SUMMARY
+            echo "- **API**: https://api.promata.com.br" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### 🔧 Development URLs" >> $GITHUB_STEP_SUMMARY
+            echo "- **Frontend**: https://promata-dev.com.br" >> $GITHUB_STEP_SUMMARY
+            echo "- **API**: https://api.promata-dev.com.br" >> $GITHUB_STEP_SUMMARY
+            echo "- **Traefik**: https://traefik.promata-dev.com.br" >> $GITHUB_STEP_SUMMARY
+            echo "- **PgAdmin**: https://pgadmin.promata-dev.com.br" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Notify Success
+        if: needs.deploy-azure.result == 'success' || needs.deploy-aws.result == 'success'
+        run: |
+          echo "✅ Deployment successful!"
+          
+          # Aqui você pode adicionar notificações para Discord/Slack
+          # curl -X POST $DISCORD_WEBHOOK -H "Content-Type: application/json" -d '{...}'
+
+      - name: Notify Failure
+        if: needs.deploy-azure.result == 'failure' || needs.deploy-aws.result == 'failure'
+        run: |
+          echo "❌ Deployment failed!"
+          
+          # Notificação de falha
+          exit 1
+
+  # Job 6: Rollback em caso de falha
+  rollback-on-failure:
+    name: 🔄 Emergency Rollback
+    runs-on: ubuntu-latest
+    needs: [determine-config, deploy-azure, deploy-aws]
+    if: failure()
+    
+    steps:
+      - name: Checkout Infrastructure
+        uses: actions/checkout@v4
+
+      - name: Execute Rollback
+        run: |
+          echo "🚨 Executing emergency rollback..."
+          
+          if [ "${{ needs.determine-config.outputs.cloud_provider }}" = "azure" ]; then
+            echo "Rolling back Azure deployment..."
+            make rollback ENV=${{ needs.determine-config.outputs.environment }}
+          else
+            echo "Rolling back AWS deployment..."
+            make rollback-aws ENV=${{ needs.determine-config.outputs.environment }}
           fi

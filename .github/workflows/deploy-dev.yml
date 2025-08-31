@@ -1,0 +1,72 @@
+name: Deploy Dev Environment
+
+on:
+  repository_dispatch:
+    types: [deploy-dev-frontend, deploy-dev-backend]
+  workflow_dispatch:
+    inputs:
+      force_deploy:
+        description: 'Force full deployment'
+        required: false
+        default: 'false'
+
+env:
+  ENV: dev
+  AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Tools
+        run: |
+          curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
+          sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
+          sudo apt-get update && sudo apt-get install -y terraform ansible make
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Setup Ansible Vault
+        run: |
+          echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > ~/.ansible-vault-password
+          chmod 600 ~/.ansible-vault-password
+          echo "vault_password_file = ~/.ansible-vault-password" >> ~/.ansible.cfg
+
+      - name: Create Environment File
+        run: |
+          cat > environments/dev/.env.dev << EOF
+          AZURE_SUBSCRIPTION_ID=${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          AZURE_RESOURCE_GROUP=promata-dev-rg
+          AZURE_LOCATION=eastus2
+          DOMAIN_NAME=promata.com.br
+          BACKEND_IMAGE=norohim/pro-mata-backend-dev:latest
+          FRONTEND_IMAGE=norohim/pro-mata-frontend-dev:latest
+          BACKEND_REPLICAS=2
+          FRONTEND_REPLICAS=2
+          TF_VAR_ssh_public_key="${{ secrets.SSH_PUBLIC_KEY }}"
+          EOF
+
+      - name: Deploy Infrastructure
+        run: |
+          make deploy-automated ENV=dev
+        timeout-minutes: 30
+
+      - name: Health Check
+        run: |
+          make health ENV=dev
+        timeout-minutes: 10
+
+      - name: Deployment Summary
+        run: |
+          echo "## 🎉 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment**: dev" >> $GITHUB_STEP_SUMMARY  
+          echo "- **Triggered by**: ${{ github.event.client_payload.triggered_by }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Frontend**: https://promata.com.br" >> $GITHUB_STEP_SUMMARY
+          echo "- **Backend API**: https://api.promata.com.br" >> $GITHUB_STEP_SUMMARY
+          echo "- **Traefik Dashboard**: https://traefik.promata.com.br" >> $GITHUB_STEP_SUMMARY

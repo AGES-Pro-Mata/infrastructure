@@ -22,7 +22,7 @@ infrastructure/
 - **Compute**: Docker Swarm on Standard_B2s VMs
 - **Network**: VNet 10.1.0.0/16 with NSGs
 - **Storage**: Premium SSD managed disks
-- **DNS**: DuckDNS (promata-dev.duckdns.org)
+- **DNS**: Custom domain (promata.com.br)
 - **TLS**: Let's Encrypt via Traefik
 - **Database**: PostgreSQL with PgBouncer pooling
 - **Monitoring**: Prometheus + Grafana
@@ -63,7 +63,7 @@ infrastructure/
 1. **Infrastructure**: Terraform provisions Azure resources
 2. **Configuration**: Ansible configures VMs and services
 3. **Applications**: Docker Swarm deploys service stacks
-4. **DNS**: DuckDNS updates with public IP
+4. **DNS**: Custom domain configuration
 5. **Health**: Automated health checks verify deployment
 
 ### Production Flow  

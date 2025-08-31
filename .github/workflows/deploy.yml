@@ -81,7 +81,6 @@ jobs:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           TRAEFIK_AUTH_USERS: ${{ secrets.TRAEFIK_AUTH_USERS }}
           GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
-          DUCKDNS_TOKEN: ${{ secrets.DUCKDNS_TOKEN }}
           TF_VAR_ssh_public_key: ${{ secrets.SSH_PUBLIC_KEY }}
         run: |
           # Criar arquivo de secrets para o ambiente

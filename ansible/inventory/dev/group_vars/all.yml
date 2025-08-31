@@ -3,7 +3,7 @@
 # Environment Configuration
 environment: development
 project_name: pro-mata
-domain_name: "{{ duckdns_domain }}.duckdns.org"
+domain_name: "promata.com.br"
 
 # Docker Configuration
 docker_version: "24.0"
@@ -39,9 +39,6 @@ traefik_api_dashboard: true
 acme_email: "{{ vault_acme_email }}"
 traefik_auth_users: "{{ vault_traefik_auth_users }}"
 
-# DuckDNS Configuration
-duckdns_domain: "{{ vault_duckdns_domain }}"
-duckdns_token: "{{ vault_duckdns_token }}"
 
 # JWT Configuration
 jwt_secret: "{{ vault_jwt_secret }}"
@@ -49,10 +46,8 @@ jwt_expires_in: "1h"
 
 # Stack Environment Variables
 stack_environment:
-  # Domain & DNS
+  # Domain Configuration
   DOMAIN_NAME: "{{ domain_name }}"
-  DUCKDNS_DOMAIN: "{{ duckdns_domain }}"
-  DUCKDNS_TOKEN: "{{ duckdns_token }}"
   
   # Application
   ENVIRONMENT: "{{ environment }}"

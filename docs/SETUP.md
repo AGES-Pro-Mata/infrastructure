@@ -47,8 +47,7 @@ POSTGRES_PASSWORD=secure_password_here
 REDIS_PASSWORD=redis_password_here
 
 # DNS
-DUCKDNS_TOKEN=your-duckdns-token
-DOMAIN_NAME=promata-dev.duckdns.org
+DOMAIN_NAME=promata.com.br
 ```
 
 ### Production (AWS)
@@ -148,7 +147,7 @@ sudo ufw status
 telnet <node-ip> 2377
 
 # DNS resolution
-nslookup promata-dev.duckdns.org
+nslookup promata.com.br
 ```
 
 ### Registry Issues
@@ -163,8 +162,8 @@ docker system info | grep Registry
 ### Health Checks
 ```bash
 # Application endpoints
-curl https://api.promata-dev.duckdns.org/health
-curl https://promata-dev.duckdns.org/health
+curl https://api.promata.com.br/health
+curl https://promata.com.br/health
 
 # Database connectivity  
 PGPASSWORD=$POSTGRES_PASSWORD psql -h $DB_HOST -U $POSTGRES_USER -d $POSTGRES_DB -c "SELECT 1;"

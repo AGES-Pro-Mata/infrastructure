@@ -477,14 +477,14 @@ monitor_network() {
     local unusual_connections=0
     
     # Verificar muitas conexões de um mesmo IP
-    local top_ips=$(ss -tnp | grep ESTAB | awk '{print $5}' | cut -d: -f1 | sort | uniq -c | sort -nr | head -5)
+    # local top_ips=$(ss -tnp | grep ESTAB | awk '{print $5}' | cut -d: -f1 | sort | uniq -c | sort -nr | head -5)
     
-    while read -r count ip; do
-        if [[ -n "$count" ]] && [[ $count -gt 50 ]] && [[ "$ip" != "127.0.0.1" ]]; then
-            ((unusual_connections++))
-            log "ALERT" "IP com muitas conexões: $ip ($count conexões)"
-        fi
-    done <<< "$top_ips"
+    # while read -r count ip; do
+    #     if [[ -n "$count" ]] && [[ $count -gt 50 ]] && [[ "$ip" != "127.0.0.1" ]]; then
+    #         ((unusual_connections++))
+    #         log "ALERT" "IP com muitas conexões: $ip ($count conexões)"
+    #     fi
+    # done <<< "$top_ips"
     
     # Verificar portas inesperadas listening
     local unexpected_ports=$(ss -tlnp | grep LISTEN | awk '{print $4}' | cut -d: -f2 | sort -n | uniq)

@@ -2,7 +2,7 @@ name: Pro-Mata Deployment Trigger
 
 on:
   repository_dispatch:
-    types: [deploy-dev, deploy-prod, docker-hub-auto-deploy]
+    types: [deploy, docker-hub-auto-deploy]
   workflow_dispatch:
     inputs:
       environment:
@@ -50,7 +50,7 @@ jobs:
             echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
             echo "backend_image_tag=${{ github.event.inputs.backend_image_tag }}" >> $GITHUB_OUTPUT
             echo "frontend_image_tag=${{ github.event.inputs.frontend_image_tag }}" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event.action }}" = "deploy-dev" ]; then
+          elif [ "${{ github.event.action }}" = "deploy" ]; then
             echo "environment=dev" >> $GITHUB_OUTPUT
             echo "backend_image_tag=${{ github.event.client_payload.backend_tag }}" >> $GITHUB_OUTPUT
             echo "frontend_image_tag=${{ github.event.client_payload.frontend_tag }}" >> $GITHUB_OUTPUT
@@ -100,7 +100,7 @@ jobs:
   deploy-to-development:
     needs: [determine-environment, check-images]
     if: needs.determine-environment.outputs.environment == 'dev'
-    uses: ./.github/workflows/deploy-dev.yml
+    uses: ./.github/workflows/deploy.yml
     with:
       backend_image_tag: ${{ needs.determine-environment.outputs.backend_image_tag }}
       frontend_image_tag: ${{ needs.determine-environment.outputs.frontend_image_tag }}

@@ -9,7 +9,6 @@ Infraestrutura automatizada do Pro-Mata AGES: Docker Swarm (Azure dev), ECS Farg
 ```mermaid
 graph TB
     subgraph "Internet"
-        DuckDNS[DuckDNS<br/>promata-dev.duckdns.org]
         LE[Let's Encrypt<br/>Certificados TLS]
     end
     
@@ -37,7 +36,7 @@ graph TB
         end
     end
     
-    DuckDNS --> LB
+     --> LB
     LE --> LB
     LB --> FE1
     LB --> FE2
@@ -85,7 +84,7 @@ infrastructure/
 
 ## 🔧 Architecture Components
 
-**Networking**: DuckDNS (DNS), Traefik (proxy/LB), CoreDNS (service discovery)
+**Networking**: (DNS), Traefik (proxy/LB), CoreDNS (service discovery)
 **Database**: PostgreSQL HA with PgBouncer connection pooling
 **Security**: Let's Encrypt SSL, Azure NSG/AWS security groups
 **Monitoring**: Prometheus + Grafana, centralized logging
@@ -139,14 +138,7 @@ make rollback                # Emergency rollback
 ```
 
 ### Monitoring
-Access: https://promata-dev.duckdns.org (frontend), https://api.promata-dev.duckdns.org (API)
 
-## 📊 Monitoring Endpoints
-
-- Frontend: https://promata-dev.duckdns.org
-- API: https://api.promata-dev.duckdns.org
-- Traefik: https://promata-dev.duckdns.org:8080
-- Grafana: https://promata-dev.duckdns.org:3001
 
 Alerts configured for service downtime, resource usage >80%, SSL expiration
 
@@ -161,7 +153,6 @@ make status
 make logs SERVICE=backend
 
 # DNS/connectivity
-nslookup promata-dev.duckdns.org
 
 # Emergency rollback
 ./scripts/rollback.sh

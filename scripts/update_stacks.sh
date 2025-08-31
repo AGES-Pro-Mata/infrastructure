@@ -117,9 +117,6 @@ update_proxy() {
     if [[ "$SERVICE" == "all" ]] || [[ "$SERVICE" == "proxy" ]]; then
         update_service "promata-proxy_traefik"
         wait_for_service "promata-proxy_traefik" 60
-        
-        # Update DuckDNS
-        update_service "promata-proxy_duckdns-updater"
     fi
 }
 

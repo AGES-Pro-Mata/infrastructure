@@ -4,7 +4,7 @@ Streamlined deployment guide for Pro-Mata infrastructure.
 
 ## Prerequisites
 - Azure CLI, Terraform >= 1.8.0, Docker
-- Azure subscription, DuckDNS account, Docker Hub access
+- Azure subscription, Custom domain, Docker Hub access
 - SSH key pair for VM access
 
 ## 🚀 Quick Deployment
@@ -12,7 +12,7 @@ Streamlined deployment guide for Pro-Mata infrastructure.
 ### Local Setup
 ```bash
 cp environments/dev/.env.dev.example environments/dev/.env.dev
-# Edit: Azure subscription, DuckDNS token, passwords, SSH key
+# Edit: Azure subscription, domain configuration, passwords, SSH key
 
 make deploy-dev  # Full deployment
 ```
@@ -24,10 +24,10 @@ make deploy-dev  # Full deployment
 
 ## 🎯 Access Points
 
-- **Frontend**: https://promata-dev.duckdns.org
-- **API**: https://api.promata-dev.duckdns.org  
-- **Traefik**: https://traefik.promata-dev.duckdns.org
-- **PgAdmin**: https://pgladmin.promata-dev.duckdns.org
+- **Frontend**: https://promata.com.br
+- **API**: https://api.promata.com.br  
+- **Traefik**: https://traefik.promata.com.br
+- **PgAdmin**: https://pgladmin.promata.com.br
 
 ## 📊 Management Commands
 
@@ -51,7 +51,7 @@ scripts/backup-database.sh  # Database backup
 docker node ls && docker service ls
 
 # DNS resolution  
-nslookup promata-dev.duckdns.org
+nslookup promata.com.br
 
 # Database connectivity
 docker exec -it pgbouncer psql -h localhost -p 6432 -U promata -d promata_dev

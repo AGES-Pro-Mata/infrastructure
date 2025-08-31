@@ -91,7 +91,7 @@ echo "  Tag: $PUSHED_TAG"
 echo "  Pusher: $PUSHER"
 
 # Trigger GitHub Actions via repository dispatch
-if [[ "$REPO_NAME" =~ pro-mata-.+-dev$ ]] && [[ "$PUSHED_TAG" == "latest" ]]; then
+if [[ "$REPO_NAME" =~ ^norohim/pro-mata-.+-dev$ ]] && [[ "$PUSHED_TAG" == "latest" ]]; then
     echo "Triggering deployment for dev environment..."
     
     curl -X POST \

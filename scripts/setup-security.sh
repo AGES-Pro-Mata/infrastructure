@@ -105,8 +105,12 @@ generate_secrets() {
             local secret_value
             case "$secret_name" in
                 "traefik-auth-hash")
-                    # Generate htpasswd hash for admin:ProMata2025!
-                    secret_value=$(python3 -c "import crypt; print(crypt.crypt('ProMata2025!', crypt.mksalt(crypt.METHOD_SHA512)))")
+                    # Use TRAEFIK_ADMIN_PASSWORD env var if set, otherwise generate a random password
+                    local admin_password="${TRAEFIK_ADMIN_PASSWORD:-$(openssl rand -base64 16)}"
+                    if [ -z "${TRAEFIK_ADMIN_PASSWORD}" ]; then
+                        warn "No TRAEFIK_ADMIN_PASSWORD provided. Generated random password for Traefik admin: ${admin_password}"
+                    fi
+                    secret_value=$(python3 -c "import crypt; print(crypt.crypt('${admin_password}', crypt.mksalt(crypt.METHOD_SHA512)))")
                     secret_value="admin:$secret_value"
                     ;;
                 "jwt-secret")

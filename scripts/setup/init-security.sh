@@ -890,11 +890,11 @@ create_initial_env() {
     cp "$PROJECT_ROOT/security/templates/environment.env.template" "$env_file"
     
     # Configurar valores básicos para o ambiente especificado
-    sed -i "s/ENVIRONMENT=dev/ENVIRONMENT=$ENVIRONMENT/" "$env_file"
+    sed -i "s|ENVIRONMENT=dev|ENVIRONMENT=$ENVIRONMENT|" "$env_file"
     
     # Gerar senha padrão do dashboard
     local dashboard_password=$(openssl rand -base64 12)
-    sed -i "s/DASHBOARD_PASSWORD=\"\"/DASHBOARD_PASSWORD=\"$dashboard_password\"/" "$env_file"
+    sed -i "s|DASHBOARD_PASSWORD=\"\"|DASHBOARD_PASSWORD=\"$dashboard_password\"|" "$env_file"
     
     chmod 600 "$env_file"
     
@@ -912,7 +912,7 @@ run_basic_tests() {
     
     # Teste 1: Scripts executáveis
     if [[ -x "$PROJECT_ROOT/scripts/security-scan.sh" ]]; then
-        ((tests_passed++))
+        tests_passed=$((tests_passed + 1))
         log "SUCCESS" "✅ Scripts executáveis"
     else
         log "ERROR" "❌ Scripts não executáveis"
@@ -920,7 +920,7 @@ run_basic_tests() {
     
     # Teste 2: Estrutura de diretórios
     if [[ -d "$PROJECT_ROOT/security" ]] && [[ -d "$PROJECT_ROOT/logs" ]]; then
-        ((tests_passed++))
+        tests_passed=$((tests_passed + 1))
         log "SUCCESS" "✅ Estrutura de diretórios"
     else
         log "ERROR" "❌ Estrutura de diretórios incompleta"
@@ -928,7 +928,7 @@ run_basic_tests() {
     
     # Teste 3: Arquivos de configuração
     if [[ -f "$PROJECT_ROOT/security/security-config.yml" ]]; then
-        ((tests_passed++))
+        tests_passed=$((tests_passed + 1))
         log "SUCCESS" "✅ Configurações criadas"
     else
         log "ERROR" "❌ Configurações não encontradas"
@@ -936,7 +936,7 @@ run_basic_tests() {
     
     # Teste 4: Dependências básicas
     if command -v curl &> /dev/null && command -v jq &> /dev/null; then
-        ((tests_passed++))
+        tests_passed=$((tests_passed + 1))
         log "SUCCESS" "✅ Dependências básicas"
     else
         log "ERROR" "❌ Dependências básicas em falta"
@@ -944,7 +944,7 @@ run_basic_tests() {
     
     # Teste 5: Permissões
     if [[ -r "$PROJECT_ROOT/security/security-config.yml" ]]; then
-        ((tests_passed++))
+        tests_passed=$((tests_passed + 1))
         log "SUCCESS" "✅ Permissões configuradas"
     else
         log "ERROR" "❌ Problemas de permissões"

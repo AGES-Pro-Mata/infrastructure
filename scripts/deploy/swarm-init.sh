@@ -162,10 +162,10 @@ update_ansible_inventory() {
     local inventory_file="$PROJECT_ROOT/ansible/inventory/$ENV/hosts.yml"
     local temp_file=$(mktemp)
     
-    # Replace IP addresses in inventory
-    sed -e "s/{{ manager_public_ip }}/$MANAGER_IP/g" \
-        -e "s/{{ manager_private_ip }}/$MANAGER_IP/g" \
-        -e "s/{{ worker_private_ip }}/$WORKER_IP/g" \
+    # Replace IP addresses in inventory (using different delimiter to avoid conflicts)
+    sed -e "s|{{ manager_public_ip }}|$MANAGER_IP|g" \
+        -e "s|{{ manager_private_ip }}|$MANAGER_IP|g" \
+        -e "s|{{ worker_private_ip }}|$WORKER_IP|g" \
         "$inventory_file" > "$temp_file"
     
     mv "$temp_file" "$inventory_file"

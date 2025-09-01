@@ -86,8 +86,8 @@ deploy_azure_terraform() {
     
     # Initialize Terraform
     log "Initializing Azure Terraform..."
-    if [[ -f "../../backends/${ENVIRONMENT}-backend.tf" ]]; then
-        terraform init -backend-config="../../backends/${ENVIRONMENT}-backend.tf"
+    if [[ -f "../../backends/${ENVIRONMENT}-backend.hcl" ]]; then
+        terraform init -backend-config="../../backends/${ENVIRONMENT}-backend.hcl"
     else
         warn "Backend config not found, using local state"
         terraform init
@@ -95,7 +95,7 @@ deploy_azure_terraform() {
     
     # Plan
     log "Planning Azure Terraform deployment..."
-    terraform plan -var-file="../../../$ENV_DIR/terraform.tfvars" -out=tfplan
+    terraform plan -var-file="$ENV_DIR/terraform.tfvars" -out=tfplan
     
     # Apply
     log "Applying Azure Terraform changes..."
@@ -110,8 +110,8 @@ deploy_aws_terraform() {
     
     # Initialize Terraform
     log "Initializing AWS Terraform..."
-    if [[ -f "../../backends/${ENVIRONMENT}-backend.tf" ]]; then
-        terraform init -backend-config="../../backends/${ENVIRONMENT}-backend.tf"
+    if [[ -f "../../backends/${ENVIRONMENT}-backend.hcl" ]]; then
+        terraform init -backend-config="../../backends/${ENVIRONMENT}-backend.hcl"
     else
         warn "Backend config not found, using local state"
         terraform init
@@ -119,7 +119,7 @@ deploy_aws_terraform() {
     
     # Plan
     log "Planning AWS Terraform deployment..."
-    terraform plan -var-file="../../../$ENV_DIR/terraform.tfvars" -out=tfplan
+    terraform plan -var-file="$ENV_DIR/terraform.tfvars" -out=tfplan
     
     # Apply
     log "Applying AWS Terraform changes..."

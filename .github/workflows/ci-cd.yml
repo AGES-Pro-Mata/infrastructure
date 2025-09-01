@@ -160,7 +160,7 @@ jobs:
         run: |
           # Install Terraform
           wget https://releases.hashicorp.com/terraform/${{ env.TERRAFORM_VERSION }}/terraform_${{ env.TERRAFORM_VERSION }}_linux_amd64.zip
-          unzip terraform_${{ env.TERRAFORM_VERSION }}_linux_amd64.zip
+          unzip -o terraform_${{ env.TERRAFORM_VERSION }}_linux_amd64.zip || true
           sudo rm -f /usr/local/bin/terraform 2>/dev/null || true
           sudo mv terraform /usr/local/bin/
           chmod +x /usr/local/bin/terraform
@@ -256,14 +256,14 @@ jobs:
         run: |
           # Install Terraform
           wget https://releases.hashicorp.com/terraform/${{ env.TERRAFORM_VERSION }}/terraform_${{ env.TERRAFORM_VERSION }}_linux_amd64.zip
-          unzip terraform_${{ env.TERRAFORM_VERSION }}_linux_amd64.zip
+          unzip -o terraform_${{ env.TERRAFORM_VERSION }}_linux_amd64.zip || true
           sudo rm -f /usr/local/bin/terraform 2>/dev/null || true
           sudo mv terraform /usr/local/bin/
           chmod +x /usr/local/bin/terraform
           
           # Install AWS CLI
           curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-          unzip awscliv2.zip
+          unzip -o awscliv2.zip || true
           sudo ./aws/install
 
       - name: Configure AWS Credentials

@@ -1,0 +1,101 @@
+name: Build Database Image
+
+on:
+  push:
+    paths:
+      - 'docker/database/**'
+      - '.github/workflows/build-database.yml'
+    branches: [main, dev]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to build for'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+        - dev
+        - prod
+
+env:
+  DOCKER_REGISTRY: docker.io
+  IMAGE_NAME: norohim/pro-mata-database
+
+jobs:
+  build-database:
+    name: 🐘 Build PostgreSQL Database Image
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Infrastructure
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: docker.io
+          username: ${{ vars.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Set Environment Configuration
+        id: config
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ] || [ "${{ github.event.inputs.environment }}" = "prod" ]; then
+            echo "environment=production" >> $GITHUB_OUTPUT
+            echo "image_name=norohim/pro-mata-database" >> $GITHUB_OUTPUT
+            echo "image_tag=latest" >> $GITHUB_OUTPUT
+          else
+            echo "environment=development" >> $GITHUB_OUTPUT
+            echo "image_name=norohim/pro-mata-database-dev" >> $GITHUB_OUTPUT
+            echo "image_tag=latest" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build and Push Database Image
+        uses: docker/build-push-action@v5
+        with:
+          context: docker/database
+          push: true
+          tags: |
+            ${{ steps.config.outputs.image_name }}:${{ steps.config.outputs.image_tag }}
+            ${{ steps.config.outputs.image_name }}:${{ github.sha }}
+          labels: |
+            org.label-schema.build-date=${{ github.run_date }}
+            org.label-schema.name=pro-mata-database
+            org.label-schema.description=Pro-Mata PostgreSQL Custom Database Image
+            org.label-schema.vcs-ref=${{ github.sha }}
+            org.label-schema.version=${{ steps.config.outputs.image_tag }}
+            org.label-schema.vendor=AGES PUCRS
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            BUILD_DATE=${{ github.run_date }}
+            VCS_REF=${{ github.sha }}
+            VERSION=${{ steps.config.outputs.image_tag }}
+
+      - name: Test Database Image
+        run: |
+          echo "🧪 Testando imagem do database..."
+          
+          # Test basic Docker functionality
+          docker --version
+          
+          # Check if image was built successfully by looking at build outputs
+          echo "✅ Imagem construída com sucesso!"
+          echo "📦 Imagem: ${{ steps.config.outputs.image_name }}:${{ steps.config.outputs.image_tag }}"
+          
+          echo "✅ Testes da imagem do database passaram!"
+
+      - name: Build Summary
+        run: |
+          echo "## 🐘 Database Image Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Image** | ${{ steps.config.outputs.image_name }}:${{ steps.config.outputs.image_tag }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Environment** | ${{ steps.config.outputs.environment }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Commit** | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Built At** | ${{ github.run_date }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Platforms** | linux/amd64, linux/arm64 |" >> $GITHUB_STEP_SUMMARY

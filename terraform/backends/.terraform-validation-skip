@@ -1,0 +1,11 @@
+# This file prevents Terraform validation in the backends directory
+# The backends directory contains multiple backend configurations that should not be validated together
+# Each backend configuration should be used individually in deployment directories
+
+# Backend configurations are in:
+# - dev-backend.tf (Azure Storage for development)  
+# - staging-backend.tf (Azure Storage for staging)
+# - prod-backend.tf (AWS S3 for production)
+
+# Usage: Copy the appropriate backend config to your deployment directory
+# Example: cp terraform/backends/dev-backend.tf terraform/deployments/dev/backend.tf

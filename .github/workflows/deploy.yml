@@ -1,0 +1,167 @@
+# .github/workflows/deploy.yml
+name: Deploy Infrastructure with Make
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+        - dev
+        - staging
+        - prod
+      action:
+        description: 'Action to perform'
+        required: true
+        default: 'deploy'
+        type: choice
+        options:
+        - deploy
+        - update
+        - destroy
+        - health
+        - status
+
+  push:
+    branches: [main]
+    paths: ['envs/prod/**', 'terraform/**', 'ansible/**']
+
+env:
+  ENV: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'prod' || 'dev') }}
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Tools
+        run: |
+          # Install Terraform
+          wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+          sudo apt update && sudo apt install -y terraform ansible make
+
+      - name: Validate Configuration
+        run: |
+          echo "🔍 Validating infrastructure configuration..."
+          make validate-terraform
+
+  deploy:
+    needs: validate
+    runs-on: ubuntu-latest
+    if: github.event.inputs.action != 'destroy'
+    environment: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'development') }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Tools
+        run: |
+          # Remove potential Docker conflicts
+          sudo apt-get remove -y containerd || true
+          sudo apt-get remove -y docker docker-engine docker.io containerd runc || true
+          
+          # Install Terraform
+          wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+          sudo apt update && sudo apt install -y terraform ansible make
+          
+          # Install Docker properly
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y docker-ce docker-ce-cli containerd.io
+
+      # - name: Azure Login
+      #   uses: azure/login@v2
+      #   with:
+      #     creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Load Secrets
+        env:
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_REPLICA_PASSWORD: ${{ secrets.POSTGRES_REPLICA_PASSWORD }}
+          PGLADMIN_PASSWORD: ${{ secrets.PGLADMIN_PASSWORD }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          TRAEFIK_AUTH_USERS: ${{ secrets.TRAEFIK_AUTH_USERS }}
+          GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
+          TF_VAR_ssh_public_key: ${{ secrets.SSH_PUBLIC_KEY }}
+        run: |
+          # Criar arquivo de secrets para o ambiente
+          mkdir -p envs/${{ env.ENV }}
+          cat > envs/${{ env.ENV }}/.env.secrets << EOF
+          export POSTGRES_PASSWORD='${{ secrets.POSTGRES_PASSWORD }}'
+          export POSTGRES_REPLICA_PASSWORD='${{ secrets.POSTGRES_REPLICA_PASSWORD }}'
+          export PGLADMIN_PASSWORD='${{ secrets.PGLADMIN_PASSWORD }}'
+          export JWT_SECRET='${{ secrets.JWT_SECRET }}'
+          export TRAEFIK_AUTH_USERS='${{ secrets.TRAEFIK_AUTH_USERS }}'
+          export GRAFANA_ADMIN_PASSWORD='${{ secrets.GRAFANA_ADMIN_PASSWORD }}'
+          export CLOUDFLARE_API_TOKEN='${{ secrets.CLOUDFLARE_API_TOKEN }}'
+          export CLOUDFLARE_ZONE_ID='${{ secrets.CLOUDFLARE_ZONE_ID }}'
+          export TF_VAR_ssh_public_key='${{ secrets.SSH_PUBLIC_KEY }}'
+          EOF
+
+      - name: Execute Action
+        run: |
+          case "${{ github.event.inputs.action || 'deploy' }}" in
+            "deploy")
+              make deploy-automated ENV=${{ env.ENV }}
+              ;;
+            "update")
+              make update-dev ENV=${{ env.ENV }}
+              ;;
+            "health")
+              make health ENV=${{ env.ENV }}
+              ;;
+            "status")
+              make status ENV=${{ env.ENV }}
+              ;;
+            *)
+              echo "Unknown action: ${{ github.event.inputs.action }}"
+              exit 1
+              ;;
+          esac
+
+      - name: Extract SSH Key
+        if: ${{ github.event.inputs.action == 'deploy' || github.event.inputs.action == '' }}
+        run: |
+          mkdir -p ~/.ssh
+          cd terraform/deployments/${{ env.ENV }}
+          terraform output -raw ssh_private_key > ~/.ssh/promata_key
+          chmod 600 ~/.ssh/promata_key
+          echo "SSH key extracted and saved to ~/.ssh/promata_key"
+
+      - name: Show Results
+        run: make show-deployment-info ENV=${{ env.ENV }}
+
+  destroy:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.action == 'destroy'
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Tools
+        run: |
+          # Install Terraform
+          wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+          sudo apt update && sudo apt install -y terraform make
+
+      # - name: Azure Login
+      #   uses: azure/login@v2
+      #   with:
+      #     creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Destroy Infrastructure
+        env:
+          TF_VAR_ssh_public_key: ${{ secrets.SSH_PUBLIC_KEY }}
+        run: make destroy-${{ env.ENV }}

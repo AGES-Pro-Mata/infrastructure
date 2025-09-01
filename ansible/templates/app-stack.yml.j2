@@ -1,0 +1,124 @@
+# Application Stack - Pro-Mata Infrastructure
+# Frontend (React) + Backend (NestJS) with HA and Load Balancing
+
+version: "3.8"
+
+services:
+  # Frontend Service - React with Nginx
+  frontend:
+    image: {{ frontend_image }}
+    environment:
+      - NODE_ENV=production
+      - VITE_API_URL=https://api.{{ domain_name }}
+      - VITE_APP_ENV={{ environment }}
+      - VITE_APP_VERSION=latest
+    
+    networks:
+      - promata_public
+      - promata_internal
+    
+    deploy:
+      replicas: {{ frontend_replicas }}
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
+      labels:
+        # Traefik configuration
+        - traefik.enable=true
+        - traefik.docker.network=promata_public
+        
+        # Frontend routes
+        - traefik.http.routers.frontend.rule=Host(`{{ domain_name }}`)
+        - traefik.http.routers.frontend.entrypoints=websecure
+        - traefik.http.routers.frontend.tls.certresolver=letsencrypt
+        - traefik.http.services.frontend.loadbalancer.server.port=8080
+        
+        # Health check
+        - traefik.http.services.frontend.loadbalancer.healthcheck.path=/health
+        - traefik.http.services.frontend.loadbalancer.healthcheck.interval=30s
+        
+        # Security headers
+        - traefik.http.middlewares.security-headers.headers.customrequestheaders.X-Forwarded-Proto=https
+        - traefik.http.middlewares.security-headers.headers.customresponseheaders.X-Frame-Options=DENY
+        - traefik.http.middlewares.security-headers.headers.customresponseheaders.X-Content-Type-Options=nosniff
+        - traefik.http.routers.frontend.middlewares=security-headers
+    
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # Backend Service - NestJS API
+  backend:
+    image: {{ backend_image }}
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=postgresql://{{ postgres_user }}:{{ postgres_password }}@pgbouncer:6432/{{ postgres_db }}
+      - JWT_SECRET={{ jwt_secret }}
+      - JWT_EXPIRES_IN={{ jwt_expires_in }}
+      - CORS_ORIGIN=https://{{ domain_name }}
+    
+    networks:
+      - promata_public
+      - promata_internal
+      - promata_database
+    
+    depends_on:
+      - pgbouncer
+    
+    deploy:
+      replicas: {{ backend_replicas }}
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 3
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+      labels:
+        # Traefik configuration
+        - traefik.enable=true
+        - traefik.docker.network=promata_public
+        
+        # API routes
+        - traefik.http.routers.backend.rule=Host(`api.{{ domain_name }}`)
+        - traefik.http.routers.backend.entrypoints=websecure
+        - traefik.http.routers.backend.tls.certresolver=letsencrypt
+        - traefik.http.services.backend.loadbalancer.server.port=3000
+        
+        # Health check
+        - traefik.http.services.backend.loadbalancer.healthcheck.path=/health
+        - traefik.http.services.backend.loadbalancer.healthcheck.interval=30s
+        
+        # CORS middleware
+        - traefik.http.middlewares.cors.headers.accesscontrolallowmethods=GET,OPTIONS,PUT,POST,DELETE,PATCH
+        - traefik.http.middlewares.cors.headers.accesscontrolalloworiginlist=https://{{ domain_name }}
+        - traefik.http.middlewares.cors.headers.accesscontrolmaxage=100
+        - traefik.http.middlewares.cors.headers.addvaryheader=true
+        - traefik.http.routers.backend.middlewares=cors,security-headers
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+networks:
+  promata_public:
+    external: true
+  promata_internal:
+    external: true
+  promata_database:
+    external: true

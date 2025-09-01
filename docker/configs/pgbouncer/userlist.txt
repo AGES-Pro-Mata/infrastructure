@@ -1,0 +1,13 @@
+# PgBouncer User List - Pro-Mata Dev
+# Format: "username" "password_hash"
+# This file will be populated by the deployment script with actual password hashes
+
+# Main application user - will be populated with actual hash
+"promata" "md5placeholder_will_be_replaced"
+
+# Replication user - will be populated with actual hash
+"replicator" "md5placeholder_will_be_replaced"
+
+# Note: Password hashes will be generated during deployment using:
+# echo -n 'passwordusername' | md5sum for md5 method
+# or SCRAM-SHA-256 for more secure authentication

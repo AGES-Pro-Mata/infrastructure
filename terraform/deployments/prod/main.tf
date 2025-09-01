@@ -98,7 +98,7 @@ resource "aws_route_table_association" "public" {
 
 # Security Group for ECS
 resource "aws_security_group" "ecs" {
-  name        = "sg-promata-prod-ecs"
+  name        = "promata-prod-ecs-sg"
   description = "Security group for ECS tasks"
   vpc_id      = aws_vpc.prod.id
   
@@ -124,7 +124,7 @@ resource "aws_security_group" "ecs" {
   }
   
   tags = {
-    Name        = "sg-promata-prod-ecs"
+    Name        = "promata-prod-ecs-sg"
     Environment = "production"
     Project     = "pro-mata"
   }

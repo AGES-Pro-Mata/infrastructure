@@ -151,17 +151,24 @@ jobs:
       - name: 📥 Checkout código
         uses: actions/checkout@v4
         
-      - name: 🔧 Setup Node.js (para scan de dependências)
-        if: matrix.scan_type == 'dependencies'
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
+      # Node.js setup removido - este é um projeto de infraestrutura, não Node.js
           
       - name: 🛠️ Instalar dependências
         run: |
           sudo apt-get update
-          sudo apt-get install -y jq curl openssl docker.io
+          
+          # Remover conflitos de Docker se existirem
+          sudo apt-get remove -y containerd || true
+          sudo apt-get remove -y docker docker-engine docker.io containerd runc || true
+          
+          # Instalar dependências básicas
+          sudo apt-get install -y jq curl openssl
+          
+          # Instalar Docker oficial para evitar conflitos
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y docker-ce docker-ce-cli containerd.io
           
           # Instalar ferramentas específicas por tipo de scan
           if [[ "${{ matrix.scan_type }}" == "containers" ]]; then
@@ -175,12 +182,7 @@ jobs:
             pip3 install safety
           fi
           
-      - name: 📦 Instalar dependências do projeto
-        if: matrix.scan_type == 'dependencies'
-        run: |
-          if [[ -f "package.json" ]]; then
-            npm ci
-          fi
+      # Dependências Node.js removidas - este é um projeto de infraestrutura, não Node.js
           
       - name: 🔍 Executar scan de segurança
         run: |
@@ -235,10 +237,7 @@ jobs:
         run: |
           chmod +x scripts/security/security-audit.sh
           EXIT_CODE=0
-          ./scripts/security/security-audit.sh 
-            --compliance-check 
-            --environment ${{ needs.validate.outputs.environment }} 
-            --format json || EXIT_CODE=$?
+          ./scripts/security/security-audit.sh --compliance-check --environment ${{ needs.validate.outputs.environment }} --format json || EXIT_CODE=$?
           
           # Exit codes: 0=success, 1=high findings, 2=critical findings
           if [[ $EXIT_CODE -eq 2 ]]; then
@@ -284,7 +283,19 @@ jobs:
       - name: 🛠️ Setup ambiente de teste
         run: |
           sudo apt-get update
-          sudo apt-get install -y jq curl openssl docker.io
+          
+          # Remover conflitos de Docker se existirem
+          sudo apt-get remove -y containerd || true
+          sudo apt-get remove -y docker docker-engine docker.io containerd runc || true
+          
+          # Instalar dependências básicas
+          sudo apt-get install -y jq curl openssl
+          
+          # Instalar Docker oficial para evitar conflitos
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y docker-ce docker-ce-cli containerd.io
           
           # Inicializar sistema de segurança para testes
           chmod +x scripts/setup/*.sh scripts/security/*.sh scripts/utils/*.sh
@@ -486,9 +497,14 @@ jobs:
             
       - name: 🧹 Executar limpeza
         run: |
-          chmod +x scripts/backup/backup-recovery.sh
-          # Limpar backups antigos (manter últimos 10)
-          ./scripts/backup/backup-recovery.sh cleanup --retention 10
+          # Verificar se o script existe e dar permissão
+          if [[ -f "scripts/backup/backup-recovery.sh" ]]; then
+            chmod +x scripts/backup/backup-recovery.sh
+            # Limpar backups antigos (manter últimos 10)
+            ./scripts/backup/backup-recovery.sh cleanup --retention 10
+          else
+            echo "⚠️ Script de backup não encontrado, pulando limpeza"
+          fi
           
       - name: 📊 Estatísticas do pipeline
         run: |

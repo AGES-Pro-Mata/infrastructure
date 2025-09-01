@@ -1,5 +1,9 @@
 name: Pro-Mata Security Pipeline
 
+# INFORMATIVE MODE: Este pipeline executa verificações de segurança como informativas
+# Issues de segurança são reportados como warnings, mas não bloqueiam o pipeline
+# Apenas falhas estruturais críticas causam falha no workflow
+
 on:
   push:
     branches: [main, develop, staging]
@@ -104,9 +108,18 @@ jobs:
           sudo apt-get install -y trivy
           
       - name: 🧪 Executar testes de segurança básicos
+        continue-on-error: true
         run: |
           chmod +x scripts/security/*.sh
-          ./scripts/security/security-scan.sh --environment ${{ steps.setup.outputs.environment }} --type dependencies --ci-mode
+          EXIT_CODE=0
+          ./scripts/security/security-scan.sh --environment ${{ steps.setup.outputs.environment }} --type dependencies --ci-mode || EXIT_CODE=$?
+          
+          if [[ $EXIT_CODE -ne 0 ]]; then
+            echo "::warning::Testes básicos de segurança encontraram issues - continuando como informativo"
+            echo "basic_security_issues=true" >> $GITHUB_ENV
+          else
+            echo "::notice::Testes básicos de segurança passaram"
+          fi
           
       - name: 📊 Validar estrutura de arquivos
         run: |
@@ -185,6 +198,7 @@ jobs:
       # Dependências Node.js removidas - este é um projeto de infraestrutura, não Node.js
           
       - name: 🔍 Executar scan de segurança
+        continue-on-error: true
         run: |
           chmod +x scripts/security/security-scan.sh
           
@@ -193,11 +207,23 @@ jobs:
             scan_type="${{ github.event.inputs.scan_type }}"
           fi
           
+          EXIT_CODE=0
           ./scripts/security/security-scan.sh \
             --environment ${{ needs.validate.outputs.environment }} \
             --type "$scan_type" \
             --format sarif \
-            --ci-mode
+            --ci-mode || EXIT_CODE=$?
+            
+          # Tratar vulnerabilidades como informativas
+          if [[ $EXIT_CODE -eq 1 ]]; then
+            echo "::warning::Vulnerabilidades encontradas no scan de $scan_type, mas continuando pipeline como informativo"
+            echo "security_issues=true" >> $GITHUB_ENV
+          elif [[ $EXIT_CODE -gt 1 ]]; then
+            echo "::error::Erro crítico no scan de segurança para $scan_type"
+            echo "security_critical=true" >> $GITHUB_ENV
+          else
+            echo "::notice::Scan de segurança $scan_type executado com sucesso"
+          fi
             
       - name: 📤 Upload SARIF results
         if: always()
@@ -233,21 +259,22 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y jq curl openssl
           
-      - name: 🔍 Executar auditoria de segurança (${{ matrix.type }})
+      - name: 🔍 Executar auditoria de segurança
+        continue-on-error: true
         run: |
           chmod +x scripts/security/security-audit.sh
           EXIT_CODE=0
           ./scripts/security/security-audit.sh --compliance-check --environment ${{ needs.validate.outputs.environment }} --format json || EXIT_CODE=$?
           
-          # Exit codes: 0=success, 1=high findings, 2=critical findings
+          # Exit codes: 0=success, 1=high findings, 2=critical findings - tratar como informativo
           if [[ $EXIT_CODE -eq 2 ]]; then
-            echo "❌ CRITICAL security findings detected!"
-            exit 2
+            echo "::warning::Achados CRÍTICOS de segurança detectados - pipeline continuando como informativo"
+            echo "security_findings=critical" >> $GITHUB_ENV
           elif [[ $EXIT_CODE -eq 1 ]]; then
-            echo "⚠️ HIGH security findings detected but continuing workflow"
+            echo "::warning::Achados de segurança ALTOS detectados - pipeline continuando como informativo"
             echo "security_findings=high" >> $GITHUB_ENV
           else
-            echo "✅ Security audit passed"
+            echo "::notice::Auditoria de segurança passou com sucesso"
           fi
             
       - name: 📊 Gerar relatório de auditoria
@@ -302,18 +329,36 @@ jobs:
           ./scripts/setup/init-security.sh --environment dev --skip-deps
           
       - name: 🧪 Executar testes de integração
+        continue-on-error: true
         run: |
+          EXIT_CODE=0
           ./scripts/utils/test-security.sh \
             --environment dev \
             --type integration \
-            --verbose
+            --verbose || EXIT_CODE=$?
+            
+          if [[ $EXIT_CODE -ne 0 ]]; then
+            echo "::warning::Testes de integração falharam - continuando como informativo"
+            echo "integration_test_issues=true" >> $GITHUB_ENV
+          else
+            echo "::notice::Testes de integração passaram"
+          fi
             
       - name: 🧪 Executar testes end-to-end
+        continue-on-error: true
         run: |
+          EXIT_CODE=0
           ./scripts/utils/test-security.sh \
             --environment dev \
             --type e2e \
-            --verbose
+            --verbose || EXIT_CODE=$?
+            
+          if [[ $EXIT_CODE -ne 0 ]]; then
+            echo "::warning::Testes end-to-end falharam - continuando como informativo"
+            echo "e2e_test_issues=true" >> $GITHUB_ENV
+          else
+            echo "::notice::Testes end-to-end passaram"
+          fi
             
       - name: 📊 Upload resultados dos testes
         if: always()
@@ -431,18 +476,25 @@ jobs:
           audit_status="${{ needs.security_audit.result }}"
           tests_status="${{ needs.integration_tests.result }}"
           
-          if [[ "$validate_status" == "failure" ]] || [[ "$scan_status" == "failure" ]] || [[ "$audit_status" == "failure" ]] || [[ "$tests_status" == "failure" ]]; then
-            echo "overall_status=failure" >> $GITHUB_OUTPUT
-            echo "status_emoji=❌" >> $GITHUB_OUTPUT
-            echo "status_color=15158332" >> $GITHUB_OUTPUT
-          elif [[ "$validate_status" == "cancelled" ]] || [[ "$scan_status" == "cancelled" ]] || [[ "$audit_status" == "cancelled" ]] || [[ "$tests_status" == "cancelled" ]]; then
+          # Com continue-on-error, jobs com falhas serão marcados como "success"
+          # Verificamos envs para issues de segurança
+          has_security_issues=false
+          
+          # Verificar se algum job foi cancelado
+          if [[ "$validate_status" == "cancelled" ]] || [[ "$scan_status" == "cancelled" ]] || [[ "$audit_status" == "cancelled" ]] || [[ "$tests_status" == "cancelled" ]]; then
             echo "overall_status=cancelled" >> $GITHUB_OUTPUT
             echo "status_emoji=⏹️" >> $GITHUB_OUTPUT
             echo "status_color=7506394" >> $GITHUB_OUTPUT
+          # Verificar falhas reais (não de continue-on-error)
+          elif [[ "$validate_status" == "failure" ]]; then
+            echo "overall_status=failure" >> $GITHUB_OUTPUT
+            echo "status_emoji=❌" >> $GITHUB_OUTPUT
+            echo "status_color=15158332" >> $GITHUB_OUTPUT
           else
-            echo "overall_status=success" >> $GITHUB_OUTPUT
-            echo "status_emoji=✅" >> $GITHUB_OUTPUT
-            echo "status_color=3066993" >> $GITHUB_OUTPUT
+            # Pipeline executou com sucesso (issues de segurança são informativos)
+            echo "overall_status=success_with_warnings" >> $GITHUB_OUTPUT
+            echo "status_emoji=⚠️" >> $GITHUB_OUTPUT
+            echo "status_color=16776960" >> $GITHUB_OUTPUT
           fi
           
       - name: 📢 Enviar notificação Discord

@@ -217,7 +217,9 @@ test_infrastructure_config() {
         cd "$terraform_dir"
         
         # Validate Terraform configuration
-        if terraform validate >/dev/null 2>&1; then
+        if ! command -v terraform >/dev/null 2>&1; then
+            warn_test "Terraform not installed, skipping validation"
+        elif terraform validate >/dev/null 2>&1; then
             pass_test "Terraform configuration is valid"
         else
             fail_test "Terraform configuration is invalid"

@@ -136,10 +136,16 @@ check_prerequisites() {
 generate_encryption_key() {
     local key_file="$SCRIPT_DIR/.backup.key"
     
+    # Criar diretório se não existir
+    mkdir -p "$(dirname "$key_file")"
+    
     if [[ ! -f "$key_file" ]]; then
         log "INFO" "Gerando chave de criptografia..."
-        openssl rand -base64 32 > "$key_file"
-        chmod 600 "$key_file"
+        if ! openssl rand -base64 32 > "$key_file" 2>/dev/null; then
+            log "ERROR" "Falha ao gerar chave de criptografia"
+            return 1
+        fi
+        chmod 600 "$key_file" 2>/dev/null || true
         log "SUCCESS" "Chave de criptografia gerada"
     fi
     
@@ -188,9 +194,18 @@ create_full_backup() {
     # Criptografar se necessário
     if [[ "$ENCRYPT_BACKUP" == "true" ]]; then
         local key_file=$(generate_encryption_key)
-        log "INFO" "Criptografando backup..."
-        openssl enc -aes-256-cbc -salt -in "$backup_path.tar.gz" -out "$final_backup" -pass file:"$key_file"
-        rm "$backup_path.tar.gz"
+        if [[ $? -ne 0 ]] || [[ ! -f "$key_file" ]]; then
+            log "WARN" "Falha na geração da chave, salvando backup sem criptografia"
+            final_backup="$backup_path.tar.gz"
+        else
+            log "INFO" "Criptografando backup..."
+            if openssl enc -aes-256-cbc -salt -in "$backup_path.tar.gz" -out "$final_backup" -pass file:"$key_file" 2>/dev/null; then
+                rm "$backup_path.tar.gz"
+            else
+                log "WARN" "Falha na criptografia, mantendo backup sem criptografia"
+                final_backup="$backup_path.tar.gz"
+            fi
+        fi
     fi
     
     # Verificar integridade

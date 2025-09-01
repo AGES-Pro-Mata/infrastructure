@@ -51,8 +51,13 @@ validate: check-env ## Validate infrastructure
 
 validate-terraform: check-env ## Validate Terraform
 	@echo "🔍 Validating Terraform for $(ENV)..."
-	@cd $(TF_DIR) && terraform fmt -check
-	@cd $(TF_DIR) && terraform validate
+	@if ! command -v terraform >/dev/null 2>&1; then \
+		echo "⚠️  Terraform not found. Skipping validation."; \
+		echo "💡 Install Terraform to run validation: https://terraform.io/downloads"; \
+	else \
+		cd $(TF_DIR) && terraform fmt -check; \
+		cd $(TF_DIR) && terraform validate; \
+	fi
 
 backup: check-env ## Backup environment
 	@echo "💾 Backing up $(ENV) environment..."

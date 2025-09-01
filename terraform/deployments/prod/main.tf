@@ -1,20 +1,6 @@
 # AWS Infrastructure for Production Environment
 # Pro-Mata Infrastructure - Production
 
-terraform {
-  required_version = ">= 1.8.0"
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-  }
-}
-
-provider "aws" {
-  region = var.aws_region
-}
-
 # VPC
 resource "aws_vpc" "prod" {
   cidr_block           = "10.0.0.0/16"

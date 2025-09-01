@@ -43,6 +43,23 @@ validate_environment() {
     fi
     
     log "Validating environment: $ENVIRONMENT"
+    log "Project root: $PROJECT_ROOT"
+    log "Environment dir: $ENV_DIR"
+    log "Terraform dir: $TF_DIR"
+    
+    # Debug: List what's actually available
+    log "Listing terraform directory structure:"
+    if [[ -d "$PROJECT_ROOT/terraform" ]]; then
+        find "$PROJECT_ROOT/terraform" -type d -name "*dev*" | head -5 || true
+        log "Contents of terraform directory:"
+        ls -la "$PROJECT_ROOT/terraform/" || true
+        if [[ -d "$PROJECT_ROOT/terraform/deployments" ]]; then
+            log "Contents of terraform/deployments:"
+            ls -la "$PROJECT_ROOT/terraform/deployments/" || true
+        fi
+    else
+        error "Terraform directory not found at: $PROJECT_ROOT/terraform"
+    fi
     
     case "$ENVIRONMENT" in
         dev)
@@ -56,11 +73,15 @@ validate_environment() {
     
     if [[ ! -d "$ENV_DIR" ]]; then
         error "Environment directory not found: $ENV_DIR"
+        log "Available environments:"
+        ls -la "$PROJECT_ROOT/envs/" || true
         exit 1
     fi
     
     if [[ ! -f "$ENV_DIR/terraform.tfvars" ]]; then
         error "Terraform variables file not found: $ENV_DIR/terraform.tfvars"
+        log "Contents of $ENV_DIR:"
+        ls -la "$ENV_DIR/" || true
         exit 1
     fi
     

@@ -7,7 +7,7 @@ ENV=${1:-dev}
 SCRIPT_DIR="$(dirname "$0")"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 STACK_DIR="$PROJECT_ROOT/docker/stacks"
-ENV_DIR="$PROJECT_ROOT/environments/$ENV"
+ENV_DIR="$PROJECT_ROOT/envs/$ENV"
 
 # Colors
 GREEN='\033[0;32m'

@@ -102,3 +102,49 @@ validate-migration: ## Validate migration
 	@echo "🔍 Validating migration..."
 	@./scripts/utils/validate-migration.sh
 
+# CI/CD automation targets
+deploy-automated: check-env ## Automated deployment for CI/CD
+	@echo "🤖 Starting automated deployment for $(ENV)..."
+	@./scripts/deploy/deploy.sh $(ENV)
+
+stacks-deploy: check-env ## Deploy only application stacks
+	@echo "📦 Deploying application stacks for $(ENV)..."
+	@./scripts/deploy/deploy-stacks.sh $(ENV)
+
+health: check-env ## Health check for environment
+	@echo "🏥 Running health checks for $(ENV)..."
+	@./scripts/utils/health-check.sh $(ENV)
+
+status: check-env ## Show environment status
+	@echo "📊 Showing status for $(ENV)..."
+	@./scripts/utils/test-infrastructure.sh $(ENV)
+
+show-deployment-info: check-env ## Show deployment information
+	@echo "📋 Deployment information for $(ENV):"
+	@echo "Environment: $(ENV)"
+	@echo "TF Directory: $(TF_DIR)" 
+	@echo "Env Directory: $(ENV_DIR)"
+	@if [ -d "$(TF_DIR)" ]; then \
+		cd $(TF_DIR) && terraform output 2>/dev/null || echo "No Terraform outputs available"; \
+	fi
+
+update-dev: check-env ## Update development environment
+	@echo "🔄 Updating $(ENV) environment..."
+	@./scripts/deploy/deploy-stacks.sh $(ENV)
+
+destroy-dev: ## Destroy development infrastructure
+	@echo "💥 Destroying dev infrastructure..."
+	@cd terraform/deployments/dev && terraform destroy -var-file=../../../envs/dev/terraform.tfvars -auto-approve
+
+destroy-prod: ## Destroy production infrastructure
+	@echo "💥 Destroying prod infrastructure..."
+	@cd terraform/deployments/prod && terraform destroy -var-file=../../../envs/prod/terraform.tfvars -auto-approve
+
+destroy-staging: ## Destroy staging infrastructure
+	@echo "💥 Destroying staging infrastructure..."
+	@cd terraform/deployments/staging && terraform destroy -var-file=../../../envs/staging/terraform.tfvars -auto-approve
+
+rollback: check-env ## Rollback to previous deployment
+	@echo "🔄 Rolling back $(ENV) deployment..."
+	@./scripts/utils/rollback.sh $(ENV)
+

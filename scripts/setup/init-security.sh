@@ -911,7 +911,7 @@ run_basic_tests() {
     local tests_total=5
     
     # Teste 1: Scripts executáveis
-    if [[ -x "$PROJECT_ROOT/scripts/security-scan.sh" ]]; then
+    if [[ -x "$PROJECT_ROOT/scripts/security/security-scan.sh" ]]; then
         tests_passed=$((tests_passed + 1))
         log "SUCCESS" "✅ Scripts executáveis"
     else

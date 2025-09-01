@@ -140,7 +140,7 @@ jobs:
         run: |
           # Install Terraform
           wget https://releases.hashicorp.com/terraform/${{ env.TERRAFORM_VERSION }}/terraform_${{ env.TERRAFORM_VERSION }}_linux_amd64.zip -O terraform.zip
-          unzip -o terraform.zip
+          unzip -o terraform.zip || true
           sudo rm -rf /usr/local/bin/terraform 2>/dev/null || true
           sudo mv terraform /usr/local/bin/
           chmod +x /usr/local/bin/terraform
@@ -248,7 +248,7 @@ jobs:
       - name: Setup Terraform
         run: |
           wget https://releases.hashicorp.com/terraform/${{ env.TERRAFORM_VERSION }}/terraform_${{ env.TERRAFORM_VERSION }}_linux_amd64.zip -O terraform.zip
-          unzip -o terraform.zip
+          unzip -o terraform.zip || true
           sudo mv terraform /usr/local/bin/
           chmod +x /usr/local/bin/terraform
 

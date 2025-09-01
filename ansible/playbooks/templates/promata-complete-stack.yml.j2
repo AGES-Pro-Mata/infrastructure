@@ -7,14 +7,16 @@ version: "3.8"
 services:
   # Database Migration Init Container
   db-migrate:
-    image: {{ backend_image | regex_replace('-dev:', '-migration-dev:') if 'dev' in backend_image else backend_image | regex_replace(':', '-migration:') }}
+    image: {{ migration_image | default('norohim/pro-mata-migration-dev:latest') }}
     environment:
       - NODE_ENV={{ 'production' if ansible_environment == 'prod' else 'development' }}
       - DATABASE_URL=postgresql://{{ postgres_user }}:{{ postgres_password }}@postgres-primary:5432/{{ postgres_db }}
-      - DB_HOST=postgres-primary
-      - DB_PORT=5432
+      - POSTGRES_HOST=postgres-primary
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB={{ postgres_db }}
       - POSTGRES_USER={{ postgres_user }}
-      - RUN_SEED={{ run_seed | default('false') }}
+      - POSTGRES_PASSWORD={{ postgres_password }}
+      - RUN_SEED={{ run_seed | default('true') }}
     networks:
       - database_tier
     depends_on:
@@ -25,6 +27,8 @@ services:
         constraints: [node.role == manager]
       restart_policy:
         condition: none
+        delay: 5s
+        max_attempts: 3
       resources:
         limits:
           memory: 256M

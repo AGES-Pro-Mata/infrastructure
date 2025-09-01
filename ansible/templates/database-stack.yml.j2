@@ -3,11 +3,18 @@
 version: "3.8"
 
 services:
-  # Database Initialization with Prisma Migrations (sample)
+  # Database Initialization with Pro-Mata Migration Image
   db-migrations:
-    image: node:18-alpine
+    image: {{ migration_image | default('norohim/pro-mata-migration-dev:latest') }}
     environment:
       - DATABASE_URL=postgresql://{{ postgres_user }}:{{ postgres_password }}@postgres-primary:5432/{{ postgres_db }}
+      - POSTGRES_HOST=postgres-primary
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB={{ postgres_db }}
+      - POSTGRES_USER={{ postgres_user }}
+      - POSTGRES_PASSWORD={{ postgres_password }}
+      - NODE_ENV={{ 'production' if environment == 'prod' else 'development' }}
+      - RUN_SEED={{ run_seed | default('true') }}
     networks:
       - promata_database
     depends_on:
@@ -18,41 +25,8 @@ services:
         constraints: [node.role == manager]
       restart_policy:
         condition: none
-    command: >
-      sh -c "
-        apk add --no-cache postgresql-client &&
-        npm install -g prisma @prisma/client &&
-        cat > prisma/schema.prisma << 'EOF'
-        generator client {
-          provider = \"prisma-client-js\"
-        }
-        datasource db {
-          provider = \"postgresql\"
-          url      = env(\"DATABASE_URL\")
-        }
-        model User {
-          id        Int      @id @default(autoincrement())
-          email     String   @unique
-          name      String?
-          createdAt DateTime @default(now())
-          updatedAt DateTime @updatedAt
-          posts     Post[]
-        }
-        model Post {
-          id        Int      @id @default(autoincrement())
-          title     String
-          content   String?
-          published Boolean  @default(false)
-          author    User     @relation(fields: [authorId], references: [id])
-          authorId  Int
-          createdAt DateTime @default(now())
-          updatedAt DateTime @updatedAt
-        }
-        EOF
-        && mkdir -p prisma
-        && prisma generate &&
-        prisma db push --accept-data-loss
-      "
+        delay: 5s
+        max_attempts: 3
 
   # PostgreSQL Primary (Master)
   postgres-primary:

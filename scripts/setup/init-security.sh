@@ -638,7 +638,7 @@ create_helper_scripts() {
 
 # Script de start rápido
 create_quick_start_script() {
-    local quick_start="$PROJECT_ROOT/scripts/quick-start.sh"
+    local quick_start="$PROJECT_ROOT/scripts/utils/quick-start.sh"
     
     cat > "$quick_start" << 'EOF'
 #!/bin/bash
@@ -700,7 +700,7 @@ case "$option" in
         ;;
     5)
         echo "🔍 Executando auditoria..."
-        "$SCRIPT_DIR/security-audit.sh" --environment dev --compliance-check
+        "$PROJECT_ROOT/scripts/security/security-audit.sh" --compliance-check --environment dev
         ;;
     0)
         echo "👋 Até logo!"
@@ -975,7 +975,7 @@ show_next_steps() {
     echo "   ▶ make security-check ENVIRONMENT=$ENVIRONMENT"
     echo "   ▶ make security-scan ENVIRONMENT=$ENVIRONMENT"
     echo "   ▶ make security-monitor ENVIRONMENT=$ENVIRONMENT"
-    echo "   ▶ ./scripts/quick-start.sh"
+    echo "   ▶ ./scripts/utils/quick-start.sh"
     echo ""
     echo -e "${YELLOW}3. Dashboard de segurança:${NC}"
     echo "   ▶ Abra: dashboard.html no navegador"

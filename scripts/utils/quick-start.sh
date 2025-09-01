@@ -258,7 +258,7 @@ run_security_scan() {
 run_security_audit() {
     log "STEP" "Executando auditoria de segurança..."
     
-    if "$PROJECT_ROOT/scripts/security-audit.sh" --environment "$ENVIRONMENT" --compliance-check --verbose; then
+    if "$PROJECT_ROOT/scripts/security/security-audit.sh" --compliance-check --environment "$ENVIRONMENT" --verbose; then
         log "SUCCESS" "Auditoria concluída!"
     else
         log "ERROR" "Auditoria falhou. Verifique os logs."

@@ -22,6 +22,13 @@ ansible-vault-password
 **/secrets.yml
 **/vault.yml
 
+# Real environment files (keep templates only)
+**/.env.production
+**/.env.real
+**/envs/**/.env.local
+**/envs/**/secrets/
+**/envs/**/*.real
+
 # SSH Keys
 **/*.pem
 **/*.key

@@ -41,12 +41,12 @@ variable "ssl_mode" {
   description = "SSL mode: off, flexible, full, strict"
   type        = string
   default     = "flexible"
-
+  
   validation {
     condition = contains([
-      "off",
-      "flexible",
-      "full",
+      "off", 
+      "flexible", 
+      "full", 
       "strict"
     ], var.ssl_mode)
     error_message = "SSL mode must be one of: off, flexible, full, strict."
@@ -57,14 +57,14 @@ variable "security_level" {
   description = "Cloudflare security level: off, essentially_off, low, medium, high, under_attack"
   type        = string
   default     = "medium"
-
+  
   validation {
     condition = contains([
       "off",
-      "essentially_off",
-      "low",
-      "medium",
-      "high",
+      "essentially_off", 
+      "low", 
+      "medium", 
+      "high", 
       "under_attack"
     ], var.security_level)
     error_message = "Security level must be valid Cloudflare security level."
@@ -74,7 +74,7 @@ variable "security_level" {
 variable "traefik_proxied" {
   description = "Whether to proxy Traefik dashboard through Cloudflare"
   type        = bool
-  default     = false # Usually DNS only for dashboard
+  default     = false  # Usually DNS only for dashboard
 }
 
 variable "create_page_rules" {

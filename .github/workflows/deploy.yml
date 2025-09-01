@@ -27,7 +27,7 @@ on:
 
   push:
     branches: [main]
-    paths: ['environments/prod/**', 'terraform/**', 'ansible/**']
+    paths: ['envs/prod/**', 'terraform/**', 'ansible/**']
 
 env:
   ENV: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'prod' || 'dev') }}
@@ -80,8 +80,8 @@ jobs:
           TF_VAR_ssh_public_key: ${{ secrets.SSH_PUBLIC_KEY }}
         run: |
           # Criar arquivo de secrets para o ambiente
-          mkdir -p environments/${{ env.ENV }}
-          cat > environments/${{ env.ENV }}/.env.secrets << EOF
+          mkdir -p envs/${{ env.ENV }}
+          cat > envs/${{ env.ENV }}/.env.secrets << EOF
           export POSTGRES_PASSWORD='${{ secrets.POSTGRES_PASSWORD }}'
           export POSTGRES_REPLICA_PASSWORD='${{ secrets.POSTGRES_REPLICA_PASSWORD }}'
           export PGLADMIN_PASSWORD='${{ secrets.PGLADMIN_PASSWORD }}'

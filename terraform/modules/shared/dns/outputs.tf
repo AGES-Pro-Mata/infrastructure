@@ -3,32 +3,32 @@ output "dns_records" {
   value = var.create_dns_records ? {
     main = {
       name    = cloudflare_record.main[0].name
-      content = cloudflare_record.main[0].content
+      value   = cloudflare_record.main[0].value
       proxied = cloudflare_record.main[0].proxied
     }
     www = {
       name    = cloudflare_record.www[0].name
-      content = cloudflare_record.www[0].content
+      value   = cloudflare_record.www[0].value
       proxied = cloudflare_record.www[0].proxied
     }
     api = {
       name    = cloudflare_record.api[0].name
-      content = cloudflare_record.api[0].content
+      value   = cloudflare_record.api[0].value
       proxied = cloudflare_record.api[0].proxied
     }
     traefik = {
       name    = cloudflare_record.traefik[0].name
-      content = cloudflare_record.traefik[0].content
+      value   = cloudflare_record.traefik[0].value
       proxied = cloudflare_record.traefik[0].proxied
     }
     pgadmin = {
       name    = cloudflare_record.pgadmin[0].name
-      content = cloudflare_record.pgadmin[0].content
+      value   = cloudflare_record.pgadmin[0].value
       proxied = cloudflare_record.pgadmin[0].proxied
     }
     grafana = {
       name    = cloudflare_record.grafana[0].name
-      content = cloudflare_record.grafana[0].content
+      value   = cloudflare_record.grafana[0].value
       proxied = cloudflare_record.grafana[0].proxied
     }
   } : {}
@@ -37,10 +37,10 @@ output "dns_records" {
 output "ssl_configuration" {
   description = "SSL/TLS configuration applied"
   value = var.configure_ssl ? {
-    ssl_mode         = cloudflare_zone_settings_override.ssl_settings[0].settings[0].ssl
-    always_use_https = cloudflare_zone_settings_override.ssl_settings[0].settings[0].always_use_https
-    min_tls_version  = cloudflare_zone_settings_override.ssl_settings[0].settings[0].min_tls_version
-    tls_1_3          = cloudflare_zone_settings_override.ssl_settings[0].settings[0].tls_1_3
+    ssl_mode            = cloudflare_zone_settings_override.ssl_settings[0].settings.ssl
+    always_use_https    = cloudflare_zone_settings_override.ssl_settings[0].settings.always_use_https
+    min_tls_version     = cloudflare_zone_settings_override.ssl_settings[0].settings.min_tls_version
+    security_level      = cloudflare_zone_settings_override.ssl_settings[0].settings.security_level
   } : {}
 }
 
@@ -61,12 +61,12 @@ output "cloudflare_zone_id" {
 output "domain_urls" {
   description = "All configured domain URLs"
   value = var.create_dns_records ? {
-    main        = "https://${var.domain_name}"
-    www         = "https://www.${var.domain_name}"
-    api         = "https://api.${var.domain_name}"
-    traefik     = "https://traefik.${var.domain_name}"
-    pgadmin     = "https://pgadmin.${var.domain_name}"
-    grafana     = "https://grafana.${var.domain_name}"
+    main    = "https://${var.domain_name}"
+    www     = "https://www.${var.domain_name}"
+    api     = "https://api.${var.domain_name}"
+    traefik = "https://traefik.${var.domain_name}"
+    pgadmin = "https://pgadmin.${var.domain_name}"
+    grafana = "https://grafana.${var.domain_name}"
     environment = var.environment != "prod" ? "https://${var.environment}.${var.domain_name}" : null
   } : {}
 }

@@ -176,7 +176,7 @@ jobs:
 
       - name: Create Environment File
         run: |
-          cat > environments/${{ needs.determine-config.outputs.environment }}/.env.${{ needs.determine-config.outputs.environment }} << EOF
+          cat > envs/${{ needs.determine-config.outputs.environment }}/.env.${{ needs.determine-config.outputs.environment }} << EOF
           # Azure Configuration
           AZURE_SUBSCRIPTION_ID=${{ secrets.AZURE_SUBSCRIPTION_ID }}
           AZURE_RESOURCE_GROUP=${{ needs.determine-config.outputs.resource_group }}
@@ -255,7 +255,7 @@ jobs:
 
       - name: Create Environment File
         run: |
-          cat > environments/${{ needs.determine-config.outputs.environment }}/.env.${{ needs.determine-config.outputs.environment }} << EOF
+          cat > envs/${{ needs.determine-config.outputs.environment }}/.env.${{ needs.determine-config.outputs.environment }} << EOF
           # AWS Configuration
           AWS_REGION=${{ needs.determine-config.outputs.region }}
           AWS_ACCOUNT_ID=${{ secrets.AWS_ACCOUNT_ID }}

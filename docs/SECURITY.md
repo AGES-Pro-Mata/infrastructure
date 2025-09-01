@@ -39,9 +39,10 @@ ansible-vault view ansible/inventory/dev/group_vars/vault.yml --vault-password-f
 ### Segredos por Ambiente
 
 #### Desenvolvimento (dev)
+
 ```yaml
 # Credenciais de banco de dados
-vault_postgres_password: "dev_secure_pg_pass_2024"
+vault_postgres_password: "REPLACE_WITH_SECURE_PASSWORD"
 vault_postgres_replica_password: "dev_replica_pass_2024"
 
 # Segredos da aplicação
@@ -58,7 +59,7 @@ vault_acme_email: "devops@promata.com.br"
 
 # Serviços externos
 vault_duckdns_token: "duck_dns_token_for_dev_env"
-vault_cloudflare_api_token: "cf_api_token_here"
+vault_cloudflare_api_token: "REPLACE_WITH_YOUR_CLOUDFLARE_TOKEN"
 vault_cloudflare_zone_id: "cf_zone_id_here"
 
 # Chaves de backup e monitoramento
@@ -67,6 +68,7 @@ vault_prometheus_basic_auth_password: "prometheus_password_dev"
 ```
 
 #### Staging
+
 ```yaml
 # Estrutura similar ao dev, mas com valores específicos para staging
 vault_postgres_password: "staging_secure_pg_pass_2024"
@@ -74,6 +76,7 @@ vault_postgres_password: "staging_secure_pg_pass_2024"
 ```
 
 #### Produção
+
 ```yaml
 # Estrutura similar, mas com valores mais seguros e específicos para prod
 vault_postgres_password: "prod_ultra_secure_pg_pass_2024"
@@ -145,6 +148,7 @@ echo "Novos segredos gerados. Atualizando vault..."
 ### Estratégias de Backup
 
 #### 1. Backend Remoto (Produção)
+
 ```hcl
 # terraform/environments/prod/aws/backend.tf
 terraform {
@@ -162,6 +166,7 @@ terraform {
 ```
 
 #### 2. Backend Remoto (Dev/Staging)
+
 ```hcl
 # terraform/environments/dev/azure/backend.tf
 terraform {
@@ -181,6 +186,7 @@ terraform {
 ### Scripts de Backup e Restauração
 
 #### Backup Manual
+
 ```bash
 # Backup local
 ./scripts/backup-terraform-state.sh dev local
@@ -193,6 +199,7 @@ terraform {
 ```
 
 #### Restauração
+
 ```bash
 # Listar backups disponíveis
 ls -la backups/terraform-state/
@@ -207,6 +214,7 @@ ls -la backups/terraform-state/
 ### Backup Automatizado
 
 #### GitHub Actions
+
 ```yaml
 name: Terraform State Backup
 on:
@@ -306,6 +314,7 @@ resource "cloudflare_page_rule" "api_rate_limit" {
 ### Runbook de Emergência
 
 #### 1. Comprometimento de Segredos
+
 ```bash
 # Ações imediatas:
 1. Rotacionar todas as senhas comprometidas
@@ -319,6 +328,7 @@ resource "cloudflare_page_rule" "api_rate_limit" {
 ```
 
 #### 2. Falha na Infraestrutura
+
 ```bash
 # Diagnóstico rápido:
 1. Verificar status dos serviços
@@ -332,6 +342,7 @@ terraform apply -auto-approve
 ```
 
 #### 3. Rollback Cloudflare
+
 ```bash
 # Em caso de problemas com Cloudflare:
 1. Acessar https://registro.br/
@@ -360,13 +371,15 @@ GitHub_Support: "github.com/contact/support"
 ## 🔐 Melhores Práticas de Segurança
 
 ### Desenvolvimento
+
 - ✅ Nunca commitar segredos no código
 - ✅ Usar vault para todos os segredos
 - ✅ Rotacionar segredos regularmente
 - ✅ Revisar logs de auditoria
 - ✅ Implementar MFA onde possível
 
-### Produção
+### Production
+
 - ✅ SSL/TLS strict mode
 - ✅ Firewall restritivo (apenas IPs necessários)
 - ✅ Monitoramento 24/7
@@ -376,6 +389,7 @@ GitHub_Support: "github.com/contact/support"
 - ✅ Testes de recuperação de desastres
 
 ### Acesso
+
 - ✅ Princípio do menor privilégio
 - ✅ Chaves SSH únicas por usuário
 - ✅ Acesso via bastion host em produção
@@ -385,6 +399,7 @@ GitHub_Support: "github.com/contact/support"
 ## 📊 Métricas de Segurança
 
 ### KPIs de Segurança
+
 ```bash
 # Métricas a monitorar:
 - Tentativas de login falhadas
@@ -396,6 +411,7 @@ GitHub_Support: "github.com/contact/support"
 ```
 
 ### Dashboards Recomendados
+
 ```bash
 # Grafana dashboards:
 1. Security Overview
@@ -466,6 +482,7 @@ Melhorias:
 ## ✅ Checklist de Implementação
 
 ### Configuração Inicial
+
 - [ ] Configurar Ansible Vault para todos os ambientes
 - [ ] Implementar backup automatizado do Terraform
 - [ ] Configurar Cloudflare com SSL strict
@@ -474,6 +491,7 @@ Melhorias:
 - [ ] Treinar equipe nos procedures
 
 ### Manutenção Contínua
+
 - [ ] Rotação mensal de segredos (prod)
 - [ ] Backup diário de estados Terraform
 - [ ] Revisão semanal de logs de segurança

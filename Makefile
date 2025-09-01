@@ -26,13 +26,38 @@ help:
 	@echo "  terraform-apply ENV=dev     Apply Terraform changes"
 	@echo "  ansible-deploy ENV=dev      Deploy with Ansible"
 	@echo "  stacks-deploy ENV=dev       Deploy Docker stacks"
+	@echo ""
+	@echo "🔐 Security & Backup Commands:"
+	@echo "  vault-setup ENV=dev         Setup Ansible Vault"
+	@echo "  backup-state ENV=dev        Backup Terraform state"
+	@echo ""
+	@echo "✅ Validation Commands:"
+	@echo "  infrastructure-validate     Complete infrastructure validation"
+	@echo "  terraform-validate          Validate Terraform configuration"
+	@echo "  cloudflare-test             Test Cloudflare DNS and SSL"
 
 # Validation commands
 terraform-validate:
 	@echo "🔍 Validating Terraform for $(ENV)..."
-	@cd environments/$(ENV)/azure && terraform fmt -check -recursive
-	@cd environments/$(ENV)/azure && terraform init -backend=false
-	@cd environments/$(ENV)/azure && terraform validate
+	@cd terraform/environments/$(ENV)/azure && terraform fmt -check -recursive
+	@cd terraform/environments/$(ENV)/azure && terraform init -backend=false
+	@cd terraform/environments/$(ENV)/azure && terraform validate
+
+vault-setup:
+	@echo "🔐 Setting up Ansible Vault for $(ENV)..."
+	@scripts/setup-vault.sh $(ENV)
+
+cloudflare-test:
+	@echo "☁️  Testing Cloudflare configuration..."
+	@scripts/test-cloudflare-setup.sh
+
+infrastructure-validate:
+	@echo "🔍 Validating infrastructure for $(ENV)..."
+	@scripts/validate-infrastructure.sh $(ENV)
+
+backup-state:
+	@echo "💾 Backing up Terraform state for $(ENV)..."
+	@scripts/backup-terraform-state.sh $(ENV) azure
 
 ansible-validate:
 	@echo "🔍 Validating Ansible playbooks..."
@@ -46,18 +71,18 @@ ansible-validate:
 terraform-init:
 	@echo "🏗️  Initializing Terraform for $(ENV)..."
 ifeq ($(CI),true)
-	@cd environments/$(ENV)/azure && terraform init -upgrade
+	@cd terraform/environments/$(ENV)/azure && terraform init -upgrade
 else
-	@if [ ! -f "environments/$(ENV)/backend.tf" ]; then \
+	@if [ ! -f "terraform/environments/$(ENV)/azure/backend.tf" ]; then \
 		echo "Setting up Azure Backend..."; \
-		chmod +x environments/$(ENV)/azure/backend-setup.sh && environments/$(ENV)/azure/backend-setup.sh; \
+		chmod +x terraform/environments/$(ENV)/azure/backend-setup.sh && terraform/environments/$(ENV)/azure/backend-setup.sh; \
 	fi
-	@cd environments/$(ENV)/azure && terraform init
+	@cd terraform/environments/$(ENV)/azure && terraform init
 endif
 
 terraform-plan: terraform-init
 	@echo "📋 Planning Terraform changes for $(ENV)..."
-	@cd environments/$(ENV)/azure && terraform plan -out=tfplan
+	@cd terraform/environments/$(ENV)/azure && terraform plan -out=tfplan
 ifeq ($(DRY_RUN),true)
 	@echo "Dry run completed - no changes applied"
 else
@@ -67,20 +92,20 @@ endif
 terraform-apply: terraform-plan  
 	@echo "🚀 Applying Terraform changes for $(ENV)..."
 ifneq ($(DRY_RUN),true)
-	@cd environments/$(ENV)/azure && terraform apply -auto-approve tfplan
-	@cd environments/$(ENV)/azure && terraform output -json > terraform-outputs.json
+	@cd terraform/environments/$(ENV)/azure && terraform apply -auto-approve tfplan
+	@cd terraform/environments/$(ENV)/azure && terraform output -json > terraform-outputs.json
 endif
 
 terraform-apply-automated:
 	@echo "🚀 Applying Terraform changes (automated)..."
-	@cd environments/$(ENV)/azure && terraform init -upgrade || true
-	@cd environments/$(ENV)/azure && terraform apply -auto-approve
-	@cd environments/$(ENV)/azure && terraform output -json > terraform-outputs.json
+	@cd terraform/environments/$(ENV)/azure && terraform init -upgrade || true
+	@cd terraform/environments/$(ENV)/azure && terraform apply -auto-approve
+	@cd terraform/environments/$(ENV)/azure && terraform output -json > terraform-outputs.json
 
 terraform-destroy:
 	@echo "💥 Destroying Terraform infrastructure for $(ENV)..."
-	@cd environments/$(ENV)/azure && terraform init -upgrade || true
-	@cd environments/$(ENV)/azure && terraform destroy -auto-approve
+	@cd terraform/environments/$(ENV)/azure && terraform init -upgrade || true
+	@cd terraform/environments/$(ENV)/azure && terraform destroy -auto-approve
 
 # Ansible commands
 generate-inventory:
@@ -132,10 +157,10 @@ show-deployment-info:
 	@echo ""
 	@echo "📊 Deployment Information for $(ENV):"
 	@echo "=========================="
-	@cd environments/$(ENV)/azure && \
+	@cd terraform/environments/$(ENV)/azure && \
 	if [ -f terraform-outputs.json ]; then \
 		MANAGER_IP=$$(cat terraform-outputs.json | jq -r '.swarm_manager_public_ip.value // "N/A"') && \
-		DOMAIN=$$(grep DOMAIN_NAME ../.env.$(ENV) 2>/dev/null | cut -d= -f2 || echo "promata.com.br") && \
+		DOMAIN=$$(grep DOMAIN_NAME ../../../config/environments/$(ENV)/.env.$(ENV) 2>/dev/null | cut -d= -f2 || echo "promata.com.br") && \
 		echo "🌐 Frontend:    https://$$DOMAIN" && \
 		echo "🔧 Backend API: https://api.$$DOMAIN" && \
 		echo "📊 Traefik:    https://traefik.$$DOMAIN" && \

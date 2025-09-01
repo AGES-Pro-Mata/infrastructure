@@ -3,11 +3,16 @@
 version: "3.8"
 
 services:
-  # Database Initialization with Prisma Migrations (sample)
-  db-migrations:
-    image: node:18-alpine
+  # Database Migration Init Container
+  db-migrate:
+    image: norohim/pro-mata-migration:${MIGRATE_VERSION:-latest}
     environment:
+      - NODE_ENV=${NODE_ENV:-development}
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-primary:5432/${POSTGRES_DB}
+      - DB_HOST=postgres-primary
+      - DB_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER}
+      - RUN_SEED=${RUN_SEED:-false}
     networks:
       - promata_database
     depends_on:
@@ -17,46 +22,16 @@ services:
       placement:
         constraints: [node.role == manager]
       restart_policy:
-        condition: none
-    command: >
-      sh -c "
-        apk add --no-cache postgresql-client &&
-        npm install -g prisma @prisma/client &&
-        cat > prisma/schema.prisma << 'EOF'
-        generator client {
-          provider = \"prisma-client-js\"
-        }
-        datasource db {
-          provider = \"postgresql\"
-          url      = env(\"DATABASE_URL\")
-        }
-        model User {
-          id        Int      @id @default(autoincrement())
-          email     String   @unique
-          name      String?
-          createdAt DateTime @default(now())
-          updatedAt DateTime @updatedAt
-          posts     Post[]
-        }
-        model Post {
-          id        Int      @id @default(autoincrement())
-          title     String
-          content   String?
-          published Boolean  @default(false)
-          author    User     @relation(fields: [authorId], references: [id])
-          authorId  Int
-          createdAt DateTime @default(now())
-          updatedAt DateTime @updatedAt
-        }
-        EOF
-        && mkdir -p prisma
-        && prisma generate &&
-        prisma db push --accept-data-loss
-      "
+        condition: none  # Execute apenas uma vez
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
 
   # PostgreSQL Primary (Master)
   postgres-primary:
-    image: postgres:15-alpine
+    image: promata/database:${DB_VERSION:-latest}
     environment:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
@@ -98,7 +73,7 @@ services:
 
   # PostgreSQL Replica (Standby)
   postgres-replica:
-    image: postgres:15-alpine
+    image: promata/database:${DB_VERSION:-latest}
     environment:
       - PGUSER=${POSTGRES_REPLICA_USER:-replicator}
       - POSTGRES_USER=${POSTGRES_USER}
@@ -166,6 +141,7 @@ services:
     
     depends_on:
       - postgres-primary
+      - db-migrate
     
     deploy:
       replicas: 2

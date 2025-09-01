@@ -55,7 +55,6 @@ jobs:
           FRONTEND_IMAGE=norohim/pro-mata-frontend-dev:latest
           BACKEND_REPLICAS=2
           FRONTEND_REPLICAS=2
-          TF_VAR_ssh_public_key="${{ secrets.SSH_PUBLIC_KEY }}"
           EOF
 
       - name: Deploy Infrastructure

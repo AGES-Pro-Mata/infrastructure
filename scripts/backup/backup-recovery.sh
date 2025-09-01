@@ -134,7 +134,7 @@ check_prerequisites() {
 
 # Gerar chave de criptografia
 generate_encryption_key() {
-    local key_file="$BACKUP_DIR/.backup.key"
+    local key_file="$SCRIPT_DIR/.backup.key"
     
     if [[ ! -f "$key_file" ]]; then
         log "INFO" "Gerando chave de criptografia..."
@@ -483,7 +483,7 @@ verify_backup() {
         fi
     elif [[ "$backup_file" =~ \.tar\.gz\.enc$ ]]; then
         # Para arquivos criptografados, tentar descriptografar em teste
-        local key_file="$BACKUP_DIR/.backup.key"
+        local key_file="$SCRIPT_DIR/.backup.key"
         if [[ -f "$key_file" ]]; then
             if ! openssl enc -aes-256-cbc -d -in "$backup_file" -pass file:"$key_file" | gzip -t &>/dev/null; then
                 log "ERROR" "Arquivo criptografado corrompido ou chave inválida"
@@ -602,7 +602,7 @@ restore_backup() {
     
     if [[ "$backup_path" =~ \.tar\.gz\.enc$ ]]; then
         # Descriptografar primeiro
-        local key_file="$BACKUP_DIR/.backup.key"
+        local key_file="$SCRIPT_DIR/.backup.key"
         if [[ -f "$key_file" ]]; then
             log "INFO" "Descriptografando backup..."
             openssl enc -aes-256-cbc -d -in "$backup_path" -out "$temp_dir/backup.tar.gz" -pass file:"$key_file"

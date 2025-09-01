@@ -1,6 +1,6 @@
 #!/bin/bash
 # Full deployment script for Pro-Mata Infrastructure
-# Updated for new envs/ structure and AWS deployment
+# Handles both Terraform and Ansible deployment
 
 set -euo pipefail
 
@@ -38,16 +38,6 @@ warn() {
 validate_environment() {
     log "Validating environment: $ENVIRONMENT"
     
-    case "$ENVIRONMENT" in
-        dev|staging|prod)
-            log "Valid environment: $ENVIRONMENT"
-            ;;
-        *)
-            error "Environment must be: dev, staging, or prod"
-            exit 1
-            ;;
-    esac
-    
     if [[ ! -d "$ENV_DIR" ]]; then
         error "Environment directory not found: $ENV_DIR"
         exit 1
@@ -68,24 +58,12 @@ validate_environment() {
 
 # Deploy Terraform infrastructure
 deploy_terraform() {
-    case "$ENVIRONMENT" in
-        dev|staging)
-            log "🔵 Deploying Azure infrastructure for $ENVIRONMENT..."
-            deploy_azure_terraform
-            ;;
-        prod)
-            log "🟢 Deploying AWS infrastructure for $ENVIRONMENT..."
-            deploy_aws_terraform
-            ;;
-    esac
-}
-
-# Deploy Azure infrastructure for dev/staging
-deploy_azure_terraform() {
+    log "Deploying Terraform infrastructure for $ENVIRONMENT..."
+    
     cd "$TF_DIR"
     
     # Initialize Terraform
-    log "Initializing Azure Terraform..."
+    log "Initializing Terraform..."
     if [[ -f "../../backends/${ENVIRONMENT}-backend.tf" ]]; then
         terraform init -backend-config="../../backends/${ENVIRONMENT}-backend.tf"
     else
@@ -94,38 +72,14 @@ deploy_azure_terraform() {
     fi
     
     # Plan
-    log "Planning Azure Terraform deployment..."
+    log "Planning Terraform deployment..."
     terraform plan -var-file="../../../$ENV_DIR/terraform.tfvars" -out=tfplan
     
     # Apply
-    log "Applying Azure Terraform changes..."
+    log "Applying Terraform changes..."
     terraform apply tfplan
     
-    success "Azure Terraform deployment completed"
-}
-
-# Deploy AWS infrastructure for prod
-deploy_aws_terraform() {
-    cd "$TF_DIR"
-    
-    # Initialize Terraform
-    log "Initializing AWS Terraform..."
-    if [[ -f "../../backends/${ENVIRONMENT}-backend.tf" ]]; then
-        terraform init -backend-config="../../backends/${ENVIRONMENT}-backend.tf"
-    else
-        warn "Backend config not found, using local state"
-        terraform init
-    fi
-    
-    # Plan
-    log "Planning AWS Terraform deployment..."
-    terraform plan -var-file="../../../$ENV_DIR/terraform.tfvars" -out=tfplan
-    
-    # Apply
-    log "Applying AWS Terraform changes..."
-    terraform apply tfplan
-    
-    success "AWS Terraform deployment completed"
+    success "Terraform deployment completed"
 }
 
 # Deploy with Ansible (if configured)
@@ -143,7 +97,7 @@ deploy_ansible() {
         return 0
     fi
     
-    log "🔧 Deploying with Ansible for $ENVIRONMENT..."
+    log "Deploying with Ansible for $ENVIRONMENT..."
     
     # Check if vault password file exists
     local vault_file="$ENV_DIR/secrets/.vault_pass"
@@ -168,15 +122,15 @@ deploy_ansible() {
 
 # Main deployment function
 main() {
-    log "🌟 Starting full deployment for environment: $ENVIRONMENT"
+    log "Starting full deployment for environment: $ENVIRONMENT"
     
     validate_environment
     deploy_terraform
     deploy_ansible
     
-    success "✅ Full deployment completed for $ENVIRONMENT!"
+    success "Full deployment completed for $ENVIRONMENT!"
     log "Infrastructure should be accessible according to your DNS configuration"
 }
 
 # Execute main function
-main "$@" 
+main "$@"

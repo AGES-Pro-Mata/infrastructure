@@ -3,7 +3,7 @@
 variable "resource_group_name" {
   description = "The name of the resource group"
   type        = string
-  default     = "rg-promata-dev"
+  default     = "rg-myproject-dev"
 }
 
 variable "location" {
@@ -21,7 +21,7 @@ variable "environment" {
 variable "project_name" {
   description = "Project name"
   type        = string
-  default     = "pro-mata"
+  default     = "myproject"
 }
 
 variable "vm_size" {
@@ -35,7 +35,7 @@ variable "vm_size" {
 variable "storage_account_name" {
   description = "Name of the storage account (must be globally unique)"
   type        = string
-  default     = "promatadevstore"
+  default     = "myprojectdevstore"
 
   validation {
     condition     = can(regex("^[a-z0-9]{3,24}$", var.storage_account_name))
@@ -53,10 +53,10 @@ variable "common_tags" {
   description = "Common tags for all resources"
   type        = map(string)
   default = {
-    Project     = "pro-mata"
+    Project     = "myproject"
     Environment = "dev"
     ManagedBy   = "terraform"
-    Owner       = "pro-mata-team"
+    Owner       = "myproject-team"
   }
 }
 
@@ -64,32 +64,32 @@ variable "common_tags" {
 variable "postgres_db" {
   description = "PostgreSQL database name"
   type        = string
-  default     = "promata_dev"
+  default     = "myproject_dev"
 }
 
 variable "postgres_user" {
   description = "PostgreSQL username"
   type        = string
-  default     = "promata"
+  default     = "myproject"
 }
 
 # Application configuration
 variable "domain_name" {
   description = "Domain name for the application"
   type        = string
-  default     = "dev.promata.com.br"
+  default     = "dev.example.com"
 }
 
 variable "backend_image" {
   description = "Backend Docker image"
   type        = string
-  default     = "norohim/pro-mata-backend-dev:latest"
+  default     = "YOUR_DOCKERHUB_ORG/myproject-backend-dev:latest"
 }
 
 variable "frontend_image" {
   description = "Frontend Docker image"
   type        = string
-  default     = "norohim/pro-mata-frontend-dev:latest"
+  default     = "YOUR_DOCKERHUB_ORG/myproject-frontend-dev:latest"
 }
 
 variable "backend_replicas" {
@@ -113,7 +113,7 @@ variable "cloudflare_api_token" {
 }
 
 variable "cloudflare_zone_id" {
-  description = "Cloudflare Zone ID for promata.com.br"
+  description = "Cloudflare Zone ID for your domain"
   type        = string
   default     = null
 }

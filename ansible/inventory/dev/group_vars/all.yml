@@ -1,25 +1,25 @@
-# Group Variables for Pro-Mata Development Environment
+# Group Variables for Development Environment
 ---
 # Environment Configuration
 environment: development
-project_name: pro-mata
-domain_name: "promata.com.br"
+project_name: myproject
+domain_name: "example.com"
 
 # Docker Configuration
 docker_version: "24.0"
 docker_compose_version: "v2.21.0"
 
 # Application Configuration
-backend_image: "norohim/pro-mata-backend-dev:latest"
-frontend_image: "norohim/pro-mata-frontend-dev:latest"
+backend_image: "YOUR_DOCKERHUB_ORG/myproject-backend-dev:latest"
+frontend_image: "YOUR_DOCKERHUB_ORG/myproject-frontend-dev:latest"
 
 # Replica Configuration
 frontend_replicas: 2
 backend_replicas: 2
 
 # Database Configuration
-postgres_db: "{{ vault_postgres_db | default('promata_dev') }}"
-postgres_user: "{{ vault_postgres_user | default('promata') }}"
+postgres_db: "{{ vault_postgres_db | default('myproject_dev') }}"
+postgres_user: "{{ vault_postgres_user | default('myproject') }}"
 postgres_password: "{{ vault_postgres_password }}"
 postgres_replica_user: "{{ vault_postgres_replica_user | default('replicator') }}"
 postgres_replica_password: "{{ vault_postgres_replica_password }}"
@@ -30,7 +30,7 @@ pgbouncer_pool_size: 20
 pgbouncer_max_client_conn: 100
 
 # PgAdmin Configuration (optional)
-pgadmin_email: "{{ vault_pgadmin_email | default('admin@promata.dev') }}"
+pgadmin_email: "{{ vault_pgadmin_email | default('admin@example.dev') }}"
 pgadmin_password: "{{ vault_pgadmin_password }}"
 
 # Traefik Configuration
@@ -90,7 +90,7 @@ grafana_admin_password: "{{ vault_grafana_admin_password }}"
 # Backup Configuration
 backup_enabled: true
 backup_retention_days: 7
-backup_s3_bucket: "promata-dev-backups"
+backup_s3_bucket: "myproject-dev-backups"
 
 # Security Configuration
 ssl_enabled: true

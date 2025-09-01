@@ -122,6 +122,24 @@ resource "cloudflare_record" "environment_subdomain" {
   ]
 }
 
+# Environment-specific API subdomains
+resource "cloudflare_record" "api_environment_subdomain" {
+  count   = var.create_dns_records && var.environment != "prod" ? 1 : 0
+  zone_id = var.cloudflare_zone_id
+  name    = "api-${var.environment}"
+  content = var.server_public_ip
+  type    = "A"
+  ttl     = 1
+  proxied = true
+
+  tags = [
+    var.environment,
+    "terraform",
+    "promata",
+    "api"
+  ]
+}
+
 # SSL/TLS Configuration
 resource "cloudflare_zone_settings_override" "ssl_settings" {
   count   = var.configure_ssl ? 1 : 0

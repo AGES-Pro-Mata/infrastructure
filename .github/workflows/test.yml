@@ -29,9 +29,22 @@ jobs:
 
       - name: Validate Terraform
         run: |
-          # Validate Terraform files directly since make target doesn't exist
+          # Validate Terraform files, but skip backends directory (has multiple backend configs)
           find . -name "*.tf" -type f | while read -r file; do
             dir=$(dirname "$file")
+            
+            # Skip backends directory as it contains multiple backend configurations
+            if [[ "$dir" == *"/terraform/backends"* ]] || [[ "$dir" == "./terraform/backends" ]]; then
+              echo "Skipping $dir (contains multiple backend configurations)"
+              continue
+            fi
+            
+            # Skip if directory has .terraform-validation-skip file
+            if [[ -f "$dir/.terraform-validation-skip" ]]; then
+              echo "Skipping $dir (has .terraform-validation-skip file)"
+              continue
+            fi
+            
             echo "Validating Terraform in $dir"
             (cd "$dir" && terraform init -backend=false && terraform validate)
           done

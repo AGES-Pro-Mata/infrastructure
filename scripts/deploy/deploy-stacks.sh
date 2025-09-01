@@ -28,7 +28,7 @@ else
 fi
 
 # Required variables check
-required_vars=("DOMAIN_NAME" "POSTGRES_PASSWORD" "DUCKDNS_TOKEN")
+required_vars=("DOMAIN_NAME" "POSTGRES_PASSWORD" "CLOUDFLARE_API_TOKEN")
 for var in "${required_vars[@]}"; do
     if [[ -z "${!var}" ]]; then
         error "Required variable $var is not set"
@@ -122,7 +122,7 @@ main() {
     # Deploy stacks in order
     log "📦 Deploying stacks..."
     
-    # 1. Proxy stack (Traefik + DuckDNS)
+    # 1. Proxy stack (Traefik + Cloudflare)
     deploy_stack "promata-proxy" "$STACK_DIR/proxy-stack.yml"
     wait_for_service "promata-proxy_traefik"
     

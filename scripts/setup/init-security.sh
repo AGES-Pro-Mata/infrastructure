@@ -18,7 +18,7 @@ NC='\033[0m'
 
 # Configurações
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"  # Go up two levels: scripts/setup -> scripts -> root
 
 # Variáveis globais
 VERBOSE=false
@@ -304,7 +304,7 @@ reporting:
   
   schedule: "0 6 * * 1"  # Segunda-feira às 6h
   recipients:
-    - "security@promata.duckdns.org"
+    - "security@promata.com.br"
 
 dashboard:
   enabled: true
@@ -648,7 +648,7 @@ create_quick_start_script() {
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"  # Go up two levels: scripts/utils -> scripts -> root
 
 echo "🚀 Pro-Mata Security - Quick Start"
 echo "=================================="

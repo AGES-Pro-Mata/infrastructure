@@ -149,9 +149,9 @@ AZURE_RESOURCE_GROUP=rg-promata-dev
 AZURE_LOCATION=East US 2
 
 # === DOMAIN & DNS CONFIGURATION ===
-DOMAIN_NAME=promata-dev.duckdns.org
-DUCKDNS_DOMAIN=promata-dev
-# DUCKDNS_TOKEN loaded from: Azure Key Vault OR local .env.secrets
+DOMAIN_NAME=dev.promata.com.br
+CLOUDFLARE_ZONE_ID=promata.com.br
+# CLOUDFLARE_API_TOKEN loaded from: Azure Key Vault OR local .env.secrets
 
 # === APPLICATION CONFIGURATION ===
 ENVIRONMENT=development
@@ -198,7 +198,7 @@ PROMETHEUS_RETENTION=15d
 DEBUG=true
 NODE_ENV=development
 LOG_LEVEL=debug
-CORS_ORIGINS=https://promata-dev.duckdns.org,http://localhost:3000
+CORS_ORIGINS=https://dev.promata.com.br,http://localhost:3000
 
 # === BACKUP CONFIGURATION ===
 BACKUP_ENABLED=true
@@ -239,8 +239,9 @@ GRAFANA_ADMIN_PASSWORD=$(az keyvault secret show --vault-name "$KEY_VAULT_NAME" 
 # SSH Key
 TF_VAR_ssh_public_key=$(cat ~/.ssh/id_rsa.pub 2>/dev/null || echo "SSH_KEY_NOT_FOUND")
 
-# DuckDNS Token (if exists in Key Vault)
-DUCKDNS_TOKEN=$(az keyvault secret show --vault-name "$KEY_VAULT_NAME" --name "duckdns-token" --query value -o tsv 2>/dev/null || echo "DUCKDNS_TOKEN_NOT_SET")
+# Cloudflare Tokens (if exists in Key Vault)
+CLOUDFLARE_API_TOKEN=$(az keyvault secret show --vault-name "$KEY_VAULT_NAME" --name "cloudflare-api-token" --query value -o tsv 2>/dev/null || echo "CLOUDFLARE_API_TOKEN_NOT_SET")
+CLOUDFLARE_ZONE_ID=$(az keyvault secret show --vault-name "$KEY_VAULT_NAME" --name "cloudflare-zone-id" --query value -o tsv 2>/dev/null || echo "CLOUDFLARE_ZONE_ID_NOT_SET")
 EOF
 
     log "✅ Secrets loaded to: $secrets_file"
@@ -292,7 +293,8 @@ done
 REQUIRED_SECRETS=(
     "POSTGRES_PASSWORD"
     "JWT_SECRET"
-    "DUCKDNS_TOKEN"
+    "CLOUDFLARE_API_TOKEN"
+    "CLOUDFLARE_ZONE_ID"
     "TF_VAR_ssh_public_key"
 )
 
@@ -393,7 +395,8 @@ done
 
 echo ""
 echo "# Additional secrets to add manually:"
-echo "DUCKDNS_TOKEN=your-duckdns-token"
+echo "CLOUDFLARE_API_TOKEN=your-cloudflare-api-token"
+echo "CLOUDFLARE_ZONE_ID=your-cloudflare-zone-id"
 echo "AZURE_CLIENT_ID=your-service-principal-id"
 echo "AZURE_CLIENT_SECRET=your-service-principal-secret"
 echo "AZURE_TENANT_ID=your-tenant-id"
@@ -419,8 +422,9 @@ setup_mode() {
     log "✅ Security setup completed!"
     echo ""
     warn "📋 Next Steps:"
-    warn "1. Add your DuckDNS token to Key Vault:"
-    warn "   az keyvault secret set --vault-name '$KEY_VAULT_NAME' --name 'duckdns-token' --value 'your-token'"
+    warn "1. Add your Cloudflare tokens to Key Vault:"
+    warn "   az keyvault secret set --vault-name '$KEY_VAULT_NAME' --name 'cloudflare-api-token' --value 'your-token'"
+    warn "   az keyvault secret set --vault-name '$KEY_VAULT_NAME' --name 'cloudflare-zone-id' --value 'your-zone-id'"
     warn "2. Load secrets for development:"
     warn "   source ./scripts/load-env.sh $ENV"
     warn "3. For CI/CD, run:"
@@ -448,7 +452,8 @@ ci_mode() {
     local required_vars=(
         "POSTGRES_PASSWORD"
         "JWT_SECRET"
-        "DUCKDNS_TOKEN"
+        "CLOUDFLARE_API_TOKEN"
+        "CLOUDFLARE_ZONE_ID"
     )
     
     local missing_vars=()

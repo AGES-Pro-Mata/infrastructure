@@ -3,13 +3,11 @@ name: Deploy Pro-Mata Infrastructure
 on:
   repository_dispatch:
     types: 
-      # Triggers from Frontend
+      # Triggers from Frontend (Dev Only)
       - deploy-dev-frontend
-      - deploy-prod-frontend
       
-      # Triggers from Backend
+      # Triggers from Backend (Dev Only)
       - deploy-dev-backend
-      - deploy-prod-backend
       
       # Manual triggers
       - deploy-manual
@@ -77,10 +75,8 @@ jobs:
               TRIGGERED_BY="docker_hub_webhook"
             elif [[ "$EVENT_TYPE" == *"dev"* ]]; then
               ENV="dev"
-            elif [[ "$EVENT_TYPE" == *"prod"* ]]; then
-              ENV="prod"
             else
-              ENV="dev" # default
+              ENV="dev" # default - force dev environment only
             fi
             
             if [[ "$EVENT_TYPE" == *"frontend"* ]]; then
@@ -110,20 +106,13 @@ jobs:
             FRONTEND_IMAGE="norohim/pro-mata-frontend-dev:${FRONTEND_TAG}"
           fi
           
-          # Configurações por ambiente
-          if [ "$ENV" = "prod" ]; then
-            echo "cloud_provider=aws" >> $GITHUB_OUTPUT
-            echo "backend_image=${BACKEND_IMAGE:-norohim/pro-mata-backend:latest}" >> $GITHUB_OUTPUT
-            echo "frontend_image=${FRONTEND_IMAGE:-norohim/pro-mata-frontend:latest}" >> $GITHUB_OUTPUT
-            echo "resource_group=promata-prod-rg" >> $GITHUB_OUTPUT
-            echo "region=us-east-1" >> $GITHUB_OUTPUT
-          else
-            echo "cloud_provider=azure" >> $GITHUB_OUTPUT
-            echo "backend_image=${BACKEND_IMAGE:-norohim/pro-mata-backend-dev:latest}" >> $GITHUB_OUTPUT
-            echo "frontend_image=${FRONTEND_IMAGE:-norohim/pro-mata-frontend-dev:latest}" >> $GITHUB_OUTPUT
-            echo "resource_group=promata-dev-rg" >> $GITHUB_OUTPUT
-            echo "region=eastus2" >> $GITHUB_OUTPUT
-          fi
+          # Force dev environment configuration only
+          echo "cloud_provider=azure" >> $GITHUB_OUTPUT
+          echo "backend_image=${BACKEND_IMAGE:-norohim/pro-mata-backend-dev:latest}" >> $GITHUB_OUTPUT
+          echo "frontend_image=${FRONTEND_IMAGE:-norohim/pro-mata-frontend-dev:latest}" >> $GITHUB_OUTPUT
+          echo "resource_group=promata-dev-rg" >> $GITHUB_OUTPUT
+          echo "region=eastus2" >> $GITHUB_OUTPUT
+          ENV="dev"  # Force dev environment
           
           echo "🎯 Configuration determined:"
           echo "Environment: $ENV"
@@ -250,12 +239,12 @@ jobs:
           make health ENV=${{ needs.determine-config.outputs.environment }}
         timeout-minutes: 10
 
-  # Job 4: Deploy AWS (Prod)
+  # Job 4: Deploy AWS (Disabled for dev-only infrastructure)
   deploy-aws:
-    name: ☁️ Deploy to AWS (Prod)
+    name: ☁️ Deploy to AWS (Disabled)
     runs-on: ubuntu-latest
     needs: [determine-config, verify-images]
-    if: needs.determine-config.outputs.cloud_provider == 'aws'
+    if: false  # Disabled - dev environment only
     
     steps:
       - name: Checkout Infrastructure

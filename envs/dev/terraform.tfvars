@@ -1,7 +1,9 @@
 # Generated from envs/dev/.env
 # Mon 01 Sep 2025 07:46:59 AM -03
 
-environment = "dev  "
+# Azure Configuration
+environment = "dev"
+project_name = "pro-mata"
 env_color = "blue                          # Para UI diferenciada"
 env_prefix = "dev"
 domain_name = "promata.com.br"
@@ -19,4 +21,8 @@ postgres_db = "promata_dev"
 database_size = "Basic                     # Menor para dev"
 monitoring_enabled = "true"
 prometheus_retention = "7d                 # Menor retenção"
-cloudflare_api_token = "your_api_token_here"
+# DNS/Cloudflare Configuration (if needed)
+cloudflare_api_token = "PLACEHOLDER_REPLACE_WITH_YOUR_API_TOKEN"
+server_public_ip = "1.1.1.1"             # PLACEHOLDER - Update with actual Azure public IP
+cloudflare_zone_id = "PLACEHOLDER_REPLACE_WITH_YOUR_ZONE_ID"
+create_dns_records = "false"              # Disable until real IPs are available

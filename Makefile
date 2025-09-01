@@ -30,7 +30,7 @@ init: check-env ## Initialize environment
 
 deploy: check-env ## Deploy infrastructure
 	@echo "🚀 Deploying $(ENV) environment..."
-	@./scripts/deploy/full-deploy.sh $(ENV)
+	@./scripts/deploy/deploy.sh $(ENV)
 
 deploy-terraform: check-env ## Deploy only Terraform
 	@echo "🏗️  Deploying Terraform for $(ENV)..."

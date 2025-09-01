@@ -1,7 +1,7 @@
 # Group Variables for Development Environment
 ---
 # Environment Configuration
-environment: development
+env_name: development
 project_name: myproject
 domain_name: "example.com"
 
@@ -50,7 +50,7 @@ stack_environment:
   DOMAIN_NAME: "{{ domain_name }}"
   
   # Application
-  ENVIRONMENT: "{{ environment }}"
+  ENVIRONMENT: "{{ env_name }}"
   BACKEND_IMAGE: "{{ backend_image }}"
   FRONTEND_IMAGE: "{{ frontend_image }}"
   BACKEND_REPLICAS: "{{ backend_replicas }}"

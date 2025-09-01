@@ -43,7 +43,7 @@ jobs:
         run: |
           # Install Terraform using direct download method
           wget https://releases.hashicorp.com/terraform/1.8.0/terraform_1.8.0_linux_amd64.zip -O terraform.zip
-          unzip terraform.zip
+          unzip -o terraform.zip || true
           sudo rm -f /usr/local/bin/terraform 2>/dev/null || true
           sudo mv terraform /usr/local/bin/
           chmod +x /usr/local/bin/terraform
@@ -88,10 +88,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y docker-ce docker-ce-cli containerd.io
 
-      # - name: Azure Login
-      #   uses: azure/login@v2
-      #   with:
-      #     creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Load Secrets
         env:
@@ -171,10 +171,10 @@ jobs:
           # Install Make
           sudo apt update && sudo apt install -y make
 
-      # - name: Azure Login
-      #   uses: azure/login@v2
-      #   with:
-      #     creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Destroy Infrastructure
         env:

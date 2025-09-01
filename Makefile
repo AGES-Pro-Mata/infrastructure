@@ -1,220 +1,99 @@
-# Pro-Mata Infrastructure - Updated for New Structure
-.PHONY: help deploy-automated terraform-validate
+# Pro-Mata Infrastructure Makefile - New Structure
+# Updated for unified envs/ structure
 
+.DEFAULT_GOAL := help
+.PHONY: help init deploy validate backup clean
+
+# Environment and paths
 ENV ?= dev
-SERVICE ?= all
-DRY_RUN ?= false
-CI ?= false
+ENV_DIR := envs/$(ENV)
+TF_DIR := terraform/deployments/$(ENV)
+ANSIBLE_DIR := ansible
 
-# Detect CI environment
-ifeq ($(GITHUB_ACTIONS),true)
-	CI = true
-endif
+# Check if environment exists
+check-env:
+	@if [ ! -d "$(ENV_DIR)" ]; then \
+		echo "❌ Environment $(ENV) not found in $(ENV_DIR)"; \
+		exit 1; \
+	fi
 
-help:
-	@echo "🏗️  Pro-Mata Infrastructure Commands"
+help: ## Show this help message
+	@echo "🏗️  Pro-Mata Infrastructure Makefile"
+	@echo "====================================="
 	@echo ""
-	@echo "🚀 Main Commands:"
-	@echo "  deploy-automated ENV=dev    Complete automated deployment"
-	@echo "  update-dev ENV=dev          Update services"  
-	@echo "  destroy-ENV                 Destroy environment"
-	@echo "  health ENV=dev              Health checks"
-	@echo "  status ENV=dev              Show status"
-	@echo ""
-	@echo "🔧 Component Commands:"
-	@echo "  terraform-init ENV=dev      Initialize Terraform"
-	@echo "  terraform-apply ENV=dev     Apply Terraform changes"
-	@echo "  ansible-deploy ENV=dev      Deploy with Ansible"
-	@echo "  stacks-deploy ENV=dev       Deploy Docker stacks"
-	@echo ""
-	@echo "🔐 Security & Backup Commands:"
-	@echo "  vault-setup ENV=dev         Setup Ansible Vault"
-	@echo "  backup-state ENV=dev        Backup Terraform state"
-	@echo ""
-	@echo "✅ Validation Commands:"
-	@echo "  infrastructure-validate     Complete infrastructure validation"
-	@echo "  terraform-validate          Validate Terraform configuration"
-	@echo "  cloudflare-test             Test Cloudflare DNS and SSL"
+	@echo "📋 Available Commands:"
+	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z_-]+:.*##/ { printf "  %-20s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
 
-# Validation commands
-terraform-validate:
+init: check-env ## Initialize environment
+	@echo "🔧 Initializing $(ENV) environment..."
+	@./scripts/setup/init-environment.sh $(ENV)
+
+deploy: check-env ## Deploy infrastructure
+	@echo "🚀 Deploying $(ENV) environment..."
+	@./scripts/deploy/full-deploy.sh $(ENV)
+
+deploy-terraform: check-env ## Deploy only Terraform
+	@echo "🏗️  Deploying Terraform for $(ENV)..."
+	@cd $(TF_DIR) && terraform init -backend-config=../../backends/$(ENV).tf
+	@cd $(TF_DIR) && terraform plan -var-file=../../../$(ENV_DIR)/terraform.tfvars
+	@cd $(TF_DIR) && terraform apply -var-file=../../../$(ENV_DIR)/terraform.tfvars
+
+deploy-ansible: check-env ## Deploy only Ansible
+	@echo "🔧 Deploying Ansible for $(ENV)..."
+	@ansible-playbook -i $(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml \
+		-e @$(ENV_DIR)/ansible-vars.yml \
+		--vault-password-file $(ENV_DIR)/secrets/.vault_pass \
+		$(ANSIBLE_DIR)/playbooks/deploy.yml
+
+validate: check-env ## Validate infrastructure
+	@echo "🔍 Validating $(ENV) environment..."
+	@./scripts/security/validate-infrastructure.sh $(ENV)
+
+validate-terraform: check-env ## Validate Terraform
 	@echo "🔍 Validating Terraform for $(ENV)..."
-	@cd terraform/environments/$(ENV)/azure && terraform fmt -check -recursive
-	@cd terraform/environments/$(ENV)/azure && terraform init -backend=false
-	@cd terraform/environments/$(ENV)/azure && terraform validate
+	@cd $(TF_DIR) && terraform fmt -check
+	@cd $(TF_DIR) && terraform validate
 
-vault-setup:
-	@echo "🔐 Setting up Ansible Vault for $(ENV)..."
-	@scripts/setup-vault.sh $(ENV)
+backup: check-env ## Backup environment
+	@echo "💾 Backing up $(ENV) environment..."
+	@./scripts/backup/backup-all.sh $(ENV)
 
-cloudflare-test:
-	@echo "☁️  Testing Cloudflare configuration..."
-	@scripts/test-cloudflare-setup.sh
-
-infrastructure-validate:
-	@echo "🔍 Validating infrastructure for $(ENV)..."
-	@scripts/validate-infrastructure.sh $(ENV)
-
-backup-state:
+backup-terraform: check-env ## Backup Terraform state
 	@echo "💾 Backing up Terraform state for $(ENV)..."
-	@scripts/backup-terraform-state.sh $(ENV) azure
+	@./scripts/backup/backup-terraform-state.sh $(ENV)
 
-ansible-validate:
-	@echo "🔍 Validating Ansible playbooks..."
-	@for playbook in ansible/playbooks/*.yml; do \
-		if [ -f "$$playbook" ]; then \
-			ansible-playbook --syntax-check "$$playbook" || exit 1; \
-		fi \
-	done
+clean: ## Clean temporary files
+	@echo "🧹 Cleaning temporary files..."
+	@find . -name "*.tmp" -delete
+	@find . -name ".terraform" -type d -exec rm -rf {} + 2>/dev/null || true
+	@find . -name "terraform.tfstate.backup" -delete
 
-# Terraform commands (updated paths)
-terraform-init:
-	@echo "🏗️  Initializing Terraform for $(ENV)..."
-ifeq ($(CI),true)
-	@cd terraform/environments/$(ENV)/azure && terraform init -upgrade
-else
-	@if [ ! -f "terraform/environments/$(ENV)/azure/backend.tf" ]; then \
-		echo "Setting up Azure Backend..."; \
-		chmod +x terraform/environments/$(ENV)/azure/backend-setup.sh && terraform/environments/$(ENV)/azure/backend-setup.sh; \
-	fi
-	@cd terraform/environments/$(ENV)/azure && terraform init
-endif
+# Development commands
+dev-init: ## Initialize development environment
+	@$(MAKE) init ENV=dev
 
-terraform-plan: terraform-init
-	@echo "📋 Planning Terraform changes for $(ENV)..."
-	@cd terraform/environments/$(ENV)/azure && terraform plan -out=tfplan
-ifeq ($(DRY_RUN),true)
-	@echo "Dry run completed - no changes applied"
-else
-	@echo "Plan saved to tfplan"
-endif
+dev-deploy: ## Deploy development environment
+	@$(MAKE) deploy ENV=dev
 
-terraform-apply: terraform-plan  
-	@echo "🚀 Applying Terraform changes for $(ENV)..."
-ifneq ($(DRY_RUN),true)
-	@cd terraform/environments/$(ENV)/azure && terraform apply -auto-approve tfplan
-	@cd terraform/environments/$(ENV)/azure && terraform output -json > terraform-outputs.json
-endif
+dev-validate: ## Validate development environment
+	@$(MAKE) validate ENV=dev
 
-terraform-apply-automated:
-	@echo "🚀 Applying Terraform changes (automated)..."
-	@cd terraform/environments/$(ENV)/azure && terraform init -upgrade || true
-	@cd terraform/environments/$(ENV)/azure && terraform apply -auto-approve
-	@cd terraform/environments/$(ENV)/azure && terraform output -json > terraform-outputs.json
+# Production commands
+prod-init: ## Initialize production environment
+	@$(MAKE) init ENV=prod
 
-terraform-destroy:
-	@echo "💥 Destroying Terraform infrastructure for $(ENV)..."
-	@cd terraform/environments/$(ENV)/azure && terraform init -upgrade || true
-	@cd terraform/environments/$(ENV)/azure && terraform destroy -auto-approve
+prod-deploy: ## Deploy production environment
+	@$(MAKE) deploy ENV=prod
 
-# Ansible commands
-generate-inventory:
-	@echo "📋 Generating Ansible inventory from Terraform..."
-	@scripts/generate-ansible-inventory.sh $(ENV)
+prod-validate: ## Validate production environment
+	@$(MAKE) validate ENV=prod
 
-ansible-deploy: generate-inventory
-	@echo "🔧 Running Ansible deployment for $(ENV)..."
-	@cd ansible && ansible-playbook -i inventory/$(ENV)/hosts.yml playbooks/deploy-complete.yml
-ifeq ($(CI),true)
-	@cd ansible && ansible-playbook -i inventory/$(ENV)/hosts.yml playbooks/deploy-complete.yml --diff
-endif
+# Migration commands
+migrate-structure: ## Migrate to new structure
+	@echo "🔄 Migrating repository structure..."
+	@./scripts/utils/migrate-structure.sh
 
-# Docker Swarm commands  
-swarm-init:
-	@echo "🐳 Initializing Docker Swarm for $(ENV)..."
-	@scripts/swarm-init.sh $(ENV)
+validate-migration: ## Validate migration
+	@echo "🔍 Validating migration..."
+	@./scripts/utils/validate-migration.sh
 
-stacks-deploy:
-	@echo "📦 Deploying Docker stacks for $(ENV)..."
-	@scripts/deploy-stacks.sh $(ENV)
-
-# Complete deployment pipeline
-deploy-automated: terraform-apply-automated generate-inventory ansible-deploy
-	@echo "🎉 FULLY AUTOMATED deployment completed!"
-	@$(MAKE) show-deployment-info
-
-# Update commands
-update-dev:
-	@echo "🔄 Updating $(SERVICE) for $(ENV)..."
-	@scripts/update-stacks.sh $(ENV) $(SERVICE)
-
-# Health and status
-health:
-	@echo "🏥 Running health checks for $(ENV)..."
-	@scripts/health-check.sh $(ENV)
-
-status:
-	@echo "📊 Infrastructure Status for $(ENV):"
-	@if docker node ls >/dev/null 2>&1; then \
-		echo "🐳 Docker Swarm: Active"; \
-		docker service ls --format "table {{.Name}}\t{{.Replicas}}\t{{.Image}}"; \
-	else \
-		echo "🐳 Docker Swarm: Not available locally"; \
-	fi
-
-# Show deployment information  
-show-deployment-info:
-	@echo ""
-	@echo "📊 Deployment Information for $(ENV):"
-	@echo "=========================="
-	@cd terraform/environments/$(ENV)/azure && \
-	if [ -f terraform-outputs.json ]; then \
-		MANAGER_IP=$$(cat terraform-outputs.json | jq -r '.swarm_manager_public_ip.value // "N/A"') && \
-		DOMAIN=$$(grep DOMAIN_NAME ../../../config/environments/$(ENV)/.env.$(ENV) 2>/dev/null | cut -d= -f2 || echo "promata.com.br") && \
-		echo "🌐 Frontend:    https://$$DOMAIN" && \
-		echo "🔧 Backend API: https://api.$$DOMAIN" && \
-		echo "📊 Traefik:    https://traefik.$$DOMAIN" && \
-		echo "🖥️  SSH Access: ssh ubuntu@$$MANAGER_IP" && \
-		echo "📍 Manager IP:  $$MANAGER_IP"; \
-	else \
-		echo "⚠️  Terraform outputs not found. Run terraform apply first."; \
-	fi
-
-# DNS update
-dns-update:
-	@echo "🌐 Updating DNS for $(ENV)..."
-	@scripts/dns-updater.sh $(ENV)
-
-# Destruction commands
-destroy-dev:
-	@echo "⚠️  Destroying DEV environment..."
-	@$(MAKE) terraform-destroy ENV=dev
-
-destroy-staging:
-	@echo "⚠️  Destroying STAGING environment..."
-ifneq ($(CI),true)
-	@echo "Are you sure? Type 'yes' to continue:"
-	@read -r confirm && [ "$$confirm" = "yes" ]
-endif
-	@$(MAKE) terraform-destroy ENV=staging
-
-destroy-prod:
-	@echo "🚨 DESTROYING PRODUCTION ENVIRONMENT"
-ifneq ($(CI),true)
-	@echo "⛔ CRITICAL: Type 'DESTROY_PRODUCTION' to continue:"
-	@read -r confirm && [ "$$confirm" = "DESTROY_PRODUCTION" ]
-endif
-	@$(MAKE) terraform-destroy ENV=prod
-
-# Cleanup
-cleanup:
-	@echo "🧹 Cleaning up resources..."
-	@docker system prune -af --volumes || true
-
-# Environment shortcuts
-dev: ENV=dev
-dev: deploy-automated
-
-staging: ENV=staging
-staging: deploy-automated
-
-prod: ENV=prod  
-prod: deploy-automated
-
-# Quick commands
-quick-deploy: terraform-apply stacks-deploy
-	@echo "⚡ Quick deployment completed for $(ENV)"
-
-quick-health:
-	@echo "⚡ Quick health check for $(ENV)..."
-	@docker service ls --format "table {{.Name}}\t{{.Replicas}}" 2>/dev/null || echo "Docker not available"

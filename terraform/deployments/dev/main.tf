@@ -278,6 +278,12 @@ resource "azurerm_linux_virtual_machine" "manager" {
   }))
 
   tags = var.common_tags
+
+  # Explicit dependencies for proper destroy order
+  depends_on = [
+    azurerm_network_interface_security_group_association.manager,
+    azurerm_public_ip.manager
+  ]
 }
 
 # Virtual Machine for Swarm Worker
@@ -318,6 +324,12 @@ resource "azurerm_linux_virtual_machine" "worker" {
   }))
 
   tags = var.common_tags
+
+  # Explicit dependencies for proper destroy order
+  depends_on = [
+    azurerm_network_interface_security_group_association.worker,
+    azurerm_public_ip.worker
+  ]
 }
 
 # Storage Account for backups and state
@@ -329,6 +341,11 @@ resource "azurerm_storage_account" "dev" {
   account_replication_type = "LRS"
 
   tags = var.common_tags
+
+  # Prevent accidental deletion of storage account
+  lifecycle {
+    prevent_destroy = false # Set to true in production
+  }
 }
 
 # Container for backups
@@ -336,6 +353,8 @@ resource "azurerm_storage_container" "backups" {
   name                  = "backups"
   storage_account_name  = azurerm_storage_account.dev.name
   container_access_type = "private"
+
+  depends_on = [azurerm_storage_account.dev]
 }
 
 # Container for terraform state backups
@@ -343,12 +362,14 @@ resource "azurerm_storage_container" "terraform_backups" {
   name                  = "terraform-state-backups"
   storage_account_name  = azurerm_storage_account.dev.name
   container_access_type = "private"
+
+  depends_on = [azurerm_storage_account.dev]
 }
 
 # Cloudflare DNS Module
 module "cloudflare_dns" {
   count  = var.enable_cloudflare_dns ? 1 : 0
-  source = "../../modules/dns"
+  source = "../../modules/shared/dns"
 
   cloudflare_api_token = var.cloudflare_api_token
   cloudflare_zone_id   = var.cloudflare_zone_id
@@ -362,4 +383,10 @@ module "cloudflare_dns" {
   traefik_proxied = false # Keep Traefik dashboard as DNS only
 
   tags = ["dev", "terraform", "promata"]
+
+  # Explicit dependency to ensure proper destroy order
+  depends_on = [
+    azurerm_public_ip.manager,
+    azurerm_linux_virtual_machine.manager
+  ]
 }

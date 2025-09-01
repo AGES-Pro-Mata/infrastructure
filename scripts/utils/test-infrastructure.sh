@@ -220,16 +220,16 @@ test_endpoints() {
     # Determine URLs based on environment
     case "$ENVIRONMENT" in
         "dev")
-            frontend_url="https://dev.promata.duckdns.org"
-            api_url="https://api-dev.promata.duckdns.org"
+            frontend_url="https://dev.promata.com.br"
+            api_url="https://api-dev.promata.com.br"
             ;;
         "staging")
-            frontend_url="https://staging.promata.duckdns.org"
-            api_url="https://api-staging.promata.duckdns.org"
+            frontend_url="https://staging.promata.com.br"
+            api_url="https://api-staging.promata.com.br"
             ;;
         "prod")
-            frontend_url="https://promata.duckdns.org"
-            api_url="https://api.promata.duckdns.org"
+            frontend_url="https://promata.com.br"
+            api_url="https://api.promata.com.br"
             ;;
         *)
             print_error "Unknown environment: $ENVIRONMENT"

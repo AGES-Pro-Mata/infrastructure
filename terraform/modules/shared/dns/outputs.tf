@@ -61,12 +61,13 @@ output "cloudflare_zone_id" {
 output "domain_urls" {
   description = "All configured domain URLs"
   value = var.create_dns_records ? {
-    main    = "https://${var.domain_name}"
-    www     = "https://www.${var.domain_name}"
-    api     = "https://api.${var.domain_name}"
-    traefik = "https://traefik.${var.domain_name}"
-    pgadmin = "https://pgadmin.${var.domain_name}"
-    grafana = "https://grafana.${var.domain_name}"
+    main        = "https://${var.domain_name}"
+    www         = "https://www.${var.domain_name}"
+    api         = "https://api.${var.domain_name}"
+    traefik     = "https://traefik.${var.domain_name}"
+    pgadmin     = "https://pgadmin.${var.domain_name}"
+    grafana     = "https://grafana.${var.domain_name}"
     environment = var.environment != "prod" ? "https://${var.environment}.${var.domain_name}" : null
+    api_environment = var.environment != "prod" ? "https://api-${var.environment}.${var.domain_name}" : null
   } : {}
 }

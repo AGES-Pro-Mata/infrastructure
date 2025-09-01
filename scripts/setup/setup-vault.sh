@@ -60,7 +60,6 @@ generate_secrets() {
             GRAFANA_ADMIN_PASSWORD=$(openssl rand -base64 16)
             PGADMIN_PASSWORD=$(openssl rand -base64 16)
             ACME_EMAIL="devops@promata.com.br"
-            DUCKDNS_TOKEN=""  # To be filled manually
             CLOUDFLARE_API_TOKEN=""  # To be filled manually
             CLOUDFLARE_ZONE_ID=""    # To be filled manually
             ;;
@@ -71,7 +70,6 @@ generate_secrets() {
             GRAFANA_ADMIN_PASSWORD=$(openssl rand -base64 16)
             PGLADMIN_PASSWORD=$(openssl rand -base64 16)
             ACME_EMAIL="devops@promata.com.br"
-            DUCKDNS_TOKEN=""  # To be filled manually
             CLOUDFLARE_API_TOKEN=""  # To be filled manually
             CLOUDFLARE_ZONE_ID=""    # To be filled manually
             ;;
@@ -82,7 +80,6 @@ generate_secrets() {
             GRAFANA_ADMIN_PASSWORD=$(openssl rand -base64 20)
             PGADMIN_PASSWORD=$(openssl rand -base64 20)
             ACME_EMAIL="admin@promata.com.br"
-            DUCKDNS_TOKEN=""  # Not used in prod
             CLOUDFLARE_API_TOKEN=""  # To be filled manually
             CLOUDFLARE_ZONE_ID=""    # To be filled manually
             ;;
@@ -119,7 +116,6 @@ vault_pgadmin_password: "$PGADMIN_PASSWORD"
 vault_acme_email: "$ACME_EMAIL"
 
 # External services
-vault_duckdns_token: "$DUCKDNS_TOKEN"
 vault_cloudflare_api_token: "$CLOUDFLARE_API_TOKEN"
 vault_cloudflare_zone_id: "$CLOUDFLARE_ZONE_ID"
 

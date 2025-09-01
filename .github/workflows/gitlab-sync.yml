@@ -48,7 +48,7 @@ jobs:
     - name: ⚙️ Configurar Git
       run: |
         git config --global user.name "GitHub Actions Sync"
-        git config --global user.email "sync@promata.duckdns.org"
+        git config --global user.email "sync@promata.com.br"
         git config --global init.defaultBranch main
 
     - name: 🐍 Setup Python

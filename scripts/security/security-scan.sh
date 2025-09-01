@@ -18,7 +18,7 @@ NC='\033[0m'
 
 # Configurações
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"  # Go up two levels: scripts/security -> scripts -> root
 LOG_DIR="$PROJECT_ROOT/logs"
 REPORTS_DIR="$PROJECT_ROOT/reports/security-scan"
 TEMP_DIR="/tmp/pro-mata-scan-$$"
@@ -151,8 +151,9 @@ add_vulnerability() {
     local description="$4"
     local fix="$5"
     
-    ((VULN_COUNT[$severity]++))
-    ((VULN_COUNT[TOTAL]++))
+    # Use safer arithmetic increment
+    VULN_COUNT[$severity]=$((VULN_COUNT[$severity] + 1))
+    VULN_COUNT[TOTAL]=$((VULN_COUNT[TOTAL] + 1))
     
     log "VULN" "[$severity] $component: $vulnerability"
     if [[ "$VERBOSE" == "true" ]]; then
@@ -495,13 +496,19 @@ scan_open_ports() {
         return
     fi
     
-    # Usar ss para listar portas TCP em listening
-    local open_ports=$(ss -tlnp | grep LISTEN | awk '{print $4}' | cut -d: -f2 | sort -n | uniq)
+    # Usar ss para listar portas TCP em listening, com melhor tratamento de erros
+    local open_ports
+    if ! open_ports=$(ss -tlnp 2>/dev/null | grep LISTEN | awk '{print $4}' | cut -d: -f2 | sort -n | uniq); then
+        log "WARNING" "Falha ao obter lista de portas abertas, continuando..."
+        return
+    fi
+    
     local unexpected_ports=""
     local expected_ports="22 80 443 3000 5000 5432 6379"
     
+    # Processar cada porta de forma mais segura
     while IFS= read -r port; do
-        if [[ -n "$port" ]] && ! echo "$expected_ports" | grep -q "$port"; then
+        if [[ -n "$port" ]] && [[ "$port" =~ ^[0-9]+$ ]] && ! echo "$expected_ports" | grep -q "\b$port\b"; then
             unexpected_ports+="$port "
         fi
     done <<< "$open_ports"
@@ -514,15 +521,17 @@ scan_open_ports() {
     
     # Verificar se portas esperadas estão abertas
     local missing_ports=""
-    for expected_port in $expected_ports; do
-        if ! echo "$open_ports" | grep -q "^$expected_port$"; then
-            case "$expected_port" in
-                22) missing_ports+="SSH($expected_port) " ;;
-                80|443) missing_ports+="HTTP($expected_port) " ;;
-                5432) missing_ports+="PostgreSQL($expected_port) " ;;
-            esac
-        fi
-    done
+    if [[ -n "$open_ports" ]]; then
+        for expected_port in $expected_ports; do
+            if ! echo "$open_ports" | grep -q "^$expected_port$"; then
+                case "$expected_port" in
+                    22) missing_ports+="SSH($expected_port) " ;;
+                    80|443) missing_ports+="HTTP($expected_port) " ;;
+                    5432) missing_ports+="PostgreSQL($expected_port) " ;;
+                esac
+            fi
+        done
+    fi
     
     if [[ -n "$missing_ports" ]] && [[ "$ENVIRONMENT" == "prod" ]]; then
         add_vulnerability "INFO" "network" "Serviços esperados não detectados" \
@@ -540,23 +549,36 @@ scan_firewall_config() {
         return
     fi
     
-    # Verificar UFW
+    # Verificar UFW (com tratamento de erro)
     if command -v ufw &> /dev/null; then
-        local ufw_status=$(ufw status | head -1 | awk '{print $2}' 2>/dev/null || echo "inactive")
-        
-        if [[ "$ufw_status" != "active" ]] && [[ "$ENVIRONMENT" == "prod" ]]; then
-            add_vulnerability "HIGH" "firewall" "Firewall não está ativo em produção" \
-                "UFW não está ativo em ambiente de produção" \
-                "Ativar firewall: sudo ufw enable"
+        local ufw_status
+        if ufw_status=$(ufw status 2>/dev/null | head -1 | awk '{print $2}'); then
+            if [[ "$ufw_status" != "active" ]] && [[ "$ENVIRONMENT" == "prod" ]]; then
+                add_vulnerability "HIGH" "firewall" "Firewall não está ativo em produção" \
+                    "UFW não está ativo em ambiente de produção" \
+                    "Ativar firewall: sudo ufw enable"
+            fi
+        else
+            log "WARNING" "Não foi possível verificar status do UFW"
         fi
+    else
+        log "INFO" "UFW não está instalado"
     fi
     
-    # Verificar iptables básico
-    local iptables_rules=$(iptables -L | wc -l 2>/dev/null || echo "0")
-    if [[ $iptables_rules -lt 10 ]] && [[ "$ENVIRONMENT" == "prod" ]]; then
-        add_vulnerability "MEDIUM" "firewall" "Regras de firewall mínimas em produção" \
-            "Poucas regras de firewall detectadas ($iptables_rules linhas)" \
-            "Configurar regras de firewall adequadas para produção"
+    # Verificar iptables básico (com tratamento de erro)
+    local iptables_rules=0
+    if command -v iptables &> /dev/null; then
+        if iptables_rules=$(iptables -L 2>/dev/null | wc -l); then
+            if [[ $iptables_rules -lt 10 ]] && [[ "$ENVIRONMENT" == "prod" ]]; then
+                add_vulnerability "MEDIUM" "firewall" "Regras de firewall mínimas em produção" \
+                    "Poucas regras de firewall detectadas ($iptables_rules linhas)" \
+                    "Configurar regras de firewall adequadas para produção"
+            fi
+        else
+            log "WARNING" "Não foi possível verificar regras do iptables"
+        fi
+    else
+        log "INFO" "iptables não está disponível"
     fi
 }
 
@@ -567,13 +589,13 @@ scan_ssl_certificates() {
     local endpoints
     case "$ENVIRONMENT" in
         "dev")
-            endpoints="dev.promata.duckdns.org:443 api-dev.promata.duckdns.org:443"
+            endpoints="dev.promata.com.br:443"
             ;;
         "staging")
-            endpoints="staging.promata.duckdns.org:443 api-staging.promata.duckdns.org:443"
+            endpoints="staging.promata.com.br:443"
             ;;
         "prod")
-            endpoints="promata.duckdns.org:443 api.promata.duckdns.org:443"
+            endpoints="promata.com.br:443"
             ;;
         *)
             endpoints=""

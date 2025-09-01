@@ -1,13 +1,21 @@
 name: Docker Hub Webhook Handler
 
+# NOTA: Este workflow recebe webhooks diretos do Docker Hub quando novas imagens são publicadas
+# Alternativamente, os repos backend/frontend podem usar repository_dispatch após push para Docker Hub
+# Se usando repository_dispatch nos repos de aplicação, este workflow pode ser desabilitado
+
 on:
-  # GitHub webhook endpoint that Docker Hub will call
+  # GitHub webhook endpoint que o Docker Hub irá chamar diretamente
+  # Configurar em: Docker Hub → Repository → Webhooks → Add webhook
+  # URL: https://api.github.com/repos/AGES-Pro-Mata/infrastructure/dispatches
+  # Content Type: application/json
+  # Payload: {"event_type": "docker-hub-webhook", "client_payload": {...}}
   repository_dispatch:
     types: [docker-hub-webhook]
 
 env:
   DOCKER_REGISTRY: docker.io
-  DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+  DOCKER_USERNAME: ${{ vars.DOCKER_USERNAME }}
 
 jobs:
   process-webhook:

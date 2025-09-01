@@ -34,7 +34,7 @@ deploy: check-env ## Deploy infrastructure
 
 deploy-terraform: check-env ## Deploy only Terraform
 	@echo "🏗️  Deploying Terraform for $(ENV)..."
-	@cd $(TF_DIR) && terraform init -backend-config=../../backends/$(ENV).tf
+	@cd $(TF_DIR) && terraform init -backend-config=../../backends/$(ENV)-backend.hcl
 	@cd $(TF_DIR) && terraform plan -var-file=../../../$(ENV_DIR)/terraform.tfvars
 	@cd $(TF_DIR) && terraform apply -var-file=../../../$(ENV_DIR)/terraform.tfvars
 

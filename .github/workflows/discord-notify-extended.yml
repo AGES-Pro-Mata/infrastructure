@@ -1,5 +1,6 @@
 name: Discord Extended Notifications
 
+# Notificações consolidadas para Discord - evita duplicação entre workflows
 on:
   # Reviews em PRs
   pull_request_review:
@@ -9,14 +10,17 @@ on:
   issues:
     types: [opened, closed]
     
-  # Deploys e CI/CD completados
+  # Deploys e CI/CD completados (apenas workflows principais)
   workflow_run:
-    workflows: ["Frontend CI/CD Pipeline", "CI/CD Pipeline", "Push to Dev Branch", "Push to Main branch"]
+    workflows: ["Deploy Pro-Mata Infrastructure", "Deploy Dev Environment"]
     types: [completed]
     
-  # Push para branches principais
+  # Push para branches principais (limitado para evitar spam)
   push:
-    branches: [main, dev]
+    branches: [main]
+
+env:
+  DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
 
 jobs:
   notify-reviews:

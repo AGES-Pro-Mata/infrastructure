@@ -46,6 +46,12 @@ jobs:
             echo "image_type=frontend" >> $GITHUB_OUTPUT
             echo "image_tag=latest" >> $GITHUB_OUTPUT
             echo "repository_name=$REPO_NAME" >> $GITHUB_OUTPUT
+          elif [[ "$REPO_NAME" == "norohim/pro-mata-database-dev" ]] && [[ "$PUSHED_TAG" == "latest" ]]; then
+            echo "✅ Database dev image with latest tag detected"
+            echo "should_deploy=true" >> $GITHUB_OUTPUT
+            echo "image_type=database" >> $GITHUB_OUTPUT
+            echo "image_tag=latest" >> $GITHUB_OUTPUT
+            echo "repository_name=$REPO_NAME" >> $GITHUB_OUTPUT
           elif [[ "$REPO_NAME" == "norohim/pro-mata-migration-dev" ]] && [[ "$PUSHED_TAG" == "latest" ]]; then
             echo "✅ Migration dev image with latest tag detected"
             echo "should_deploy=true" >> $GITHUB_OUTPUT
@@ -80,6 +86,10 @@ jobs:
           if [[ "${{ needs.process-webhook.outputs.image_type }}" == "backend" ]]; then
             BACKEND_TAG="latest"
             # Get the latest frontend tag
+            FRONTEND_TAG=$(curl -s "https://registry.hub.docker.com/v2/repositories/norohim/pro-mata-frontend-dev/tags/" | jq -r '.results[0].name')
+          elif [[ "${{ needs.process-webhook.outputs.image_type }}" == "database" ]]; then
+            # For database updates, redeploy with current latest tags
+            BACKEND_TAG=$(curl -s "https://registry.hub.docker.com/v2/repositories/norohim/pro-mata-backend-dev/tags/" | jq -r '.results[0].name')
             FRONTEND_TAG=$(curl -s "https://registry.hub.docker.com/v2/repositories/norohim/pro-mata-frontend-dev/tags/" | jq -r '.results[0].name')
           elif [[ "${{ needs.process-webhook.outputs.image_type }}" == "migration" ]]; then
             # For migration updates, redeploy with current latest tags

@@ -33,28 +33,26 @@ RUN mkdir -p /etc/postgresql/conf.d \
 # Copy custom PostgreSQL configurations
 COPY configs/postgresql.conf /etc/postgresql/postgresql.conf
 COPY configs/pg_hba.conf /etc/postgresql/pg_hba.conf
-COPY configs/recovery.conf /etc/postgresql/recovery.conf.template
 
 # Copy initialization scripts
 COPY scripts/init/ /docker-entrypoint-initdb.d/
-COPY scripts/replication/ /usr/local/bin/
-COPY scripts/backup/ /usr/local/bin/
 
 # Copy custom entrypoint
 COPY entrypoint.sh /usr/local/bin/docker-entrypoint-custom.sh
 
 # Set permissions
-RUN chmod +x /usr/local/bin/*.sh
-RUN chmod +x /docker-entrypoint-initdb.d/*.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint-custom.sh
+RUN chmod +x /docker-entrypoint-initdb.d/*.sh 2>/dev/null || true
 RUN chmod 644 /etc/postgresql/*.conf
 RUN chown -R postgres:postgres /var/lib/postgresql/backups
 RUN chown -R postgres:postgres /var/lib/postgresql/scripts
 
 # Set environment variables for Pro-Mata
 ENV POSTGRES_INITDB_ARGS="--encoding=UTF-8 --lc-collate=pt_BR.UTF-8 --lc-ctype=pt_BR.UTF-8"
-ENV POSTGRES_HOST_AUTH_METHOD=md5
 ENV TZ=America/Sao_Paulo
 ENV PGTZ=America/Sao_Paulo
+
+# Note: POSTGRES_HOST_AUTH_METHOD should be set via runtime environment, not build-time
 
 # Health check customizado para Pro-Mata
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \

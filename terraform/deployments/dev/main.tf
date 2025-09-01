@@ -351,7 +351,7 @@ resource "azurerm_storage_account" "dev" {
 # Container for backups
 resource "azurerm_storage_container" "backups" {
   name                  = "backups"
-  storage_account_id    = azurerm_storage_account.dev.id
+  storage_account_name  = azurerm_storage_account.dev.name
   container_access_type = "private"
 
   depends_on = [azurerm_storage_account.dev]
@@ -360,7 +360,7 @@ resource "azurerm_storage_container" "backups" {
 # Container for terraform state backups
 resource "azurerm_storage_container" "terraform_backups" {
   name                  = "terraform-state-backups"
-  storage_account_id    = azurerm_storage_account.dev.id
+  storage_account_name  = azurerm_storage_account.dev.name
   container_access_type = "private"
 
   depends_on = [azurerm_storage_account.dev]

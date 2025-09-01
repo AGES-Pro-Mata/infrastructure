@@ -5,10 +5,6 @@
     "max-file": "3"
   },
   "storage-driver": "overlay2",
-{% if inventory_hostname in groups['managers'] %}
-  "metrics-addr": "0.0.0.0:9323",
-  "experimental": true,
-{% endif %}
   "live-restore": true,
   "userland-proxy": false,
   "no-new-privileges": true,

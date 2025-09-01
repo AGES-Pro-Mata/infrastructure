@@ -31,7 +31,7 @@ services:
 
   # PostgreSQL Primary (Master)
   postgres-primary:
-    image: promata/database:${DB_VERSION:-latest}
+    image: norohim/pro-mata-database-dev:${DB_VERSION:-latest}
     environment:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
@@ -73,7 +73,7 @@ services:
 
   # PostgreSQL Replica (Standby)
   postgres-replica:
-    image: promata/database:${DB_VERSION:-latest}
+    image: norohim/pro-mata-database-dev:${DB_VERSION:-latest}
     environment:
       - PGUSER=${POSTGRES_REPLICA_USER:-replicator}
       - POSTGRES_USER=${POSTGRES_USER}

@@ -47,7 +47,7 @@ deploy-ansible: check-env ## Deploy only Ansible
 
 validate: check-env ## Validate infrastructure
 	@echo "🔍 Validating $(ENV) environment..."
-	@./scripts/security/validate-infrastructure.sh $(ENV)
+	@./scripts/utils/validate-infrastructure.sh $(ENV)
 
 validate-terraform: check-env ## Validate Terraform
 	@echo "🔍 Validating Terraform for $(ENV)..."

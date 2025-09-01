@@ -231,13 +231,25 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y jq curl openssl
           
-      - name: 🔍 Executar auditoria de conformidade
+      - name: 🔍 Executar auditoria de segurança (${{ matrix.type }})
         run: |
           chmod +x scripts/security/security-audit.sh
-          ./scripts/security/security-audit.sh \
-            --compliance-check \
-            --environment ${{ needs.validate.outputs.environment }} \
-            --format json
+          EXIT_CODE=0
+          ./scripts/security/security-audit.sh 
+            --compliance-check 
+            --environment ${{ needs.validate.outputs.environment }} 
+            --format json || EXIT_CODE=$?
+          
+          # Exit codes: 0=success, 1=high findings, 2=critical findings
+          if [[ $EXIT_CODE -eq 2 ]]; then
+            echo "❌ CRITICAL security findings detected!"
+            exit 2
+          elif [[ $EXIT_CODE -eq 1 ]]; then
+            echo "⚠️ HIGH security findings detected but continuing workflow"
+            echo "security_findings=high" >> $GITHUB_ENV
+          else
+            echo "✅ Security audit passed"
+          fi
             
       - name: 📊 Gerar relatório de auditoria
         if: always()

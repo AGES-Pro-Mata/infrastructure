@@ -89,6 +89,11 @@ resource "aws_route_table_association" "public" {
   count          = 2
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
+
+  depends_on = [
+    aws_route_table.public,
+    aws_subnet.public
+  ]
 }
 
 # Security Group for ECS
@@ -139,6 +144,11 @@ resource "aws_ecs_cluster" "prod" {
     Environment = "production"
     Project     = "pro-mata"
   }
+
+  depends_on = [
+    aws_subnet.public,
+    aws_security_group.ecs
+  ]
 }
 
 # Data sources

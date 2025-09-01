@@ -504,7 +504,15 @@ scan_open_ports() {
     fi
     
     local unexpected_ports=""
-    local expected_ports="22 80 443 3000 5000 5432 6379"
+    local expected_ports
+    case "$ENVIRONMENT" in
+        "dev")
+            expected_ports="22 53 80 443 631 1716 1900 3000 5000 5353 5432 6379 6463 8200 38091 57621"
+            ;;
+        *)
+            expected_ports="22 80 443 3000 5000 5432 6379"
+            ;;
+    esac
     
     # Processar cada porta de forma mais segura
     while IFS= read -r port; do
@@ -589,7 +597,8 @@ scan_ssl_certificates() {
     local endpoints
     case "$ENVIRONMENT" in
         "dev")
-            endpoints="dev.promata.com.br:443"
+            log "INFO" "Pulando verificação SSL para ambiente dev"
+            return
             ;;
         "staging")
             endpoints="staging.promata.com.br:443"

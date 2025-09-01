@@ -39,8 +39,13 @@ validate_environment() {
     log "Validating environment: $ENVIRONMENT"
     
     case "$ENVIRONMENT" in
-        dev|staging|prod)
+        dev)
             log "Valid environment: $ENVIRONMENT"
+            ;;
+        staging|prod)
+            error "Environment $ENVIRONMENT is not yet configured for deployment"
+            error "Only 'dev' environment is currently supported"
+            exit 1
             ;;
         *)
             error "Environment must be: dev, staging, or prod"

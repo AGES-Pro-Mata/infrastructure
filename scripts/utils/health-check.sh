@@ -20,12 +20,15 @@ error() { echo -e "${RED}[$(date +'%H:%M:%S')]${NC} $1"; }
 info() { echo -e "${BLUE}[$(date +'%H:%M:%S')]${NC} $1"; }
 
 # Load environment
-ENV_FILE="$PROJECT_ROOT/environments/$ENV/.env.$ENV"
+ENV_FILE="$PROJECT_ROOT/envs/$ENV/.env.$ENV"
 if [[ -f "$ENV_FILE" ]]; then
     source "$ENV_FILE"
 else
-    error "Environment file not found: $ENV_FILE"
-    exit 1
+    warn "Environment file not found: $ENV_FILE, using defaults"
+    # Set default values if env file not found
+    DOMAIN_NAME="${DOMAIN_NAME:-dev.promata.com.br}"
+    POSTGRES_USER="${POSTGRES_USER:-promata}"
+    POSTGRES_DB="${POSTGRES_DB:-promata}"
 fi
 
 # Health check functions

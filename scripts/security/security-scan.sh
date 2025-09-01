@@ -52,6 +52,32 @@ setup_logging() {
     fi
 }
 
+# Inicializar arquivo SARIF se necessário
+setup_sarif() {
+    if [[ "$OUTPUT_FORMAT" == "sarif" ]]; then
+        local sarif_file="$REPORTS_DIR/security-scan-results.sarif"
+        cat > "$sarif_file" << 'EOF'
+{
+  "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "Pro-Mata Security Scanner",
+          "version": "1.0.0",
+          "informationUri": "https://github.com/AGES-Pro-Mata/infrastructure"
+        }
+      },
+      "results": []
+    }
+  ]
+}
+EOF
+        log "INFO" "Arquivo SARIF inicializado: $sarif_file"
+    fi
+}
+
 log() {
     local level="$1"
     local message="$2"
@@ -798,9 +824,49 @@ save_sarif_result() {
     local description="$4"
     local fix="$5"
     
-    # Implementar se necessário para CI/CD
-    # Por enquanto, apenas log
-    log "INFO" "SARIF result logged: $severity $component $vulnerability"
+    local sarif_file="$REPORTS_DIR/security-scan-results.sarif"
+    
+    # Converter severity para nível SARIF
+    local sarif_level
+    case "$severity" in
+        "CRITICAL"|"HIGH") sarif_level="error" ;;
+        "MEDIUM") sarif_level="warning" ;;
+        "LOW"|"INFO") sarif_level="note" ;;
+        *) sarif_level="warning" ;;
+    esac
+    
+    # Adicionar resultado ao arquivo SARIF usando jq
+    local temp_file=$(mktemp)
+    if command -v jq >/dev/null 2>&1; then
+        jq --arg component "$component" \
+           --arg vulnerability "$vulnerability" \
+           --arg description "$description" \
+           --arg fix "$fix" \
+           --arg level "$sarif_level" \
+           '.runs[0].results += [{
+             "ruleId": ("security-" + $component + "-" + ($vulnerability | gsub("[^a-zA-Z0-9]"; "-") | ascii_downcase)),
+             "level": $level,
+             "message": {
+               "text": $description
+             },
+             "locations": [{
+               "physicalLocation": {
+                 "artifactLocation": {
+                   "uri": "infrastructure"
+                 }
+               }
+             }],
+             "fixes": [{
+               "description": {
+                 "text": $fix
+               }
+             }]
+           }]' "$sarif_file" > "$temp_file" && mv "$temp_file" "$sarif_file"
+    else
+        log "WARNING" "jq não encontrado - SARIF result não pode ser adicionado"
+    fi
+    
+    log "INFO" "SARIF result added: $severity $component $vulnerability"
 }
 
 # Gerar relatório de scan
@@ -942,6 +1008,7 @@ main() {
     setup_temp_env
     parse_arguments "$@"
     validate_arguments
+    setup_sarif
     
     log "INFO" "Iniciando scan de segurança - Tipo: $SCAN_TYPE - Ambiente: ${ENVIRONMENT:-'all'}"
     

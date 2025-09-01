@@ -88,3 +88,56 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Security scan results and logs
+logs/security-*.log
+reports/security/
+reports/security-scan/
+reports/audit/
+tmp/security/
+
+# Temporary scan files
+/tmp/pro-mata-scan-*
+*.sarif
+*-scan-results.*
+*-audit-results.*
+
+# Security keys and secrets (double check)
+security/keys/
+backups/secrets/
+*.pem
+*.key
+*.crt
+*_rsa
+*_dsa
+*_ecdsa
+*_ed25519
+
+# Environment specific secrets
+.env.*
+**/secrets.yml
+**/vault.yml
+
+# === BACKUP & TEMPORARY FILES ===
+# Terraform backups
+*.backup
+*.bak
+*.orig
+
+# Script temporary files
+**/tmp_*
+**/temp_*
+scripts/tmp/
+scripts/temp/
+
+# === MONITORING & METRICS ===
+# Prometheus data
+**/prometheus_data/
+**/grafana_data/
+**/monitoring/data/
+
+# === DEVELOPMENT ===
+# Test outputs
+test-outputs/
+**/test-results/
+coverage/

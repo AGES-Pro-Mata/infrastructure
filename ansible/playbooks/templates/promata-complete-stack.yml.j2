@@ -1,0 +1,459 @@
+# Pro-Mata Complete Stack - Generated from Ansible Template
+# Environment: {{ ansible_environment | default('development') }}
+# Generated: {{ ansible_date_time.iso8601 }}
+
+version: "3.8"
+
+services:
+  # Database Migration Init Container
+  db-migrate:
+    image: {{ backend_image | regex_replace('-dev:', '-migration-dev:') if 'dev' in backend_image else backend_image | regex_replace(':', '-migration:') }}
+    environment:
+      - NODE_ENV={{ 'production' if ansible_environment == 'prod' else 'development' }}
+      - DATABASE_URL=postgresql://{{ postgres_user }}:{{ postgres_password }}@postgres-primary:5432/{{ postgres_db }}
+      - DB_HOST=postgres-primary
+      - DB_PORT=5432
+      - POSTGRES_USER={{ postgres_user }}
+      - RUN_SEED={{ run_seed | default('false') }}
+    networks:
+      - database_tier
+    depends_on:
+      - postgres-primary
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      restart_policy:
+        condition: none
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  # PostgreSQL Primary (Master)
+  postgres-primary:
+    image: {{ database_image | default('promata/database:latest') }}
+    environment:
+      - POSTGRES_DB={{ postgres_db }}
+      - POSTGRES_USER={{ postgres_user }}
+      - POSTGRES_PASSWORD={{ postgres_password }}
+      - POSTGRES_REPLICATION_USER={{ postgres_replica_user }}
+      - POSTGRES_REPLICATION_PASSWORD={{ postgres_replica_password }}
+      - POSTGRES_REPLICATION_MODE=master
+      - PGUSER={{ postgres_user }}
+      
+    volumes:
+      - postgres_primary_data:/var/lib/postgresql/data
+      - postgres_backups:/var/lib/postgresql/backups
+    
+    networks:
+      - database_tier
+    
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.labels.database.primary == true]
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 3
+      resources:
+        limits:
+          memory: {{ postgres_memory_limit | default('2G') }}
+          cpus: {{ postgres_cpu_limit | default('1.5') }}
+        reservations:
+          memory: {{ postgres_memory_reservation | default('1G') }}
+          cpus: {{ postgres_cpu_reservation | default('0.5') }}
+    
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U {{ postgres_user }} -d {{ postgres_db }}"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # PostgreSQL Replica (Standby) - Conditional deployment
+{% if postgres_replica_count | default(0) | int > 0 %}
+  postgres-replica:
+    image: {{ database_image | default('promata/database:latest') }}
+    environment:
+      - PGUSER={{ postgres_replica_user }}
+      - POSTGRES_USER={{ postgres_user }}
+      - POSTGRES_DB={{ postgres_db }}
+      - POSTGRES_PRIMARY_HOST=postgres-primary
+      - POSTGRES_REPLICATION_USER={{ postgres_replica_user }}
+      - POSTGRES_REPLICATION_MODE=slave
+      - POSTGRES_REPLICATION_PASSWORD={{ postgres_replica_password }}
+      
+    volumes:
+      - postgres_replica_data:/var/lib/postgresql/data
+    
+    networks:
+      - database_tier
+    
+    depends_on:
+      - postgres-primary
+    
+    deploy:
+      replicas: {{ postgres_replica_count | default(1) }}
+      placement:
+        constraints: [node.labels.database.replica == true]
+        preferences:
+          - spread: node.labels.database.replica
+      restart_policy:
+        condition: on-failure
+        delay: 15s
+        max_attempts: 3
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+    
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U {{ postgres_replica_user }}"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 45s
+{% endif %}
+
+  # PgBouncer - Connection Pooling
+  pgbouncer:
+    image: pgbouncer/pgbouncer:latest
+    environment:
+      - DATABASES_HOST=postgres-primary
+      - DATABASES_PORT=5432
+      - DATABASES_USER={{ postgres_user }}
+      - DATABASES_PASSWORD={{ postgres_password }}
+      - DATABASES_DBNAME={{ postgres_db }}
+      - POOL_MODE={{ pgbouncer_pool_mode | default('transaction') }}
+      - MAX_CLIENT_CONN={{ pgbouncer_max_client_conn | default('200') }}
+      - DEFAULT_POOL_SIZE={{ pgbouncer_pool_size | default('25') }}
+      - ADMIN_USERS={{ postgres_user }}
+      - STATS_USERS={{ postgres_user }}
+    
+    networks:
+      - database_tier
+      - app_tier
+    
+    depends_on:
+      - postgres-primary
+      - db-migrate
+    
+    deploy:
+      replicas: {{ pgbouncer_replicas | default(3) }}
+      placement:
+        preferences:
+          - spread: node.id
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+    
+    healthcheck:
+      test: ["CMD-SHELL", "psql -h localhost -p 6432 -U {{ postgres_user }} -d pgbouncer -c 'SHOW STATS'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # Backend Service
+  backend:
+    image: {{ backend_image }}
+    environment:
+      - NODE_ENV={{ 'production' if ansible_environment == 'prod' else 'development' }}
+      - PORT=3000
+      - DATABASE_URL=postgresql://{{ postgres_user }}:{{ postgres_password }}@pgbouncer:6432/{{ postgres_db }}
+      - JWT_SECRET={{ jwt_secret }}
+      - JWT_EXPIRES_IN={{ jwt_expires_in | default('1h') }}
+      - CORS_ORIGIN=https://{{ domain_name }}
+      - DB_HOST=pgbouncer
+      - DB_PORT=6432
+    
+    networks:
+      - app_tier
+      - proxy_tier
+    
+    depends_on:
+      - pgbouncer
+    
+    deploy:
+      replicas: {{ backend_replicas | default(5) }}
+      placement:
+        preferences:
+          - spread: node.id
+        constraints: 
+{% if ansible_environment == 'prod' %}
+          - node.role != manager
+{% else %}
+          - node.role == manager
+{% endif %}
+      update_config:
+        parallelism: 1
+        delay: 15s
+        order: start-first
+        failure_action: rollback
+      rollback_config:
+        parallelism: 1
+        delay: 10s
+      resources:
+        limits:
+          memory: {{ backend_memory_limit | default('512M') }}
+          cpus: {{ backend_cpu_limit | default('0.5') }}
+        reservations:
+          memory: {{ backend_memory_reservation | default('256M') }}
+          cpus: {{ backend_cpu_reservation | default('0.1') }}
+      labels:
+        - traefik.enable=true
+        - traefik.docker.network=proxy_tier
+        - traefik.http.routers.backend.rule=Host(`api.{{ domain_name }}`)
+        - traefik.http.routers.backend.entrypoints=websecure
+        - traefik.http.routers.backend.tls.certresolver=letsencrypt
+        - traefik.http.services.backend.loadbalancer.server.port=3000
+        - traefik.http.services.backend.loadbalancer.healthcheck.path=/health
+        - traefik.http.services.backend.loadbalancer.healthcheck.interval=30s
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Frontend Service
+  frontend:
+    image: {{ frontend_image }}
+    environment:
+      - NODE_ENV={{ 'production' if ansible_environment == 'prod' else 'development' }}
+      - VITE_API_URL=https://api.{{ domain_name }}
+      - VITE_APP_ENV={{ ansible_environment | default('development') }}
+      - VITE_APP_VERSION={{ frontend_version | default('latest') }}
+    
+    networks:
+      - proxy_tier
+    
+    deploy:
+      replicas: {{ frontend_replicas | default(4) }}
+      placement:
+        preferences:
+          - spread: node.id
+        constraints:
+{% if ansible_environment == 'prod' %}
+          - node.role != manager
+{% else %}
+          - node.role == manager
+{% endif %}
+      update_config:
+        parallelism: 2
+        delay: 10s
+        order: start-first
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+      labels:
+        - traefik.enable=true
+        - traefik.docker.network=proxy_tier
+        - traefik.http.routers.frontend.rule=Host(`{{ domain_name }}`)
+        - traefik.http.routers.frontend.entrypoints=websecure
+        - traefik.http.routers.frontend.tls.certresolver=letsencrypt
+        - traefik.http.services.frontend.loadbalancer.server.port=8080
+        - traefik.http.services.frontend.loadbalancer.healthcheck.path=/
+        - traefik.http.services.frontend.loadbalancer.healthcheck.interval=30s
+        - traefik.http.middlewares.security-headers.headers.customresponseheaders.X-Frame-Options=DENY
+        - traefik.http.middlewares.security-headers.headers.customresponseheaders.X-Content-Type-Options=nosniff
+        - traefik.http.routers.frontend.middlewares=security-headers
+    
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # Traefik Load Balancer
+  traefik:
+    image: traefik:v3.0
+    command:
+      - "--api.dashboard=true"
+      - "--api.insecure=false"
+      - "--providers.docker=true"
+      - "--providers.docker.swarmmode=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.email={{ letsencrypt_email }}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--log.level={{ traefik_log_level | default('INFO') }}"
+      - "--accesslog=true"
+      - "--metrics.prometheus=true"
+{% if ansible_environment == 'dev' %}
+      - "--api.insecure=true"
+      - "--certificatesresolvers.letsencrypt.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory"
+{% endif %}
+    ports:
+      - "80:80"
+      - "443:443"
+{% if ansible_environment == 'dev' %}
+      - "8080:8080"
+{% endif %}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_letsencrypt:/letsencrypt
+    networks:
+      - proxy_tier
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.1'
+      labels:
+        - traefik.enable=true
+        - traefik.docker.network=proxy_tier
+        - traefik.http.routers.traefik.rule=Host(`traefik.{{ domain_name }}`)
+        - traefik.http.routers.traefik.entrypoints=websecure
+        - traefik.http.routers.traefik.tls.certresolver=letsencrypt
+        - traefik.http.routers.traefik.service=api@internal
+        - traefik.http.routers.traefik.middlewares=traefik-auth
+        - traefik.http.middlewares.traefik-auth.basicauth.users={{ traefik_auth_users }}
+
+{% if redis_enabled | default(true) %}
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --maxmemory {{ redis_maxmemory | default('256mb') }} --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - app_tier
+    deploy:
+      replicas: {{ redis_replicas | default(2) }}
+      placement:
+        preferences:
+          - spread: node.id
+        constraints:
+          - node.role == worker
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.1'
+{% endif %}
+
+{% if monitoring_enabled | default(true) %}
+  # Prometheus Monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time={{ prometheus_retention | default('200h') }}'
+      - '--web.enable-lifecycle'
+    volumes:
+      - prometheus_data:/prometheus
+      - prometheus_config:/etc/prometheus
+    networks:
+      - monitoring_tier
+      - app_tier
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.1'
+
+  # Grafana Dashboard
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD={{ grafana_admin_password }}
+      - GF_INSTALL_PLUGINS={{ grafana_plugins | default('grafana-piechart-panel') }}
+      - GF_SECURITY_ADMIN_USER={{ grafana_admin_user | default('admin') }}
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - monitoring_tier
+      - proxy_tier
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.25'
+        reservations:
+          memory: 256M
+          cpus: '0.1'
+      labels:
+        - traefik.enable=true
+        - traefik.docker.network=proxy_tier
+        - traefik.http.routers.grafana.rule=Host(`grafana.{{ domain_name }}`)
+        - traefik.http.routers.grafana.entrypoints=websecure
+        - traefik.http.routers.grafana.tls.certresolver=letsencrypt
+        - traefik.http.services.grafana.loadbalancer.server.port=3000
+{% endif %}
+
+networks:
+  database_tier:
+    external: true
+  app_tier:
+    external: true
+  proxy_tier:
+    external: true
+  monitoring_tier:
+    external: true
+
+volumes:
+  postgres_primary_data:
+    driver: local
+{% if postgres_replica_count | default(0) | int > 0 %}
+  postgres_replica_data:
+    driver: local
+{% endif %}
+  postgres_backups:
+    driver: local
+{% if redis_enabled | default(true) %}
+  redis_data:
+    driver: local
+{% endif %}
+  traefik_letsencrypt:
+    driver: local
+{% if monitoring_enabled | default(true) %}
+  prometheus_data:
+    driver: local
+  prometheus_config:
+    driver: local
+  grafana_data:
+    driver: local
+{% endif %}

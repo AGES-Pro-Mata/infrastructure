@@ -1,136 +1,86 @@
-name: Deploy to Development Environment
+name: Deploy Dev Environment
 
 on:
-  workflow_call:
+  repository_dispatch:
+    types: [deploy-dev-frontend, deploy-dev-backend]
+  workflow_dispatch:
     inputs:
-      backend_image_tag:
-        required: true
-        type: string
-      frontend_image_tag:
-        required: true
-        type: string
-    secrets:
-      DOCKER_USERNAME:
-        required: true
-      DOCKER_PASSWORD:
-        required: true
-      AZURE_CREDENTIALS:
-        required: true
-      SSH_PRIVATE_KEY:
-        required: true
+      force_deploy:
+        description: 'Force full deployment'
+        required: false
+        default: 'false'
+
+env:
+  ENV: dev
+  AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
 jobs:
-  deploy-infrastructure:
-    if: false # 🚫 DISABLED
+  deploy:
     runs-on: ubuntu-latest
-    environment: development
-    
     steps:
-      - name: Checkout Infrastructure Code
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          repository: pro-mata/pro-mata-infra
-          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.5.0
-
-      - name: Setup Azure CLI
-        uses: azure/setup-cli@v1
+      - name: Setup Tools
+        run: |
+          # Install Terraform
+          wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+          sudo apt update && sudo apt install -y terraform
+          
+          # Install Ansible
+          sudo apt install -y software-properties-common
+          sudo add-apt-repository --yes --update ppa:ansible/ansible
+          sudo apt install -y ansible make
 
       - name: Azure Login
-        uses: azure/login@v1
+        uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Terraform Init and Plan
-        working-directory: ./terraform/azure
+      - name: Setup Ansible Vault
         run: |
-          terraform init
-          terraform plan -var-file="../../environments/dev/.env.dev" -out=tfplan
+          echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > ~/.ansible-vault-password
+          chmod 600 ~/.ansible-vault-password
+          echo "vault_password_file = ~/.ansible-vault-password" >> ~/.ansible.cfg
 
-      - name: Terraform Apply
-        working-directory: ./terraform/azure
-        run: terraform apply tfplan
-
-      - name: Save Terraform State
-        working-directory: ./terraform/azure
+      - name: Create Environment File
         run: |
-          # Save state to Azure Storage or GitHub
-          ../../save-terraform-state.sh --provider azure --action save --storage github
+          cat > envs/dev/.env.dev << EOF
+          AZURE_SUBSCRIPTION_ID=${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          AZURE_RESOURCE_GROUP=promata-dev-rg
+          AZURE_LOCATION=eastus2
+          DOMAIN_NAME=promata.com.br
+          BACKEND_IMAGE=norohim/pro-mata-backend-dev:latest
+          FRONTEND_IMAGE=norohim/pro-mata-frontend-dev:latest
+          BACKEND_REPLICAS=2
+          FRONTEND_REPLICAS=2
+          TF_VAR_ssh_public_key="${{ secrets.SSH_PUBLIC_KEY }}"
+          EOF
 
-  deploy-application:
-    if: false # 🚫 DISABLED
-    needs: deploy-infrastructure
-    runs-on: ubuntu-latest
-    environment: development
-    
-    steps:
-      - name: Checkout Infrastructure Code
-        uses: actions/checkout@v4
+      - name: Deploy Infrastructure
+        run: |
+          make deploy-automated ENV=dev
+        timeout-minutes: 30
 
-      - name: Setup SSH
+      - name: Extract SSH Key
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ needs.deploy-infrastructure.outputs.manager_ip }} >> ~/.ssh/known_hosts
+          cd terraform/deployments/dev
+          terraform output -raw ssh_private_key > ~/.ssh/promata_key
+          chmod 600 ~/.ssh/promata_key
+          echo "SSH key extracted and saved to ~/.ssh/promata_key"
 
-      - name: Setup Ansible
+      - name: Health Check
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ansible
-          ansible-galaxy install -r requirements.yml
+          make health ENV=dev
+        timeout-minutes: 10
 
-      - name: Deploy with Ansible
-        env:
-          BACKEND_IMAGE_TAG: ${{ inputs.backend_image_tag }}
-          FRONTEND_IMAGE_TAG: ${{ inputs.frontend_image_tag }}
+      - name: Deployment Summary
         run: |
-          cd deployment/ansible
-          ansible-playbook -i ../../static_ip.ini \
-            -e "backend_image_tag=$BACKEND_IMAGE_TAG" \
-            -e "frontend_image_tag=$FRONTEND_IMAGE_TAG" \
-            -e "environment=dev" \
-            playbooks/swarm_setup.yml
-
-  health-check:
-    if: false # 🚫 DISABLED
-    needs: deploy-application
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Wait for Services
-        run: sleep 120
-
-      - name: Health Check - Backend
-        run: |
-          curl -f https://api.promata-dev.duckdns.org/health || exit 1
-
-      - name: Health Check - Frontend
-        run: |
-          curl -f https://promata-dev.duckdns.org || exit 1
-
-      - name: Health Check - Database
-        run: |
-          curl -f https://pgadmin.promata-dev.duckdns.org || exit 1
-
-  notify:
-    if: false # 🚫 DISABLED
-    needs: [deploy-infrastructure, deploy-application, health-check]
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Notify Success
-        if: ${{ needs.health-check.result == 'success' }}
-        run: |
-          echo "✅ Deployment to DEV completed successfully!"
-          # Add Slack/Discord/Email notification here
-
-      - name: Notify Failure
-        if: ${{ needs.health-check.result == 'failure' }}
-        run: |
-          echo "❌ Deployment to DEV failed!"
-          # Add failure notification here
+          echo "## 🎉 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment**: dev" >> $GITHUB_STEP_SUMMARY  
+          echo "- **Triggered by**: ${{ github.event.client_payload.triggered_by }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Frontend**: https://promata.com.br" >> $GITHUB_STEP_SUMMARY
+          echo "- **Backend API**: https://api.promata.com.br" >> $GITHUB_STEP_SUMMARY
+          echo "- **Traefik Dashboard**: https://traefik.promata.com.br" >> $GITHUB_STEP_SUMMARY

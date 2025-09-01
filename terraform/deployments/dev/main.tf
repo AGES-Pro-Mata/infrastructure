@@ -58,7 +58,7 @@ provider "cloudflare" {
 data "azurerm_client_config" "current" {}
 
 # Generate SSH key pair for VMs
-resource "tls_private_key" "promata_ssh" {
+resource "tls_private_key" "main_ssh" {
   algorithm = "RSA"
   rsa_bits  = 4096
 }
@@ -73,7 +73,7 @@ resource "azurerm_resource_group" "dev" {
 
 # Virtual Network
 resource "azurerm_virtual_network" "dev" {
-  name                = "vnet-promata-dev"
+  name                = "vnet-${var.project_name}-${var.environment}"
   address_space       = ["10.1.0.0/16"]
   location            = azurerm_resource_group.dev.location
   resource_group_name = azurerm_resource_group.dev.name
@@ -83,14 +83,14 @@ resource "azurerm_virtual_network" "dev" {
 
 # Subnets
 resource "azurerm_subnet" "public" {
-  name                 = "subnet-promata-dev-public"
+  name                 = "subnet-${var.project_name}-${var.environment}-public"
   resource_group_name  = azurerm_resource_group.dev.name
   virtual_network_name = azurerm_virtual_network.dev.name
   address_prefixes     = ["10.1.1.0/24"]
 }
 
 resource "azurerm_subnet" "private" {
-  name                 = "subnet-promata-dev-private"
+  name                 = "subnet-${var.project_name}-${var.environment}-private"
   resource_group_name  = azurerm_resource_group.dev.name
   virtual_network_name = azurerm_virtual_network.dev.name
   address_prefixes     = ["10.1.2.0/24"]
@@ -98,7 +98,7 @@ resource "azurerm_subnet" "private" {
 
 # Public IP for Swarm Manager
 resource "azurerm_public_ip" "manager" {
-  name                = "pip-promata-dev-manager"
+  name                = "pip-${var.project_name}-${var.environment}-manager"
   location            = azurerm_resource_group.dev.location
   resource_group_name = azurerm_resource_group.dev.name
   allocation_method   = "Static"
@@ -109,7 +109,7 @@ resource "azurerm_public_ip" "manager" {
 
 # Public IP for Swarm Worker
 resource "azurerm_public_ip" "worker" {
-  name                = "pip-promata-dev-worker"
+  name                = "pip-${var.project_name}-${var.environment}-worker"
   location            = azurerm_resource_group.dev.location
   resource_group_name = azurerm_resource_group.dev.name
   allocation_method   = "Static"
@@ -120,7 +120,7 @@ resource "azurerm_public_ip" "worker" {
 
 # Network Security Group
 resource "azurerm_network_security_group" "dev" {
-  name                = "nsg-promata-dev"
+  name                = "nsg-${var.project_name}-${var.environment}"
   location            = azurerm_resource_group.dev.location
   resource_group_name = azurerm_resource_group.dev.name
 
@@ -207,7 +207,7 @@ resource "azurerm_network_security_group" "dev" {
 
 # Network Interface for Swarm Manager
 resource "azurerm_network_interface" "manager" {
-  name                = "nic-promata-dev-manager"
+  name                = "nic-${var.project_name}-${var.environment}-manager"
   location            = azurerm_resource_group.dev.location
   resource_group_name = azurerm_resource_group.dev.name
 
@@ -223,7 +223,7 @@ resource "azurerm_network_interface" "manager" {
 
 # Network Interface for Swarm Worker
 resource "azurerm_network_interface" "worker" {
-  name                = "nic-promata-dev-worker"
+  name                = "nic-${var.project_name}-${var.environment}-worker"
   location            = azurerm_resource_group.dev.location
   resource_group_name = azurerm_resource_group.dev.name
 
@@ -250,7 +250,7 @@ resource "azurerm_network_interface_security_group_association" "worker" {
 
 # Virtual Machine for Swarm Manager
 resource "azurerm_linux_virtual_machine" "manager" {
-  name                = "vm-promata-dev-manager"
+  name                = "vm-${var.project_name}-${var.environment}-manager"
   resource_group_name = azurerm_resource_group.dev.name
   location            = azurerm_resource_group.dev.location
   size                = var.vm_size
@@ -265,7 +265,7 @@ resource "azurerm_linux_virtual_machine" "manager" {
 
   admin_ssh_key {
     username   = "ubuntu"
-    public_key = tls_private_key.promata_ssh.public_key_openssh
+    public_key = tls_private_key.main_ssh.public_key_openssh
   }
 
   os_disk {
@@ -296,7 +296,7 @@ resource "azurerm_linux_virtual_machine" "manager" {
 
 # Virtual Machine for Swarm Worker
 resource "azurerm_linux_virtual_machine" "worker" {
-  name                = "vm-promata-dev-worker"
+  name                = "vm-${var.project_name}-${var.environment}-worker"
   resource_group_name = azurerm_resource_group.dev.name
   location            = azurerm_resource_group.dev.location
   size                = var.vm_size
@@ -311,7 +311,7 @@ resource "azurerm_linux_virtual_machine" "worker" {
 
   admin_ssh_key {
     username   = "ubuntu"
-    public_key = tls_private_key.promata_ssh.public_key_openssh
+    public_key = tls_private_key.main_ssh.public_key_openssh
   }
 
   os_disk {

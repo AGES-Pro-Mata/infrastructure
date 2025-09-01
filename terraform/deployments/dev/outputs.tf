@@ -112,13 +112,13 @@ output "infrastructure_summary" {
 # SSH Key outputs for Ansible
 output "ssh_private_key" {
   description = "Private SSH key for Ansible to connect to VMs"
-  value       = tls_private_key.promata_ssh.private_key_pem
+  value       = tls_private_key.main_ssh.private_key_pem
   sensitive   = true
 }
 
 output "ssh_public_key" {
   description = "Public SSH key used for VMs"
-  value       = tls_private_key.promata_ssh.public_key_openssh
+  value       = tls_private_key.main_ssh.public_key_openssh
 }
 
 # Complete Ansible inventory as JSON
@@ -137,7 +137,7 @@ output "ansible_inventory" {
         worker_private_ip       = azurerm_network_interface.worker.private_ip_address
       }
       children = {
-        promata_dev = {
+        "${var.project_name}_${var.environment}" = {
           children = {
             managers = {
               hosts = {

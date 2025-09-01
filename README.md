@@ -1,397 +1,203 @@
-# 🏗️ Pro-Mata Infrastructure
+# 🏗️ Infrastructure as Code - Generic Template
 
-Infraestrutura automatizada do Pro-Mata AGES com Docker Swarm, CI/CD integrado e gestão de segredos. Sistema preparado para desenvolvimento (Azure) e produção (AWS) com alta disponibilidade.
+A complete infrastructure template using Terraform and Ansible for deploying applications on Azure with Docker Swarm.
 
-## 📋 Visão Geral
+## 🚀 Quick Start
 
-Este repositório gerencia toda a infraestrutura do Pro-Mata através de:
+### 1. Prerequisites
+- Azure account with active subscription
+- DockerHub account for your application images
+- GitHub repository for CI/CD
 
-- **Infrastructure as Code** (Terraform)
-- **Configuration Management** (Ansible)
-- **Container Orchestration** (Docker Swarm)
-- **CI/CD Automatizado** (GitHub Actions)
-- **Gestão de Segredos** (Azure Key Vault / AWS Secrets Manager)
+### 2. Setup (5 minutes)
 
-## 🗂️ Estrutura do Projeto
+1. **Clone and configure**:
+   ```bash
+   git clone <your-repo>
+   cd infrastructure
+   cp config.example.sh config.sh
+   ```
 
-```plain
-infrastructure/
-├── envs/                           # Configurações por ambiente
-│   ├── dev/
-│   │   ├── ansible-vars.yml        # Variáveis Ansible
-│   │   ├── terraform.tfvars        # Variáveis Terraform
-│   │   └── secrets/                # Segredos (encrypted)
-│   ├── staging/
-│   └── prod/
-├── terraform/
-│   ├── deployments/                # Deployments por ambiente
-│   │   ├── dev/                    # Azure (Docker Swarm)
-│   │   ├── staging/
-│   │   └── prod/                   # AWS (ECS + RDS)
-│   ├── backends/                   # Configurações de backend
-│   └── modules/                    # Módulos reutilizáveis
-│       ├── aws/                    # Módulos AWS
-│       ├── azure/                  # Módulos Azure
-│       ├── dns/                    # Configuração DNS
-│       └── shared/                 # Componentes compartilhados
-├── ansible/
-│   ├── inventory/                  # Inventários por ambiente
-│   ├── playbooks/                 # Playbooks principais
-│   └── roles/                     # Roles reutilizáveis
-├── docker/
-│   ├── database/                  # Custom PostgreSQL image
-│   └── stacks/                    # Docker Compose stacks
-├── scripts/                       # Scripts de automação
-│   ├── setup/                     # Scripts de configuração inicial
-│   ├── deploy/                    # Scripts de deploy
-│   ├── backup/                    # Scripts de backup
-│   ├── security/                  # Scripts de segurança
-│   └── utils/                     # Utilitários diversos
-└── .github/workflows/             # CI/CD pipelines
-```
+2. **Edit `config.sh`** with your details:
+   ```bash
+   export PROJECT_NAME="myproject"           # Your project name
+   export DOCKERHUB_ORG="myorg"              # Your DockerHub organization  
+   export DOMAIN_NAME="example.com"          # Your domain (optional)
+   ```
 
-## 🚀 Como Usar
+3. **Apply configuration**:
+   ```bash
+   ./config.sh apply
+   ```
 
-### 1. Configuração Inicial
+4. **Set GitHub secrets** in your repo:
+   - `AZURE_CREDENTIALS` - Azure service principal JSON
+   - `AZURE_SUBSCRIPTION_ID` - Your Azure subscription ID  
+   - `ANSIBLE_VAULT_PASSWORD` - Use the generated password from step 3
+
+5. **Deploy**:
+   ```bash
+   git add . && git commit -m "Initial setup" && git push
+   ```
+   Or run manually: `make deploy ENV=dev`
+
+### 3. Azure Service Principal Setup
 
 ```bash
-# Clone o repositório
-git clone https://github.com/AGES-Pro-Mata/infrastructure.git
-cd infrastructure
+# Login to Azure
+az login
 
-# Configurar ambiente de desenvolvimento
-cp envs/dev/terraform.tfvars.example envs/dev/terraform.tfvars
-cp envs/dev/ansible-vars.yml.example envs/dev/ansible-vars.yml
-
-# Editar as configurações
-vim envs/dev/terraform.tfvars
-vim envs/dev/ansible-vars.yml
+# Create service principal
+az ad sp create-for-rbac --name "myproject-terraform-sp" \
+  --role="Contributor" \
+  --scopes="/subscriptions/$(az account show --query id -o tsv)"
 ```
 
-### 2. Comandos Principais
+Use the JSON output as your `AZURE_CREDENTIALS` GitHub secret.
 
-```bash
-# Ver todos os comandos disponíveis
-make help
+## 📁 What You Get
 
-# Deploy completo do ambiente
-make deploy ENV=dev
+- **Azure Infrastructure**: VMs, networking, security groups, storage
+- **Docker Swarm**: Container orchestration with manager and worker nodes  
+- **CI/CD Pipeline**: Automated deployment via GitHub Actions
+- **DNS Management**: Optional Cloudflare integration
+- **Monitoring**: Grafana, Prometheus (built-in)
+- **Security**: SSL, firewall, SSH keys auto-generated
 
-# Deploy por componentes
-make terraform-apply ENV=dev
-make ansible-configure ENV=dev
-make docker-deploy ENV=dev
+## 🔧 Customization
 
-# Verificações
-make status ENV=dev
-make health ENV=dev
-make logs SERVICE=backend ENV=dev
-```
-
-### 3. Gestão de Ambientes
-
-#### Desenvolvimento (Azure)
-
-```bash
-# Deploy para dev
-make deploy ENV=dev
-
-# Logs e monitoramento
-make logs SERVICE=frontend ENV=dev
-make health ENV=dev
-```
-
-#### Produção (AWS)
-
-```bash
-# Deploy para produção
-make deploy ENV=prod
-
-# Backup antes do deploy
-make backup ENV=prod
-```
-
-## 🔐 Gestão de Segredos
-
-### Verificação Antes de Commits
-
-O sistema possui verificação automática de segredos antes de cada commit:
-
-```bash
-# Executar verificação manual
-./scripts/security/pre-commit-security-check.sh
-
-# Configurar como hook automático
-cp .githooks/pre-commit .git/hooks/
-chmod +x .git/hooks/pre-commit
-```
-
-### Rotação de Segredos
-
-```bash
-# Rodar segredos do ambiente de desenvolvimento
-./scripts/security/rotate-secrets.sh --environment dev
-
-# Rotação completa (produção)
-./scripts/security/rotate-secrets.sh --environment prod --force
-```
-
-### Auditoria de Segurança
-
-```bash
-# Scan completo de segurança
-./scripts/security/security-scan.sh --environment dev --type all
-
-# Apenas containers
-./scripts/security/security-scan.sh --environment dev --type containers
-```
-
-## 🔄 Fluxo de CI/CD
-
-### 1. Deploy Automático
-
-O sistema monitora mudanças nas imagens Docker via webhooks:
-
-```mermaid
-graph LR
-    A[Backend/Frontend Repo] --> B[Build & Push Docker]
-    B --> C[Webhook para Infrastructure]
-    C --> D[Deploy Automático]
-    D --> E[Notificação Discord]
-```
-
-### 2. Workflows Disponíveis
-
-| Workflow | Trigger | Propósito |
-|----------|---------|-----------|
-| `ci-cd.yml` | `repository_dispatch`, manual | Deploy principal |
-| `test.yml` | Pull requests | Validação rápida |
-| `security-workflow.yml` | Schedule, manual | Pipeline de segurança |
-| `build-database.yml` | Mudanças no database/ | Build imagem PostgreSQL |
-
-### 3. Repository Dispatch
-
-Para triggar deploys de outros repos:
-
-```bash
-curl -X POST \
-  -H "Authorization: token $GITHUB_TOKEN" \
-  -H "Accept: application/vnd.github.v3+json" \
-  https://api.github.com/repos/AGES-Pro-Mata/infrastructure/dispatches \
-  -d '{
-    "event_type": "deploy-dev-frontend",
-    "client_payload": {
-      "environment": "dev",
-      "image_tag": "latest"
-    }
-  }'
-```
-
-## 🛠️ Comandos Úteis
-
-### Status e Monitoramento
-
-```bash
-# Status geral da infraestrutura
-make status ENV=dev
-
-# Health check de todos os serviços
-make health ENV=dev
-
-# Logs de um serviço específico
-make logs SERVICE=backend ENV=dev
-
-# Estatísticas dos containers
-make stats ENV=dev
-```
-
-### Deploy e Rollback
-
-```bash
-# Deploy incremental
-make deploy-quick ENV=dev
-
-# Rollback para versão anterior
-make rollback ENV=dev
-
-# Deploy de uma stack específica
-make deploy-stack STACK=database ENV=dev
-```
-
-### Backup e Restore
-
-```bash
-# Backup completo
-make backup ENV=prod
-
-# Backup apenas do banco de dados
-./scripts/backup/backup-database.sh --environment prod
-
-# Restaurar backup
-./scripts/backup/restore-database.sh --environment dev --file backup.sql
-```
-
-### Terraform
-
-```bash
-# Planejar mudanças
-make terraform-plan ENV=dev
-
-# Aplicar mudanças
-make terraform-apply ENV=dev
-
-# Validar configuração
-make terraform-validate ENV=dev
-
-# Destruir infraestrutura (cuidado!)
-make terraform-destroy ENV=dev
-```
-
-### Ansible
-
-```bash
-# Configurar ambiente
-make ansible-configure ENV=dev
-
-# Executar playbook específico
-make ansible-run PLAYBOOK=deploy-complete ENV=dev
-
-# Validar sintaxe
-make ansible-validate ENV=dev
-```
-
-## 🔧 Configuração de Variáveis
-
-### Terraform Variables (`envs/{env}/terraform.tfvars`)
-
+### Application Images
+Update in `envs/dev/terraform.tfvars`:
 ```hcl
-# Azure/AWS
-subscription_id = "your-subscription-id"
-resource_group_location = "East US 2"
-
-# Networking
-domain_name = "promata.com.br"
-enable_ssl = true
-
-# Application
-frontend_replicas = 2
-backend_replicas = 2
-database_backup_retention = 30
+backend_image = "myorg/myapp-backend-dev:latest"
+frontend_image = "myorg/myapp-frontend-dev:latest"
 ```
 
-### Ansible Variables (`envs/{env}/ansible-vars.yml`)
-
-```yaml
-# Docker Swarm
-swarm_advertise_addr: "{{ ansible_default_ipv4.address }}"
-swarm_manager_count: 1
-
-# Application
-app_environment: development
-log_level: info
-monitoring_enabled: true
-
-# Security
-ssl_redirect: true
-security_headers: true
+### Domain Configuration
+```hcl
+domain_name = "yourdomain.com"
+enable_cloudflare_dns = true
 ```
 
-## � Troubleshooting
+### Resource Sizing
+```hcl
+vm_size = "Standard_B2s"        # Dev: small, Prod: larger
+backend_replicas = 1            # Number of backend containers
+```
 
-### Problemas Comuns
-
-#### Deploy Falha
+## 📋 Commands
 
 ```bash
-# Verificar status dos serviços
-docker service ls
-docker node ls
+# Deploy infrastructure
+make deploy ENV=dev
 
-# Verificar logs
-make logs SERVICE=failed-service ENV=dev
+# Check status
+make status ENV=dev
 
-# Rollback se necessário
-make rollback ENV=dev
+# Run health check
+make health ENV=dev
+
+# View deployment info
+make show-deployment-info ENV=dev
+
+# Clean up (DESTRUCTIVE!)
+make destroy-dev
 ```
 
-#### Problemas de Conectividade
+## 🌐 Access Your Application
+
+After successful deployment:
+- **Frontend**: https://yourdomain.com
+- **API**: https://api.yourdomain.com
+- **Traefik Dashboard**: https://traefik.yourdomain.com
+- **Grafana**: https://grafana.yourdomain.com
+
+## 🔒 Security Features
+
+- SSH key-based authentication (passwords disabled)
+- UFW firewall configured
+- Fail2ban for intrusion prevention  
+- SSL/TLS via Cloudflare or Let's Encrypt
+- Network segmentation
+- Secrets management with Ansible Vault
+
+## 🔍 Monitoring
+
+Built-in monitoring stack includes:
+- **Prometheus**: Metrics collection
+- **Grafana**: Dashboards and alerts
+- **Node Exporter**: System metrics
+- **Docker metrics**: Container monitoring
+
+## 🆘 Troubleshooting
+
+### Common Issues
+
+1. **"Storage account name already exists"**
+   ```bash
+   # Edit envs/dev/terraform.tfvars and change:
+   storage_account_name = "myprojectnewname123"
+   ```
+
+2. **"Docker images not found"**
+   - Ensure your DockerHub images exist and are publicly accessible
+   - Or add DockerHub login to GitHub workflow
+
+3. **"Subscription not authorized"**
+   - Check your Azure service principal has Contributor role
+   - Verify AZURE_CREDENTIALS secret is correct JSON
+
+4. **"Domain not resolving"**
+   - If using Cloudflare, ensure nameservers are updated
+   - DNS propagation can take up to 24 hours
+
+### Debugging
 
 ```bash
-# Testar conectividade entre serviços
-./scripts/utils/test-connectivity.sh
+# Check Terraform state
+cd terraform/deployments/dev
+terraform show
 
-# Verificar DNS
-nslookup promata.com.br
+# Check infrastructure logs  
+make status ENV=dev
 
-# Verificar certificados SSL
-./scripts/utils/test-ssl.sh promata.com.br
+# SSH into VMs (after deployment)
+ssh -i ~/.ssh/myproject_key ubuntu@<public-ip>
 ```
 
-#### Problemas de Autenticação
+## 📊 Architecture
 
-```bash
-# Verificar segredos
-./scripts/security/security-audit.sh --check-secrets
-
-# Rotar segredos se necessário
-./scripts/security/rotate-secrets.sh --environment dev
+```
+[GitHub] → [GitHub Actions] → [Azure]
+    ↓           ↓               ↓
+[Your Code] → [CI/CD] → [Terraform] → [VMs + Docker Swarm]
+                          ↓              ↓
+                    [Ansible] → [Deploy Apps + Monitoring]
 ```
 
-### Logs e Monitoramento
+## 🔄 Environments
 
-```bash
-# Logs centralizados
-docker service logs promata_backend
+- **dev**: Development environment (small VMs, 1 replica)
+- **staging**: Staging environment (coming soon)
+- **prod**: Production environment (coming soon)
 
-# Métricas dos containers
-docker stats
+## 📚 Documentation
 
-# Usar Grafana (se disponível)
-open https://grafana.promata.com.br
-```
+- [Setup Instructions](SETUP-INSTRUCTIONS.md) - Detailed setup guide
+- [Makefile Commands](./Makefile) - All available commands
+- [Terraform Variables](./terraform/deployments/dev/variables.tf) - All configuration options
 
-## 🔒 Segurança
+## 🤝 Contributing
 
-### Checklist de Segurança
+1. Fork the repository
+2. Create a feature branch
+3. Test your changes
+4. Submit a pull request
 
-- ✅ Verificação automática de segredos antes dos commits
-- ✅ Rotação automática de segredos (schedule)
-- ✅ Scan de vulnerabilidades nos containers
-- ✅ Auditoria de configurações
-- ✅ SSL/TLS obrigatório
-- ✅ Network segmentation
+## 📄 License
 
-### Comandos de Segurança
-
-```bash
-# Auditoria completa
-./scripts/security/security-audit.sh --environment prod
-
-# Scan de vulnerabilidades
-./scripts/security/security-scan.sh --type all
-
-# Monitor de segurança
-./scripts/security/security-monitor.sh --environment prod
-```
-
-## � Suporte
-
-### Notificações
-
-O sistema está configurado para enviar notificações via Discord para:
-
-- ✅ Deploys bem-sucedidos
-- ❌ Falhas nos deploys
-- 🔄 Status de CI/CD
-- 🚨 Alertas de segurança
-
-### Contato
-
-- **Time**: AGES PUCRS Pro-Mata
-- **Discord**: Configure seu webhook em `DISCORD_WEBHOOK_URL`
-- **Documentação**: Este README e comentários no código
+This template is provided as-is for educational and development purposes.
 
 ---
 
-**Pro-Mata Infrastructure** - Sistema de infraestrutura automatizada  
-*Desenvolvido pela equipe AGES PUCRS para o projeto Pro-Mata*
+**🎉 Ready to deploy?** Run `./config.sh apply` and push your changes!

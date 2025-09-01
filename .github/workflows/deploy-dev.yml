@@ -53,28 +53,28 @@ jobs:
           cat > envs/dev/terraform.tfvars << EOF
           # Azure Configuration
           environment = "dev"
-          project_name = "pro-mata"
-          domain_name = "promata.com.br"
-          azure_resource_group = "promata-dev-rg"
+          project_name = "myproject"
+          domain_name = "example.com"
+          azure_resource_group = "myproject-dev-rg"
           azure_subscription_id = "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
           azure_location = "eastus2"
           vm_size = "Standard_B2s"
           
-          # Application Images
-          backend_image = "norohim/pro-mata-backend-dev:latest"
-          frontend_image = "norohim/pro-mata-frontend-dev:latest"
-          migration_image = "norohim/pro-mata-migration-dev:latest"
+          # Application Images - Replace YOUR_DOCKERHUB_ORG with your DockerHub organization
+          backend_image = "YOUR_DOCKERHUB_ORG/myproject-backend-dev:latest"
+          frontend_image = "YOUR_DOCKERHUB_ORG/myproject-frontend-dev:latest"
+          migration_image = "YOUR_DOCKERHUB_ORG/myproject-migration-dev:latest"
           
           # Replicas
           backend_replicas = 1
           frontend_replicas = 1
           
           # Database
-          postgres_db = "promata_dev"
-          postgres_user = "promata"
+          postgres_db = "myproject_dev"
+          postgres_user = "myproject"
           
           # Storage
-          storage_account_name = "promatadevstg$(date +%s | tail -c 6)"
+          storage_account_name = "myprojectdevstg$(date +%s | tail -c 6)"
           EOF
 
       - name: Deploy Infrastructure
@@ -100,6 +100,6 @@ jobs:
           echo "## 🎉 Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "- **Environment**: dev" >> $GITHUB_STEP_SUMMARY  
           echo "- **Triggered by**: ${{ github.event.client_payload.triggered_by }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Frontend**: https://promata.com.br" >> $GITHUB_STEP_SUMMARY
-          echo "- **Backend API**: https://api.promata.com.br" >> $GITHUB_STEP_SUMMARY
-          echo "- **Traefik Dashboard**: https://traefik.promata.com.br" >> $GITHUB_STEP_SUMMARY
+          echo "- **Frontend**: https://example.com" >> $GITHUB_STEP_SUMMARY
+          echo "- **Backend API**: https://api.example.com" >> $GITHUB_STEP_SUMMARY
+          echo "- **Traefik Dashboard**: https://traefik.example.com" >> $GITHUB_STEP_SUMMARY

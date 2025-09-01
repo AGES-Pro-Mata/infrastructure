@@ -49,16 +49,32 @@ jobs:
 
       - name: Create Environment File
         run: |
-          cat > envs/dev/.env.dev << EOF
-          AZURE_SUBSCRIPTION_ID=${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          AZURE_RESOURCE_GROUP=promata-dev-rg
-          AZURE_LOCATION=eastus2
-          DOMAIN_NAME=promata.com.br
-          BACKEND_IMAGE=norohim/pro-mata-backend-dev:latest
-          FRONTEND_IMAGE=norohim/pro-mata-frontend-dev:latest
-          MIGRATION_IMAGE=norohim/pro-mata-migration-dev:latest
-          BACKEND_REPLICAS=1
-          FRONTEND_REPLICAS=1
+          # Create terraform.tfvars with secrets
+          cat > envs/dev/terraform.tfvars << EOF
+          # Azure Configuration
+          environment = "dev"
+          project_name = "pro-mata"
+          domain_name = "promata.com.br"
+          azure_resource_group = "promata-dev-rg"
+          azure_subscription_id = "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+          azure_location = "eastus2"
+          vm_size = "Standard_B2s"
+          
+          # Application Images
+          backend_image = "norohim/pro-mata-backend-dev:latest"
+          frontend_image = "norohim/pro-mata-frontend-dev:latest"
+          migration_image = "norohim/pro-mata-migration-dev:latest"
+          
+          # Replicas
+          backend_replicas = 1
+          frontend_replicas = 1
+          
+          # Database
+          postgres_db = "promata_dev"
+          postgres_user = "promata"
+          
+          # Storage
+          storage_account_name = "promatadevstg$(date +%s | tail -c 6)"
           EOF
 
       - name: Deploy Infrastructure

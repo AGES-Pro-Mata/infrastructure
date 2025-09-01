@@ -74,7 +74,7 @@ jobs:
           
           # Install Terraform using direct download method
           wget https://releases.hashicorp.com/terraform/1.8.0/terraform_1.8.0_linux_amd64.zip -O terraform.zip
-          unzip terraform.zip
+          unzip -o terraform.zip || true
           sudo rm -f /usr/local/bin/terraform 2>/dev/null || true
           sudo mv terraform /usr/local/bin/
           chmod +x /usr/local/bin/terraform
@@ -108,7 +108,7 @@ jobs:
           cat > envs/${{ env.ENV }}/.env.secrets << EOF
           export POSTGRES_PASSWORD='${{ secrets.POSTGRES_PASSWORD }}'
           export POSTGRES_REPLICA_PASSWORD='${{ secrets.POSTGRES_REPLICA_PASSWORD }}'
-          export PGLADMIN_PASSWORD='${{ secrets.PGLADMIN_PASSWORD }}'
+          export PGADMIN_PASSWORD='${{ secrets.PGADMIN_PASSWORD }}'
           export JWT_SECRET='${{ secrets.JWT_SECRET }}'
           export TRAEFIK_AUTH_USERS='${{ secrets.TRAEFIK_AUTH_USERS }}'
           export GRAFANA_ADMIN_PASSWORD='${{ secrets.GRAFANA_ADMIN_PASSWORD }}'
@@ -163,7 +163,7 @@ jobs:
         run: |
           # Install Terraform using direct download method
           wget https://releases.hashicorp.com/terraform/1.8.0/terraform_1.8.0_linux_amd64.zip -O terraform.zip
-          unzip terraform.zip
+          unzip -o terraform.zip || true
           sudo rm -f /usr/local/bin/terraform 2>/dev/null || true
           sudo mv terraform /usr/local/bin/
           chmod +x /usr/local/bin/terraform

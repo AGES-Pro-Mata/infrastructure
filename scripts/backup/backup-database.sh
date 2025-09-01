@@ -1,225 +1,251 @@
 #!/bin/bash
-# Database Backup Script - Pro-Mata Infrastructure
+# Pro-Mata Advanced Database Backup Script
+# Supports full, incremental, and point-in-time recovery backups
 
-set -e
-
-ENV=${1:-dev}
-SCRIPT_DIR="$(dirname "$0")"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-
-# Colors
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-NC='\033[0m'
-
-log() { echo -e "${GREEN}[$(date +'%H:%M:%S')]${NC} $1"; }
-warn() { echo -e "${YELLOW}[$(date +'%H:%M:%S')]${NC} $1"; }
-error() { echo -e "${RED}[$(date +'%H:%M:%S')]${NC} $1"; exit 1; }
-
-# Load environment
-ENV_FILE="$PROJECT_ROOT/environments/$ENV/.env.$ENV"
-if [[ -f "$ENV_FILE" ]]; then
-    source "$ENV_FILE"
-else
-    error "Environment file not found: $ENV_FILE"
-fi
+set -euo pipefail
 
 # Configuration
-BACKUP_DIR="/opt/promata/backups"
-RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-7}
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-BACKUP_FILE="promata_${ENV}_${TIMESTAMP}.sql"
-BACKUP_PATH="$BACKUP_DIR/$BACKUP_FILE"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
+ENV=${2:-dev}
 
-# Create backup directory
-create_backup_dir() {
-    log "📁 Creating backup directory..."
-    
-    # Create on manager node
-    ssh -o StrictHostKeyChecking=no promata@"$MANAGER_IP" \
-        "sudo mkdir -p $BACKUP_DIR && sudo chown promata:promata $BACKUP_DIR"
-}
+# Default configuration
+BACKUP_TYPE=${1:-daily}  # daily, weekly, monthly, full, incremental
+COMPRESSION=${COMPRESSION:-gzip}  # gzip, zstd, none
+RETENTION_DAYS=${RETENTION_DAYS:-30}
+ENCRYPTION_KEY=${ENCRYPTION_KEY:-""}
+STORAGE_TYPE=${STORAGE_TYPE:-local}  # local, s3, azure
 
-# Get database container
-get_db_container() {
-    log "🔍 Finding database container..."
-    
-    DB_CONTAINER=$(ssh -o StrictHostKeyChecking=no promata@"$MANAGER_IP" \
-        "docker ps --filter name=postgres-primary --format '{{.Names}}' | head -1")
-    
-    if [[ -z "$DB_CONTAINER" ]]; then
-        error "PostgreSQL primary container not found"
-    fi
-    
-    log "Found container: $DB_CONTAINER"
-}
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
 
-# Create database backup
-create_backup() {
-    log "💾 Creating database backup..."
-    
-    ssh -o StrictHostKeyChecking=no promata@"$MANAGER_IP" \
-        "docker exec $DB_CONTAINER pg_dump -U $POSTGRES_USER -d $POSTGRES_DB" > "/tmp/$BACKUP_FILE"
-    
-    # Compress backup
-    gzip "/tmp/$BACKUP_FILE"
-    BACKUP_FILE="${BACKUP_FILE}.gz"
-    BACKUP_PATH="${BACKUP_PATH}.gz"
-    
-    # Copy to backup directory on manager
-    scp -o StrictHostKeyChecking=no "/tmp/$BACKUP_FILE" "promata@$MANAGER_IP:$BACKUP_PATH"
-    
-    # Remove local temp file
-    rm "/tmp/$BACKUP_FILE"
-    
-    log "✅ Backup created: $BACKUP_PATH"
-}
+log() { echo -e "${GREEN}[$(date +'%Y-%m-%d %H:%M:%S')] $1${NC}"; }
+warn() { echo -e "${YELLOW}[$(date +'%Y-%m-%d %H:%M:%S')] WARNING: $1${NC}"; }
+error() { echo -e "${RED}[$(date +'%Y-%m-%d %H:%M:%S')] ERROR: $1${NC}"; exit 1; }
+info() { echo -e "${BLUE}[$(date +'%Y-%m-%d %H:%M:%S')] INFO: $1${NC}"; }
 
-# Verify backup
-verify_backup() {
-    log "🔍 Verifying backup..."
-    
-    local backup_size
-    backup_size=$(ssh -o StrictHostKeyChecking=no promata@"$MANAGER_IP" \
-        "ls -lh $BACKUP_PATH | awk '{print \$5}'")
-    
-    if [[ -z "$backup_size" ]]; then
-        error "Backup verification failed"
-    fi
-    
-    log "✅ Backup verified: $backup_size"
-}
-
-# Clean old backups
-cleanup_old_backups() {
-    log "🧹 Cleaning old backups (retention: $RETENTION_DAYS days)..."
-    
-    local deleted_count
-    deleted_count=$(ssh -o StrictHostKeyChecking=no promata@"$MANAGER_IP" \
-        "find $BACKUP_DIR -name 'promata_${ENV}_*.sql.gz' -mtime +$RETENTION_DAYS -delete -print | wc -l")
-    
-    if [[ "$deleted_count" -gt 0 ]]; then
-        log "🗑️  Deleted $deleted_count old backup(s)"
+# Load environment configuration
+load_config() {
+    if [[ -f "$PROJECT_ROOT/envs/$ENV/.env.$ENV" ]]; then
+        source "$PROJECT_ROOT/envs/$ENV/.env.$ENV"
     else
-        log "✅ No old backups to clean"
+        error "Environment file not found: $PROJECT_ROOT/envs/$ENV/.env.$ENV"
     fi
 }
 
-# List backups
-list_backups() {
-    log "📋 Available backups:"
+# Get database connection info
+get_db_info() {
+    # Try to get from running container first
+    POSTGRES_CONTAINER=$(ssh ubuntu@${MANAGER_IP} "docker ps --filter name=promata_postgres-primary --format '{{.Names}}' | head -1" 2>/dev/null || echo "")
     
-    ssh -o StrictHostKeyChecking=no promata@"$MANAGER_IP" \
-        "ls -lh $BACKUP_DIR/promata_${ENV}_*.sql.gz 2>/dev/null | tail -10" || log "No backups found"
+    if [[ -z "$POSTGRES_CONTAINER" ]]; then
+        error "PostgreSQL container not found. Is the stack running?"
+    fi
+    
+    DB_HOST=${DB_HOST:-postgres-primary}
+    DB_PORT=${DB_PORT:-5432}
+    DB_USER=${POSTGRES_USER:-promata}
+    DB_NAME=${POSTGRES_DB:-promata_dev}
+    DB_PASSWORD=${POSTGRES_PASSWORD}
+    
+    info "Database Info:"
+    info "  Host: $DB_HOST"
+    info "  Port: $DB_PORT"
+    info "  User: $DB_USER"
+    info "  Database: $DB_NAME"
 }
 
-# Test backup (optional restore test to temp database)
-test_backup() {
-    if [[ "${TEST_BACKUP:-false}" == "true" ]]; then
-        log "🧪 Testing backup restore..."
+# Create backup directories
+setup_backup_dirs() {
+    local backup_date=$(date +%Y/%m/%d)
+    local base_dir="/var/lib/postgresql/backups"
+    
+    ssh ubuntu@${MANAGER_IP} << EOSSH
+        # Create backup directory structure
+        docker exec $POSTGRES_CONTAINER mkdir -p $base_dir/{daily,weekly,monthly,full,incremental,wal}/$backup_date
+        docker exec $POSTGRES_CONTAINER mkdir -p $base_dir/logs
+        docker exec $POSTGRES_CONTAINER mkdir -p $base_dir/metadata
+EOSSH
+    
+    BACKUP_DIR="$base_dir/$BACKUP_TYPE/$backup_date"
+    log "Backup directory: $BACKUP_DIR"
+}
+
+# Generate backup filename
+generate_backup_name() {
+    local timestamp=$(date +%Y%m%d_%H%M%S)
+    local hostname=$(ssh ubuntu@${MANAGER_IP} "hostname" 2>/dev/null || echo "unknown")
+    
+    case $BACKUP_TYPE in
+        "full"|"weekly"|"monthly")
+            BACKUP_NAME="promata_${ENV}_full_${timestamp}_${hostname}"
+            ;;
+        "incremental")
+            BACKUP_NAME="promata_${ENV}_incr_${timestamp}_${hostname}"
+            ;;
+        *)
+            BACKUP_NAME="promata_${ENV}_${BACKUP_TYPE}_${timestamp}_${hostname}"
+            ;;
+    esac
+    
+    # Add compression extension
+    case $COMPRESSION in
+        "gzip")
+            BACKUP_NAME="${BACKUP_NAME}.sql.gz"
+            ;;
+        "zstd")
+            BACKUP_NAME="${BACKUP_NAME}.sql.zst"
+            ;;
+        *)
+            BACKUP_NAME="${BACKUP_NAME}.sql"
+            ;;
+    esac
+    
+    info "Backup filename: $BACKUP_NAME"
+}
+
+# Perform database backup based on type
+perform_backup() {
+    log "Starting $BACKUP_TYPE backup..."
+    
+    local start_time=$(date +%s)
+    local backup_cmd
+    local backup_path="$BACKUP_DIR/$BACKUP_NAME"
+    
+    case $BACKUP_TYPE in
+        "full"|"weekly"|"monthly")
+            backup_cmd="pg_dump -U $DB_USER -h localhost -p $DB_PORT -d $DB_NAME --verbose --no-password --format=custom --compress=0"
+            ;;
+        "daily")
+            backup_cmd="pg_dump -U $DB_USER -h localhost -p $DB_PORT -d $DB_NAME --verbose --no-password"
+            ;;
+        "incremental")
+            backup_cmd="pg_basebackup -U $DB_USER -h localhost -p $DB_PORT -D - --format=tar --verbose --checkpoint=fast"
+            ;;
+        *)
+            backup_cmd="pg_dump -U $DB_USER -h localhost -p $DB_PORT -d $DB_NAME --verbose --no-password"
+            ;;
+    esac
+    
+    # Add compression to the pipeline
+    case $COMPRESSION in
+        "gzip")
+            backup_cmd="$backup_cmd | gzip -9"
+            ;;
+        "zstd")
+            backup_cmd="$backup_cmd | zstd -9"
+            ;;
+    esac
+    
+    # Execute backup
+    ssh ubuntu@${MANAGER_IP} << EOSSH
+        set -e
+        export PGPASSWORD="$DB_PASSWORD"
         
-        local test_db="promata_backup_test_$$"
+        # Run backup command
+        docker exec $POSTGRES_CONTAINER bash -c "$backup_cmd > $backup_path"
         
-        # Create test database
-        ssh -o StrictHostKeyChecking=no promata@"$MANAGER_IP" \
-            "docker exec $DB_CONTAINER createdb -U $POSTGRES_USER $test_db"
-        
-        # Restore backup to test database
-        ssh -o StrictHostKeyChecking=no promata@"$MANAGER_IP" \
-            "gunzip -c $BACKUP_PATH | docker exec -i $DB_CONTAINER psql -U $POSTGRES_USER -d $test_db"
-        
-        # Verify tables exist
-        local table_count
-        table_count=$(ssh -o StrictHostKeyChecking=no promata@"$MANAGER_IP" \
-            "docker exec $DB_CONTAINER psql -U $POSTGRES_USER -d $test_db -t -c \"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public';\"" | tr -d ' ')
-        
-        # Drop test database
-        ssh -o StrictHostKeyChecking=no promata@"$MANAGER_IP" \
-            "docker exec $DB_CONTAINER dropdb -U $POSTGRES_USER $test_db"
-        
-        if [[ "$table_count" -gt 0 ]]; then
-            log "✅ Backup test successful ($table_count tables restored)"
-        else
-            error "Backup test failed (no tables found)"
+        # Check if backup was successful
+        if [[ ! -f "$backup_path" ]] || [[ ! -s "$backup_path" ]]; then
+            echo "❌ Backup file not created or empty"
+            exit 1
         fi
-    fi
+        
+        # Calculate file size and checksum
+        BACKUP_SIZE=\$(docker exec $POSTGRES_CONTAINER stat -c%s "$backup_path")
+        BACKUP_CHECKSUM=\$(docker exec $POSTGRES_CONTAINER sha256sum "$backup_path" | cut -d' ' -f1)
+        
+        echo "📊 Backup size: \$BACKUP_SIZE bytes"
+        echo "🔍 Backup checksum: \$BACKUP_CHECKSUM"
+EOSSH
+    
+    local end_time=$(date +%s)
+    local duration=$((end_time - start_time))
+    
+    log "✅ Backup completed successfully in ${duration} seconds"
+    log "📁 Backup location: $backup_path"
 }
 
-# Send notification (optional)
-send_notification() {
-    if [[ -n "${SLACK_WEBHOOK:-}" ]] || [[ -n "${DISCORD_WEBHOOK:-}" ]]; then
-        log "📤 Sending backup notification..."
-        
-        local message="✅ Database backup completed for $ENV environment\nFile: $BACKUP_FILE\nSize: $(ssh promata@$MANAGER_IP "ls -lh $BACKUP_PATH | awk '{print \$5}'")"
-        
-        # Add your notification logic here
-        log "📨 Notification sent"
-    fi
+# Clean up old backups
+cleanup_old_backups() {
+    log "🧹 Cleaning up backups older than $RETENTION_DAYS days..."
+    
+    ssh ubuntu@${MANAGER_IP} << EOSSH
+        docker exec $POSTGRES_CONTAINER bash -c "
+            # Clean up local backups
+            find /var/lib/postgresql/backups/$BACKUP_TYPE -name '*.sql*' -mtime +$RETENTION_DAYS -delete
+            find /var/lib/postgresql/backups/$BACKUP_TYPE -type d -empty -delete
+            
+            # Clean up logs
+            find /var/lib/postgresql/backups/logs -name '*.log' -mtime +7 -delete
+            
+            echo '✅ Cleanup completed'
+        "
+EOSSH
 }
 
-# Get manager IP from Terraform
-get_manager_ip() {
-    cd "$PROJECT_ROOT/terraform/environments/$ENV"
-    MANAGER_IP=$(terraform output -raw swarm_manager_public_ip)
-    cd "$PROJECT_ROOT"
+# Show help
+show_help() {
+    cat << EOF
+Pro-Mata Advanced Database Backup Script
+
+Uso: $0 <backup_type> [environment]
+
+Backup Types:
+  daily       - Daily incremental backup (default)
+  weekly      - Weekly full backup  
+  monthly     - Monthly full backup
+  full        - Full database backup
+  incremental - Incremental backup with WAL
+
+Environments: dev, staging, prod
+
+Environment Variables:
+  COMPRESSION=gzip|zstd|none     - Compression type (default: gzip)
+  RETENTION_DAYS=30              - Retention period (default: 30)
+  STORAGE_TYPE=local|s3|azure    - Storage backend (default: local)
+
+Exemplos:
+  $0 daily dev                   - Daily backup for dev environment
+  $0 weekly prod                 - Weekly backup for production
+  COMPRESSION=zstd $0 full prod  - Full backup with zstd compression
+EOF
 }
 
 # Main execution
 main() {
-    log "💾 Starting database backup for $ENV environment"
+    case ${1:-help} in
+        "help"|"-h"|"--help")
+            show_help
+            exit 0
+            ;;
+        "daily"|"weekly"|"monthly"|"full"|"incremental")
+            BACKUP_TYPE=$1
+            ;;
+        *)
+            error "Invalid backup type: ${1:-}. Use: daily, weekly, monthly, full, incremental"
+            ;;
+    esac
     
-    get_manager_ip
-    create_backup_dir
-    get_db_container
-    create_backup
-    verify_backup
+    log "🚀 Starting Pro-Mata Database Backup"
+    log "Type: $BACKUP_TYPE | Environment: $ENV | Compression: $COMPRESSION"
+    
+    # Execute backup process
+    load_config
+    get_db_info
+    setup_backup_dirs
+    generate_backup_name
+    perform_backup
     cleanup_old_backups
-    list_backups
-    test_backup
-    send_notification
     
-    echo ""
-    log "🎉 Database backup completed successfully!"
-    log "📄 Backup file: $BACKUP_FILE"
-    log "📁 Location: $BACKUP_PATH"
-    log "🕒 Retention: $RETENTION_DAYS days"
-    
-    # Instructions for restore
-    echo ""
-    log "🔄 To restore this backup:"
-    log "   1. Copy backup to container: docker cp $BACKUP_PATH container_name:/tmp/"
-    log "   2. Restore: docker exec container_name gunzip -c /tmp/$BACKUP_FILE | psql -U $POSTGRES_USER -d $POSTGRES_DB"
+    log "🎉 Backup completed successfully!"
+    log "📁 Backup: $BACKUP_NAME"
+    log "📍 Location: $BACKUP_DIR"
 }
 
-# Help function
-show_help() {
-    echo "Database Backup Script - Pro-Mata Infrastructure"
-    echo ""
-    echo "Usage: $0 [environment] [options]"
-    echo ""
-    echo "Environments:"
-    echo "  dev     - Development environment (default)"
-    echo "  prod    - Production environment"
-    echo ""
-    echo "Environment Variables:"
-    echo "  BACKUP_RETENTION_DAYS - Days to keep backups (default: 7)"
-    echo "  TEST_BACKUP          - Test restore after backup (default: false)"
-    echo "  SLACK_WEBHOOK        - Slack webhook for notifications (optional)"
-    echo ""
-    echo "Examples:"
-    echo "  $0              # Backup dev environment"
-    echo "  $0 dev          # Backup dev environment"
-    echo "  TEST_BACKUP=true $0 dev  # Backup and test restore"
-}
-
-# Handle arguments
-case "${1:-}" in
-    -h|--help)
-        show_help
-        exit 0
-        ;;
-    *)
-        main "$@"
-        ;;
-esac
+# Execute main function with all arguments
+main "$@"

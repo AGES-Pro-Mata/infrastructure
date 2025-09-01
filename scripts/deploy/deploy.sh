@@ -15,7 +15,14 @@ NC='\033[0m'
 REQUESTED_ENVIRONMENT="${1:-dev}"
 ENVIRONMENT="dev"  # Force dev environment for now
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
+
+# Fix for GitHub Actions path duplication
+if [[ "$GITHUB_ACTIONS" == "true" ]]; then
+    PROJECT_ROOT="$(pwd)"
+else
+    PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
+fi
+
 ENV_DIR="$PROJECT_ROOT/envs/$ENVIRONMENT"
 TF_DIR="$PROJECT_ROOT/terraform/deployments/$ENVIRONMENT"
 

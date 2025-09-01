@@ -16,15 +16,74 @@ REQUESTED_ENVIRONMENT="${1:-dev}"
 ENVIRONMENT="dev"  # Force dev environment for now
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Fix for GitHub Actions path duplication
+# Fix for GitHub Actions path duplication - more robust approach
 if [[ "$GITHUB_ACTIONS" == "true" ]]; then
-    PROJECT_ROOT="$(pwd)"
+    # In GitHub Actions, the workspace is /home/runner/work/{repo}/{repo}
+    # We need to find the actual project root
+    if [[ "$SCRIPT_DIR" == *"/infrastructure/infrastructure/"* ]]; then
+        # Remove the duplicate infrastructure path
+        PROJECT_ROOT="${SCRIPT_DIR%/infrastructure/scripts/deploy}"
+    else
+        # Fallback to pwd
+        PROJECT_ROOT="$(pwd)"
+    fi
 else
     PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 fi
 
+# Debug logging
+echo "=== PATH DEBUGGING ==="
+echo "GITHUB_ACTIONS: $GITHUB_ACTIONS"
+echo "SCRIPT_DIR: $SCRIPT_DIR"
+echo "PROJECT_ROOT: $PROJECT_ROOT"
+echo "PWD: $(pwd)"
+echo "Current directory contents:"
+ls -la
+echo "Project root contents:"
+ls -la "$PROJECT_ROOT" 2>/dev/null || echo "Cannot list PROJECT_ROOT"
+echo "Terraform directory check:"
+ls -la "$PROJECT_ROOT/terraform" 2>/dev/null || echo "Cannot find terraform directory"
+echo "=== END DEBUGGING ==="
+
 ENV_DIR="$PROJECT_ROOT/envs/$ENVIRONMENT"
 TF_DIR="$PROJECT_ROOT/terraform/deployments/$ENVIRONMENT"
+
+# Additional path validation and fallback
+echo "=== PATH VALIDATION ==="
+echo "ENV_DIR: $ENV_DIR"
+echo "TF_DIR: $TF_DIR"
+
+if [[ ! -d "$TF_DIR" ]]; then
+    warn "Terraform directory not found at expected location: $TF_DIR"
+    # Try alternative paths in GitHub Actions
+    if [[ "$GITHUB_ACTIONS" == "true" ]]; then
+        # Try removing one level of infrastructure
+        ALT_TF_DIR="${TF_DIR%/infrastructure/terraform/deployments/$ENVIRONMENT}/terraform/deployments/$ENVIRONMENT"
+        echo "Trying alternative path: $ALT_TF_DIR"
+        if [[ -d "$ALT_TF_DIR" ]]; then
+            TF_DIR="$ALT_TF_DIR"
+            PROJECT_ROOT="${ALT_TF_DIR%/terraform/deployments/$ENVIRONMENT}"
+            ENV_DIR="$PROJECT_ROOT/envs/$ENVIRONMENT"
+            success "Found terraform directory at alternative path: $TF_DIR"
+        else
+            # Try looking from current working directory
+            CWD_TF_DIR="$(pwd)/terraform/deployments/$ENVIRONMENT"
+            echo "Trying CWD path: $CWD_TF_DIR"
+            if [[ -d "$CWD_TF_DIR" ]]; then
+                TF_DIR="$CWD_TF_DIR"
+                PROJECT_ROOT="$(pwd)"
+                ENV_DIR="$PROJECT_ROOT/envs/$ENVIRONMENT"
+                success "Found terraform directory from CWD: $TF_DIR"
+            fi
+        fi
+    fi
+fi
+
+echo "Final paths:"
+echo "PROJECT_ROOT: $PROJECT_ROOT"
+echo "ENV_DIR: $ENV_DIR"
+echo "TF_DIR: $TF_DIR"
+echo "=== END VALIDATION ==="
 
 log() {
     echo -e "${BLUE}[$(date +'%Y-%m-%d %H:%M:%S')]${NC} $1"
@@ -207,6 +266,28 @@ main() {
     else
         log "🌟 Starting full deployment for environment: $ENVIRONMENT"
     fi
+    
+    # Final path verification
+    log "🔍 Final path verification:"
+    log "  Project root: $PROJECT_ROOT"
+    log "  Environment dir: $ENV_DIR"
+    log "  Terraform dir: $TF_DIR"
+    
+    if [[ ! -d "$TF_DIR" ]]; then
+        error "❌ CRITICAL: Terraform directory still not found after all attempts: $TF_DIR"
+        error "Available directories in project root:"
+        ls -la "$PROJECT_ROOT/" 2>/dev/null || ls -la
+        exit 1
+    fi
+    
+    if [[ ! -d "$ENV_DIR" ]]; then
+        error "❌ CRITICAL: Environment directory not found: $ENV_DIR"
+        error "Available environments:"
+        ls -la "$PROJECT_ROOT/envs/" 2>/dev/null || ls -la "envs/" 2>/dev/null || ls -la
+        exit 1
+    fi
+    
+    success "✅ Path verification passed"
     
     validate_environment
     deploy_terraform

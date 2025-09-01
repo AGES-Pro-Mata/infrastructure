@@ -47,7 +47,9 @@ jobs:
           sudo apt update && sudo apt install -y terraform ansible make
 
       - name: Validate Configuration
-        run: make terraform-validate ENV=${{ env.ENV }}
+        run: |
+          echo "🔍 Validating infrastructure configuration..."
+          make validate-terraform
 
   deploy:
     needs: validate

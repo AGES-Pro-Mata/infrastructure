@@ -45,6 +45,21 @@ output "swarm_manager_vm_id" {
   value       = azurerm_linux_virtual_machine.manager.id
 }
 
+output "swarm_worker_public_ip" {
+  description = "Public IP address of the Docker Swarm worker"
+  value       = azurerm_public_ip.worker.ip_address
+}
+
+output "swarm_worker_private_ip" {
+  description = "Private IP address of the Docker Swarm worker"
+  value       = azurerm_network_interface.worker.private_ip_address
+}
+
+output "swarm_worker_vm_id" {
+  description = "ID of the Docker Swarm worker VM"
+  value       = azurerm_linux_virtual_machine.worker.id
+}
+
 output "storage_account_name" {
   description = "Name of the storage account"
   value       = azurerm_storage_account.dev.name
@@ -86,8 +101,11 @@ output "infrastructure_summary" {
     location              = azurerm_resource_group.dev.location
     swarm_manager_public  = azurerm_public_ip.manager.ip_address
     swarm_manager_private = azurerm_network_interface.manager.private_ip_address
+    swarm_worker_public   = azurerm_public_ip.worker.ip_address
+    swarm_worker_private  = azurerm_network_interface.worker.private_ip_address
     vm_size               = var.vm_size
     storage_account       = azurerm_storage_account.dev.name
+    domain_name           = var.domain_name
   }
 }
 
@@ -112,9 +130,11 @@ output "ansible_inventory" {
         ansible_user            = "ubuntu"
         ansible_ssh_common_args = "-o StrictHostKeyChecking=no"
         env                     = "dev"
-        domain_name             = "${azurerm_public_ip.manager.ip_address}.nip.io"
+        domain_name             = var.domain_name
         manager_public_ip       = azurerm_public_ip.manager.ip_address
         manager_private_ip      = azurerm_network_interface.manager.private_ip_address
+        worker_public_ip        = azurerm_public_ip.worker.ip_address
+        worker_private_ip       = azurerm_network_interface.worker.private_ip_address
       }
       children = {
         promata_dev = {
@@ -129,7 +149,13 @@ output "ansible_inventory" {
               }
             }
             workers = {
-              hosts = {}
+              hosts = {
+                swarm-worker-1 = {
+                  ansible_host = azurerm_public_ip.worker.ip_address
+                  private_ip   = azurerm_network_interface.worker.private_ip_address
+                  node_role    = "worker"
+                }
+              }
             }
           }
         }

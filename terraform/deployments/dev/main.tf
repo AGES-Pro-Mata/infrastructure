@@ -99,6 +99,17 @@ resource "azurerm_public_ip" "manager" {
   tags = var.common_tags
 }
 
+# Public IP for Swarm Worker
+resource "azurerm_public_ip" "worker" {
+  name                = "pip-promata-dev-worker"
+  location            = azurerm_resource_group.dev.location
+  resource_group_name = azurerm_resource_group.dev.name
+  allocation_method   = "Static"
+  sku                 = "Standard"
+
+  tags = var.common_tags
+}
+
 # Network Security Group
 resource "azurerm_network_security_group" "dev" {
   name                = "nsg-promata-dev"
@@ -202,9 +213,30 @@ resource "azurerm_network_interface" "manager" {
   tags = var.common_tags
 }
 
+# Network Interface for Swarm Worker
+resource "azurerm_network_interface" "worker" {
+  name                = "nic-promata-dev-worker"
+  location            = azurerm_resource_group.dev.location
+  resource_group_name = azurerm_resource_group.dev.name
+
+  ip_configuration {
+    name                          = "internal"
+    subnet_id                     = azurerm_subnet.public.id
+    private_ip_address_allocation = "Dynamic"
+    public_ip_address_id          = azurerm_public_ip.worker.id
+  }
+
+  tags = var.common_tags
+}
+
 # Associate Network Security Group to Network Interface
 resource "azurerm_network_interface_security_group_association" "manager" {
   network_interface_id      = azurerm_network_interface.manager.id
+  network_security_group_id = azurerm_network_security_group.dev.id
+}
+
+resource "azurerm_network_interface_security_group_association" "worker" {
+  network_interface_id      = azurerm_network_interface.worker.id
   network_security_group_id = azurerm_network_security_group.dev.id
 }
 
@@ -221,6 +253,46 @@ resource "azurerm_linux_virtual_machine" "manager" {
 
   network_interface_ids = [
     azurerm_network_interface.manager.id,
+  ]
+
+  admin_ssh_key {
+    username   = "ubuntu"
+    public_key = tls_private_key.promata_ssh.public_key_openssh
+  }
+
+  os_disk {
+    caching              = "ReadWrite"
+    storage_account_type = "Premium_LRS"
+  }
+
+  source_image_reference {
+    publisher = "Canonical"
+    offer     = "0001-com-ubuntu-server-jammy"
+    sku       = "22_04-lts-gen2"
+    version   = "latest"
+  }
+
+  # Cloud-init script for Docker setup
+  custom_data = base64encode(templatefile("${path.module}/cloud-init.yml", {
+    docker_compose_version = var.docker_compose_version
+  }))
+
+  tags = var.common_tags
+}
+
+# Virtual Machine for Swarm Worker
+resource "azurerm_linux_virtual_machine" "worker" {
+  name                = "vm-promata-dev-worker"
+  resource_group_name = azurerm_resource_group.dev.name
+  location            = azurerm_resource_group.dev.location
+  size                = var.vm_size
+  admin_username      = "ubuntu"
+
+  # Disable password authentication
+  disable_password_authentication = true
+
+  network_interface_ids = [
+    azurerm_network_interface.worker.id,
   ]
 
   admin_ssh_key {

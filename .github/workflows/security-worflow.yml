@@ -106,7 +106,7 @@ jobs:
       - name: 🧪 Executar testes de segurança básicos
         run: |
           chmod +x scripts/security/*.sh
-          ./scripts/security/security-scan.sh --environment ${{ steps.setup.outputs.environment }} --type unit --quick
+          ./scripts/security/security-scan.sh --environment ${{ steps.setup.outputs.environment }} --type dependencies --ci-mode
           
       - name: 📊 Validar estrutura de arquivos
         run: |

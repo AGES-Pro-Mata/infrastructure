@@ -19,7 +19,7 @@ on:
 
 env:
   DOCKER_REGISTRY: docker.io
-  IMAGE_NAME: promata/database
+  IMAGE_NAME: norohim/pro-mata-database
 
 jobs:
   build-database:
@@ -45,10 +45,12 @@ jobs:
         run: |
           if [ "${{ github.ref_name }}" = "main" ] || [ "${{ github.event.inputs.environment }}" = "prod" ]; then
             echo "environment=production" >> $GITHUB_OUTPUT
+            echo "image_name=norohim/pro-mata-database" >> $GITHUB_OUTPUT
             echo "image_tag=latest" >> $GITHUB_OUTPUT
           else
             echo "environment=development" >> $GITHUB_OUTPUT
-            echo "image_tag=dev" >> $GITHUB_OUTPUT
+            echo "image_name=norohim/pro-mata-database-dev" >> $GITHUB_OUTPUT
+            echo "image_tag=latest" >> $GITHUB_OUTPUT
           fi
 
       - name: Build and Push Database Image
@@ -57,8 +59,8 @@ jobs:
           context: docker/database
           push: true
           tags: |
-            ${{ env.IMAGE_NAME }}:${{ steps.config.outputs.image_tag }}
-            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ steps.config.outputs.image_name }}:${{ steps.config.outputs.image_tag }}
+            ${{ steps.config.outputs.image_name }}:${{ github.sha }}
           labels: |
             org.label-schema.build-date=${{ github.run_date }}
             org.label-schema.name=pro-mata-database
@@ -79,13 +81,13 @@ jobs:
           echo "🧪 Testando imagem do database..."
           
           # Pull the built image
-          docker pull ${{ env.IMAGE_NAME }}:${{ steps.config.outputs.image_tag }}
+          docker pull ${{ steps.config.outputs.image_name }}:${{ steps.config.outputs.image_tag }}
           
           # Run basic container test
           docker run --rm --name test-postgres \
             -e POSTGRES_PASSWORD=test123 \
             -e POSTGRES_DB=test_db \
-            -d ${{ env.IMAGE_NAME }}:${{ steps.config.outputs.image_tag }}
+            -d ${{ steps.config.outputs.image_name }}:${{ steps.config.outputs.image_tag }}
           
           # Wait for PostgreSQL to start
           sleep 30
@@ -107,7 +109,7 @@ jobs:
           echo "## 🐘 Database Image Build Summary" >> $GITHUB_STEP_SUMMARY
           echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| **Image** | ${{ env.IMAGE_NAME }}:${{ steps.config.outputs.image_tag }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Image** | ${{ steps.config.outputs.image_name }}:${{ steps.config.outputs.image_tag }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **Environment** | ${{ steps.config.outputs.environment }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **Commit** | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **Built At** | ${{ github.run_date }} |" >> $GITHUB_STEP_SUMMARY

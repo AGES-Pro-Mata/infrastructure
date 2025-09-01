@@ -12,7 +12,8 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # Variables
-ENVIRONMENT="${1:-dev}"
+REQUESTED_ENVIRONMENT="${1:-dev}"
+ENVIRONMENT="dev"  # Force dev environment for now
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 ENV_DIR="$PROJECT_ROOT/envs/$ENVIRONMENT"
@@ -36,19 +37,19 @@ warn() {
 
 # Validate environment
 validate_environment() {
+    if [[ "$REQUESTED_ENVIRONMENT" != "dev" ]]; then
+        warn "Requested environment '$REQUESTED_ENVIRONMENT' is not yet configured"
+        warn "Forcing deployment to 'dev' environment instead"
+    fi
+    
     log "Validating environment: $ENVIRONMENT"
     
     case "$ENVIRONMENT" in
         dev)
             log "Valid environment: $ENVIRONMENT"
             ;;
-        staging|prod)
-            error "Environment $ENVIRONMENT is not yet configured for deployment"
-            error "Only 'dev' environment is currently supported"
-            exit 1
-            ;;
         *)
-            error "Environment must be: dev, staging, or prod"
+            error "Environment must be: dev"
             exit 1
             ;;
     esac
@@ -173,7 +174,11 @@ deploy_ansible() {
 
 # Main deployment function
 main() {
-    log "🌟 Starting full deployment for environment: $ENVIRONMENT"
+    if [[ "$REQUESTED_ENVIRONMENT" != "dev" ]]; then
+        log "🌟 Starting deployment for requested environment: $REQUESTED_ENVIRONMENT (redirected to dev)"
+    else
+        log "🌟 Starting full deployment for environment: $ENVIRONMENT"
+    fi
     
     validate_environment
     deploy_terraform

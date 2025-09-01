@@ -14,6 +14,9 @@ on:
       # Manual triggers
       - deploy-manual
       
+      # Docker Hub automatic deployment
+      - docker-hub-auto-deploy
+      
   workflow_dispatch:
     inputs:
       environment:
@@ -67,7 +70,12 @@ jobs:
             EVENT_TYPE="${{ github.event.action }}"
             echo "Event type: $EVENT_TYPE"
             
-            if [[ "$EVENT_TYPE" == *"dev"* ]]; then
+            # Handle Docker Hub auto-deploy
+            if [[ "$EVENT_TYPE" == "docker-hub-auto-deploy" ]]; then
+              ENV="${{ github.event.client_payload.environment }}"
+              COMPONENT="all"
+              TRIGGERED_BY="docker_hub_webhook"
+            elif [[ "$EVENT_TYPE" == *"dev"* ]]; then
               ENV="dev"
             elif [[ "$EVENT_TYPE" == *"prod"* ]]; then
               ENV="prod"
@@ -81,6 +89,9 @@ jobs:
             elif [[ "$EVENT_TYPE" == *"backend"* ]]; then
               COMPONENT="backend"
               TRIGGERED_BY="backend"
+            elif [[ "$EVENT_TYPE" == "docker-hub-auto-deploy" ]]; then
+              COMPONENT="all"
+              TRIGGERED_BY="docker_hub_webhook"
             else
               COMPONENT="all"
               TRIGGERED_BY="manual"
@@ -91,17 +102,25 @@ jobs:
           echo "deploy_component=$COMPONENT" >> $GITHUB_OUTPUT
           echo "triggered_by=$TRIGGERED_BY" >> $GITHUB_OUTPUT
           
+          # Get Docker images from payload (for Docker Hub auto-deploy) or use defaults
+          if [[ "$EVENT_TYPE" == "docker-hub-auto-deploy" ]]; then
+            BACKEND_TAG="${{ github.event.client_payload.backend_tag }}"
+            FRONTEND_TAG="${{ github.event.client_payload.frontend_tag }}"
+            BACKEND_IMAGE="norohim/pro-mata-backend-dev:${BACKEND_TAG}"
+            FRONTEND_IMAGE="norohim/pro-mata-frontend-dev:${FRONTEND_TAG}"
+          fi
+          
           # Configurações por ambiente
           if [ "$ENV" = "prod" ]; then
             echo "cloud_provider=aws" >> $GITHUB_OUTPUT
-            echo "backend_image=norohim/pro-mata-backend:latest" >> $GITHUB_OUTPUT
-            echo "frontend_image=norohim/pro-mata-frontend:latest" >> $GITHUB_OUTPUT
+            echo "backend_image=${BACKEND_IMAGE:-norohim/pro-mata-backend:latest}" >> $GITHUB_OUTPUT
+            echo "frontend_image=${FRONTEND_IMAGE:-norohim/pro-mata-frontend:latest}" >> $GITHUB_OUTPUT
             echo "resource_group=promata-prod-rg" >> $GITHUB_OUTPUT
             echo "region=us-east-1" >> $GITHUB_OUTPUT
           else
             echo "cloud_provider=azure" >> $GITHUB_OUTPUT
-            echo "backend_image=norohim/pro-mata-backend-dev:latest" >> $GITHUB_OUTPUT
-            echo "frontend_image=norohim/pro-mata-frontend-dev:latest" >> $GITHUB_OUTPUT
+            echo "backend_image=${BACKEND_IMAGE:-norohim/pro-mata-backend-dev:latest}" >> $GITHUB_OUTPUT
+            echo "frontend_image=${FRONTEND_IMAGE:-norohim/pro-mata-frontend-dev:latest}" >> $GITHUB_OUTPUT
             echo "resource_group=promata-dev-rg" >> $GITHUB_OUTPUT
             echo "region=eastus2" >> $GITHUB_OUTPUT
           fi
@@ -183,7 +202,7 @@ jobs:
           AZURE_LOCATION=${{ needs.determine-config.outputs.region }}
           
           # Domain Configuration
-          DOMAIN_NAME=${{ needs.determine-config.outputs.environment == 'prod' && 'promata.com.br' || 'promata-dev.com.br' }}
+          DOMAIN_NAME=${{ needs.determine-config.outputs.environment == 'prod' && 'promata.com.br' || 'dev.promata.com.br' }}
           
           # Application Images
           BACKEND_IMAGE=${{ needs.determine-config.outputs.backend_image }}
@@ -314,10 +333,10 @@ jobs:
             echo "- **API**: https://api.promata.com.br" >> $GITHUB_STEP_SUMMARY
           else
             echo "### 🔧 Development URLs" >> $GITHUB_STEP_SUMMARY
-            echo "- **Frontend**: https://promata-dev.com.br" >> $GITHUB_STEP_SUMMARY
-            echo "- **API**: https://api.promata-dev.com.br" >> $GITHUB_STEP_SUMMARY
-            echo "- **Traefik**: https://traefik.promata-dev.com.br" >> $GITHUB_STEP_SUMMARY
-            echo "- **PgAdmin**: https://pgadmin.promata-dev.com.br" >> $GITHUB_STEP_SUMMARY
+            echo "- **Frontend**: https://dev.promata.com.br" >> $GITHUB_STEP_SUMMARY
+            echo "- **API**: https://api.dev.promata.com.br" >> $GITHUB_STEP_SUMMARY
+            echo "- **Traefik**: https://traefik.dev.promata.com.br" >> $GITHUB_STEP_SUMMARY
+            echo "- **PgAdmin**: https://pgadmin.dev.promata.com.br" >> $GITHUB_STEP_SUMMARY
           fi
 
       - name: Notify Success

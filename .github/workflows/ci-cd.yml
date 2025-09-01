@@ -236,6 +236,14 @@ jobs:
           fi
         timeout-minutes: 45
 
+      - name: Extract SSH Key
+        run: |
+          mkdir -p ~/.ssh
+          cd terraform/deployments/${{ needs.determine-config.outputs.environment }}
+          terraform output -raw ssh_private_key > ~/.ssh/promata_key
+          chmod 600 ~/.ssh/promata_key
+          echo "SSH key extracted and saved to ~/.ssh/promata_key"
+
       - name: Health Checks
         run: |
           echo "🏥 Running health checks..."

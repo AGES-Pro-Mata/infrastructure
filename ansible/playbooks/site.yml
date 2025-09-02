@@ -39,13 +39,13 @@
       tags: [monitoring]
 
   post_tasks:
+    - name: Deploy stack files
+      include_tasks: tasks/deploy-stacks.yml
+      tags: [stacks]
+    
     - name: Deploy configuration files
       include_tasks: tasks/ansible_deploy_configs.yml
       tags: [configs]
-    
-    - name: Deploy scripts
-      include_tasks: tasks/deploy-script.yml
-      tags: [scripts]
 
 # Swarm Manager Specific Configuration
 - name: Configure Swarm Manager
@@ -124,8 +124,8 @@
       delegate_to: "{{ groups['managers'][0] }}"
       tags: [swarm, labels]
 
-# Deploy Application Stacks
-- name: Deploy Pro-Mata Stacks
+# Deploy Pro-Mata Complete Stack
+- name: Deploy Pro-Mata Complete Stack
   hosts: managers
   become: true
   gather_facts: false
@@ -134,49 +134,30 @@
     - "../inventory/{{ env | default('dev') }}/group_vars/all.yml"
   
   tasks:
-    - name: Deploy proxy stack (Traefik)
+    - name: Deploy complete Pro-Mata stack
       docker_stack:
-        name: "promata-proxy"
+        name: "promata-complete"
         compose:
-          - /opt/promata/stacks/proxy-stack.yml
+          - /opt/promata/stacks/promata-complete.yml
         state: present
       environment: "{{ stack_environment }}"
-      tags: [deploy, proxy]
+      tags: [deploy, complete]
     
-    - name: Wait for Traefik to be ready
-      uri:
-        url: "http://{{ ansible_default_ipv4.address }}:8080/ping"
-        method: GET
-      register: traefik_health
-      until: traefik_health.status == 200
-      retries: 30
-      delay: 10
-      tags: [deploy, proxy, health]
+    - name: Wait for stack to be ready
+      pause:
+        seconds: 60
+        prompt: "Waiting for stack services to initialize..."
+      tags: [deploy, wait]
     
-    - name: Deploy database stack
-      docker_stack:
-        name: "promata-database"
-        compose:
-          - /opt/promata/stacks/database-stack.yml
-        state: present
-      environment: "{{ stack_environment }}"
-      tags: [deploy, database]
+    - name: Check stack health
+      shell: docker service ls --filter "label=com.docker.stack.namespace=promata-complete"
+      register: stack_status
+      tags: [deploy, health]
     
-    - name: Wait for database to be ready
-      wait_for:
-        port: 5432
-        host: "{{ ansible_default_ipv4.address }}"
-        timeout: 300
-      tags: [deploy, database, health]
-    
-    - name: Deploy application stack
-      docker_stack:
-        name: "promata-app"
-        compose:
-          - /opt/promata/stacks/app-stack.yml
-        state: present
-      environment: "{{ stack_environment }}"
-      tags: [deploy, app]
+    - name: Display stack status
+      debug:
+        var: stack_status.stdout_lines
+      tags: [deploy, health]
     
     - name: Display deployment summary
       debug:
@@ -185,5 +166,7 @@
           - "🌐 Frontend: https://{{ domain_name }}"
           - "🔧 API: https://api.{{ domain_name }}"
           - "📊 Traefik: https://traefik.{{ domain_name }}"
+          - "🗄️  PgAdmin: https://pgadmin.{{ domain_name }}"
+          - "📈 Grafana: https://grafana.{{ domain_name }}"
           - "⏰ SSL certificates may take 1-2 minutes to provision"
       tags: [deploy, summary]

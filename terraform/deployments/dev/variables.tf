@@ -123,3 +123,21 @@ variable "enable_cloudflare_dns" {
   type        = bool
   default     = true
 }
+
+variable "azure_location" {
+  description = "Azure location (alias for location)"
+  type        = string
+  default     = "eastus2"
+}
+
+variable "monitoring_enabled" {
+  description = "Enable monitoring and logging"
+  type        = bool
+  default     = true
+}
+
+variable "migration_image" {
+  description = "Migration Docker image"
+  type        = string
+  default     = "YOUR_DOCKERHUB_ORG/myproject-migration-dev:latest"
+}

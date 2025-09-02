@@ -1,0 +1,52 @@
+# Deploy Docker Stack Files Task
+---
+- name: Create stack directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: '0755'
+  loop:
+    - /opt/promata/stacks
+    - /opt/promata/scripts
+
+- name: Copy Docker stack files
+  copy:
+    src: "{{ item.src }}"
+    dest: "/opt/promata/stacks/{{ item.dest }}"
+    mode: '0644'
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+  loop:
+    - { src: "../../../docker/stacks/promata-complete.yml", dest: "promata-complete.yml" }
+    - { src: "../../../docker/stacks/app-stack.yml", dest: "app-stack.yml" }
+    - { src: "../../../docker/stacks/database-stack.yml", dest: "database-stack.yml" }
+
+- name: Create environment file for stacks
+  template:
+    src: stack-env.j2
+    dest: /opt/promata/stacks/.env
+    mode: '0644'
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+
+- name: Copy deployment scripts
+  copy:
+    src: "{{ item.src }}"
+    dest: "/opt/promata/scripts/{{ item.dest }}"
+    mode: '0755'
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+  loop:
+    - { src: "../../../scripts/deploy-stacks.sh", dest: "deploy-stacks.sh" }
+    - { src: "../../../scripts/health-check.sh", dest: "health-check.sh" }
+  when: item.src is file
+
+- name: Create simple deployment script
+  template:
+    src: deploy-stacks.sh.j2
+    dest: /opt/promata/scripts/deploy-stacks.sh
+    mode: '0755'
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"

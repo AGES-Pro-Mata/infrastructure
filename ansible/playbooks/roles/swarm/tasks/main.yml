@@ -1,9 +1,10 @@
 # Swarm Role - Pro-Mata Infrastructure
 ---
 - name: Check if Docker Swarm is already initialized
-  docker_swarm_info:
+  command: docker info --format {{.Swarm.LocalNodeState}}
   register: swarm_status
   ignore_errors: yes
+  changed_when: false
 
 - name: Initialize Docker Swarm on manager
   docker_swarm:
@@ -12,8 +13,7 @@
     advertise_addr: "{{ ansible_default_ipv4.address }}"
   when: 
     - inventory_hostname in groups['managers']
-    - swarm_status.failed or (swarm_status.swarm_facts is defined and swarm_status.swarm_facts.LocalNodeState != "active")
-  register: swarm_init_result
+    - swarm_status.stdout != "active"
   register: swarm_init_result
 
 - name: Get swarm join tokens
@@ -34,7 +34,7 @@
     remote_addrs: "{{ hostvars[groups['managers'][0]]['ansible_default_ipv4']['address'] }}:2377"
   when: 
     - inventory_hostname in groups['workers']
-    - swarm_status.failed or (swarm_status.swarm_facts is defined and swarm_status.swarm_facts.LocalNodeState != "active")
+    - swarm_status.stdout != "active"
 
 - name: Wait for swarm to be ready
   pause:

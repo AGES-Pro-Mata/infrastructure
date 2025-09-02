@@ -37,11 +37,14 @@ output "dns_records" {
 output "ssl_configuration" {
   description = "SSL/TLS configuration applied"
   value = var.configure_ssl ? {
-    ssl_mode            = cloudflare_zone_settings_override.ssl_settings[0].settings[0].ssl
-    always_use_https    = cloudflare_zone_settings_override.ssl_settings[0].settings[0].always_use_https
-    min_tls_version     = cloudflare_zone_settings_override.ssl_settings[0].settings[0].min_tls_version
-    security_level      = cloudflare_zone_settings_override.ssl_settings[0].settings[0].security_level
-  } : {}
+    ssl_mode            = var.ssl_mode
+    always_use_https    = "on"
+    min_tls_version     = "1.2"
+    security_level      = var.security_level
+    note                = "Zone settings disabled for free plan compatibility"
+  } : {
+    note = "SSL configuration disabled"
+  }
 }
 
 output "page_rules_created" {

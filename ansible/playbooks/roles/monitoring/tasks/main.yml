@@ -56,7 +56,7 @@
       echo "[$TIMESTAMP] Running containers: $CONTAINER_COUNT" >> "$LOG_FILE"
       
       # Check Docker Swarm status if in swarm mode
-      if docker info --format '{{ "{{" }}.Swarm.LocalNodeState{{ "}}" }}' | grep -q "active"; then
+      if docker info --format '{{ "{{ .Swarm.LocalNodeState }}" }}' | grep -q "active"; then
           echo "[$TIMESTAMP] Docker Swarm is active" >> "$LOG_FILE"
       
           # Check swarm services
@@ -64,7 +64,7 @@
           echo "[$TIMESTAMP] Swarm services: $SERVICE_COUNT" >> "$LOG_FILE"
       
           # Check swarm nodes
-          NODE_STATUS=$(docker node ls --format "table {{ "{{" }}.Hostname{{ "}}" }}\t{{ "{{" }}.Status{{ "}}" }}\t{{ "{{" }}.Availability{{ "}}" }}")
+          NODE_STATUS=$(docker node ls --format "table {{ "{{ .Hostname }}" }}\t{{ "{{ .Status }}" }}\t{{ "{{ .Availability }}" }}")
           echo "[$TIMESTAMP] Swarm nodes status:" >> "$LOG_FILE"
           echo "$NODE_STATUS" >> "$LOG_FILE"
       else

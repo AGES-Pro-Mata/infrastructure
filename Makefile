@@ -42,8 +42,7 @@ deploy-ansible: check-env ## Deploy only Ansible
 	@echo "🔧 Deploying Ansible for $(ENV)..."
 	@ansible-playbook -i $(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml \
 		-e @$(ENV_DIR)/ansible-vars.yml \
-		--vault-password-file $(ENV_DIR)/secrets/.vault_pass \
-		$(ANSIBLE_DIR)/playbooks/deploy.yml
+		$(ANSIBLE_DIR)/playbooks/site.yml
 
 validate: check-env ## Validate infrastructure
 	@echo "🔍 Validating $(ENV) environment..."

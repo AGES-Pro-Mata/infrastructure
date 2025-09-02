@@ -1,4 +1,4 @@
-# Deploy Docker Stack Files Task - Pro-Mata Dev Environment
+# Deploy Docker Stack Files Task - Pro-Mata Environment-Specific
 ---
 - name: Create Pro-Mata directories
   file:
@@ -13,48 +13,60 @@
     - /opt/promata/logs
     - /opt/promata/data
 
-- name: Copy production stack file  
+- name: Copy {{ env }} stack file  
   copy:
-    src: "../../docker/stacks/promata-production.yml"
-    dest: "/opt/promata/stacks/promata-production.yml"
+    src: "../../docker/stacks/promata-{{ env }}.yml"
+    dest: "/opt/promata/stacks/promata-{{ env }}.yml"
     owner: "{{ ansible_user }}"
     group: "{{ ansible_user }}"
     mode: '0644'
+  when: env != 'dev'
 
-- name: Generate dev environment file
+- name: Generate {{ env }} environment file
   template:
-    src: dev.env.j2
+    src: "{{ env }}.env.j2"
     dest: /opt/promata/.env
     owner: "{{ ansible_user }}"
     group: "{{ ansible_user }}"
     mode: '0600'
+  when: env == 'dev'
 
-- name: Deploy Pro-Mata production stack
+- name: Skip stack deployment for dev environment
+  debug:
+    msg: "Skipping stack deployment for dev environment - Swarm setup complete"
+  when: env == 'dev'
+
+- name: Deploy Pro-Mata {{ env }} stack
   shell: |
     cd /opt/promata
     export $(cat .env | grep -v '^#' | grep -v '^$' | xargs)
-    docker stack deploy -c stacks/promata-production.yml promata-production --with-registry-auth
+    docker stack deploy -c stacks/promata-{{ env }}.yml promata-{{ env }} --with-registry-auth
   register: stack_deploy_result
+  when: env != 'dev'
   
 - name: Display stack deployment result
   debug:
     var: stack_deploy_result.stdout_lines
+  when: env != 'dev' and stack_deploy_result is defined
   
 - name: Wait for stack services to initialize
   pause:
     seconds: 45
     prompt: "Waiting for Pro-Mata services to initialize..."
+  when: env != 'dev'
 
 - name: Verify stack deployment
-  command: docker service ls --filter "label=com.docker.stack.namespace=promata-production" --format "table {{.Name}}\t{{.Replicas}}\t{{.Image}}"
+  command: docker service ls --filter "label=com.docker.stack.namespace=promata-{{ env }}" --format "table {{.Name}}\t{{.Replicas}}\t{{.Image}}"
   register: stack_services
+  when: env != 'dev'
   
 - name: Display deployed services
   debug:
     var: stack_services.stdout_lines
+  when: env != 'dev' and stack_services is defined
 
 - name: Check critical services health
-  command: docker service ps promata-production_{{ item }} --format "table {{.Name}}\t{{.CurrentState}}\t{{.Error}}" --no-trunc
+  command: docker service ps promata-{{ env }}_{{ item }} --format "table {{.Name}}\t{{.CurrentState}}\t{{.Error}}" --no-trunc
   register: service_status
   loop:
     - traefik
@@ -62,9 +74,10 @@
     - pgadmin
     - grafana
   ignore_errors: yes
+  when: env != 'dev'
 
 - name: Display critical service health
   debug:
     msg: "{{ item.item }} service status: {{ item.stdout_lines }}"
   loop: "{{ service_status.results }}"
-  when: item.stdout_lines is defined
+  when: env != 'dev' and item.stdout_lines is defined

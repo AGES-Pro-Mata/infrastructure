@@ -16,75 +16,7 @@ REQUESTED_ENVIRONMENT="${1:-dev}"
 ENVIRONMENT="dev"  # Force dev environment for now
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Fix for GitHub Actions path duplication - more robust approach
-if [[ "$GITHUB_ACTIONS" == "true" ]]; then
-    # In GitHub Actions, the workspace is /home/runner/work/{repo}/{repo}
-    # We need to find the actual project root
-    if [[ "$SCRIPT_DIR" == *"/infrastructure/infrastructure/"* ]]; then
-        # Remove the duplicate infrastructure path
-        PROJECT_ROOT="${SCRIPT_DIR%/infrastructure/scripts/deploy}"
-    else
-        # Fallback to pwd
-        PROJECT_ROOT="$(pwd)"
-    fi
-else
-    PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
-fi
-
-# Debug logging
-echo "=== PATH DEBUGGING ==="
-echo "GITHUB_ACTIONS: $GITHUB_ACTIONS"
-echo "SCRIPT_DIR: $SCRIPT_DIR"
-echo "PROJECT_ROOT: $PROJECT_ROOT"
-echo "PWD: $(pwd)"
-echo "Current directory contents:"
-ls -la
-echo "Project root contents:"
-ls -la "$PROJECT_ROOT" 2>/dev/null || echo "Cannot list PROJECT_ROOT"
-echo "Terraform directory check:"
-ls -la "$PROJECT_ROOT/terraform" 2>/dev/null || echo "Cannot find terraform directory"
-echo "=== END DEBUGGING ==="
-
-ENV_DIR="$PROJECT_ROOT/envs/$ENVIRONMENT"
-TF_DIR="$PROJECT_ROOT/terraform/deployments/$ENVIRONMENT"
-
-# Additional path validation and fallback
-echo "=== PATH VALIDATION ==="
-echo "ENV_DIR: $ENV_DIR"
-echo "TF_DIR: $TF_DIR"
-
-if [[ ! -d "$TF_DIR" ]]; then
-    warn "Terraform directory not found at expected location: $TF_DIR"
-    # Try alternative paths in GitHub Actions
-    if [[ "$GITHUB_ACTIONS" == "true" ]]; then
-        # Try removing one level of infrastructure
-        ALT_TF_DIR="${TF_DIR%/infrastructure/terraform/deployments/$ENVIRONMENT}/terraform/deployments/$ENVIRONMENT"
-        echo "Trying alternative path: $ALT_TF_DIR"
-        if [[ -d "$ALT_TF_DIR" ]]; then
-            TF_DIR="$ALT_TF_DIR"
-            PROJECT_ROOT="${ALT_TF_DIR%/terraform/deployments/$ENVIRONMENT}"
-            ENV_DIR="$PROJECT_ROOT/envs/$ENVIRONMENT"
-            success "Found terraform directory at alternative path: $TF_DIR"
-        else
-            # Try looking from current working directory
-            CWD_TF_DIR="$(pwd)/terraform/deployments/$ENVIRONMENT"
-            echo "Trying CWD path: $CWD_TF_DIR"
-            if [[ -d "$CWD_TF_DIR" ]]; then
-                TF_DIR="$CWD_TF_DIR"
-                PROJECT_ROOT="$(pwd)"
-                ENV_DIR="$PROJECT_ROOT/envs/$ENVIRONMENT"
-                success "Found terraform directory from CWD: $TF_DIR"
-            fi
-        fi
-    fi
-fi
-
-echo "Final paths:"
-echo "PROJECT_ROOT: $PROJECT_ROOT"
-echo "ENV_DIR: $ENV_DIR"
-echo "TF_DIR: $TF_DIR"
-echo "=== END VALIDATION ==="
-
+# Logging functions (defined early for use throughout script)
 log() {
     echo -e "${BLUE}[$(date +'%Y-%m-%d %H:%M:%S')]${NC} $1"
 }
@@ -100,6 +32,32 @@ success() {
 warn() {
     echo -e "${YELLOW}[WARN]${NC} $1"
 }
+
+# Fix for GitHub Actions path duplication - more robust approach
+if [[ "${GITHUB_ACTIONS:-false}" == "true" ]]; then
+    # In GitHub Actions, the workspace is /home/runner/work/{repo}/{repo}
+    # We need to find the actual project root
+    if [[ "$SCRIPT_DIR" == *"/infrastructure/infrastructure/"* ]]; then
+        # Remove the duplicate infrastructure path
+        PROJECT_ROOT="${SCRIPT_DIR%/infrastructure/scripts/deploy}"
+        # Ensure we don't have the duplicate
+        if [[ "$PROJECT_ROOT" == *"/infrastructure/infrastructure" ]]; then
+            PROJECT_ROOT="${PROJECT_ROOT%/infrastructure}"
+        fi
+    else
+        # Check if we're in the correct workspace
+        if [[ "$(pwd)" == *"/infrastructure" ]]; then
+            PROJECT_ROOT="$(pwd)"
+        else
+            PROJECT_ROOT="$(pwd)/infrastructure"
+        fi
+    fi
+else
+    PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
+fi
+
+ENV_DIR="$PROJECT_ROOT/envs/$ENVIRONMENT"
+TF_DIR="$PROJECT_ROOT/terraform/deployments/$ENVIRONMENT"
 
 # Validate environment
 validate_environment() {
@@ -195,6 +153,240 @@ deploy_azure_terraform() {
     terraform apply tfplan
     
     success "Azure Terraform deployment completed"
+    
+    # Extract and save SSH keys after successful deployment
+    extract_ssh_keys
+}
+
+# Extract and save SSH keys from Terraform outputs
+extract_ssh_keys() {
+    log "🔑 Extracting SSH keys from Terraform outputs..."
+    
+    # Create SSH keys directory in project root
+    local keys_dir="$PROJECT_ROOT/ssh-keys"
+    mkdir -p "$keys_dir"
+    
+    cd "$TF_DIR"
+    
+    # Extract private key
+    if terraform output -json ssh_private_key &>/dev/null; then
+        log "Extracting SSH private key..."
+        terraform output -json ssh_private_key | jq -r '.value' > "$keys_dir/${ENVIRONMENT}-ssh-key"
+        chmod 600 "$keys_dir/${ENVIRONMENT}-ssh-key"
+        success "SSH private key saved to: $keys_dir/${ENVIRONMENT}-ssh-key"
+    else
+        warn "SSH private key not found in Terraform outputs"
+    fi
+    
+    # Extract public key
+    if terraform output -json ssh_public_key &>/dev/null; then
+        log "Extracting SSH public key..."
+        terraform output -json ssh_public_key | jq -r '.value' > "$keys_dir/${ENVIRONMENT}-ssh-key.pub"
+        chmod 644 "$keys_dir/${ENVIRONMENT}-ssh-key.pub"
+        success "SSH public key saved to: $keys_dir/${ENVIRONMENT}-ssh-key.pub"
+    else
+        warn "SSH public key not found in Terraform outputs"
+    fi
+    
+    # Create SSH config file for easy access
+    create_ssh_config "$keys_dir"
+    
+    # Create setup script for SSH access
+    create_ssh_setup_script "$keys_dir"
+    
+    success "SSH keys extraction completed"
+}
+
+# Create SSH config file for easy VM access
+create_ssh_config() {
+    local keys_dir="$1"
+    local ssh_config="$keys_dir/ssh-config"
+    
+    log "Creating SSH config file..."
+    
+    cat > "$ssh_config" << EOF
+# SSH Config for ${ENVIRONMENT} environment
+# Generated on $(date)
+# Usage: ssh -F $ssh_config manager-${ENVIRONMENT}
+#        ssh -F $ssh_config worker-${ENVIRONMENT}
+
+Host manager-${ENVIRONMENT}
+    HostName $(terraform output -json swarm_manager_public_ip | jq -r '.value' 2>/dev/null || echo "IP_NOT_FOUND")
+    User ubuntu
+    IdentityFile $keys_dir/${ENVIRONMENT}-ssh-key
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+
+Host worker-${ENVIRONMENT}
+    HostName $(terraform output -json swarm_worker_public_ip | jq -r '.value' 2>/dev/null || echo "IP_NOT_FOUND")
+    User ubuntu
+    IdentityFile $keys_dir/${ENVIRONMENT}-ssh-key
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+
+Host swarm-${ENVIRONMENT}
+    HostName $(terraform output -json swarm_manager_public_ip | jq -r '.value' 2>/dev/null || echo "IP_NOT_FOUND")
+    User ubuntu
+    IdentityFile $keys_dir/${ENVIRONMENT}-ssh-key
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+EOF
+    
+    success "SSH config created: $ssh_config"
+}
+
+# Create setup script for SSH access
+create_ssh_setup_script() {
+    local keys_dir="$1"
+    local setup_script="$keys_dir/setup-ssh.sh"
+    
+    log "Creating SSH setup script..."
+    
+    # Create README
+    cat > "$keys_dir/README.md" << EOF
+# SSH Access for Pro-Mata ${ENVIRONMENT} Infrastructure
+
+This directory contains SSH keys and configuration for accessing your deployed VMs.
+
+## Files
+
+- \`${ENVIRONMENT}-ssh-key\` - Private SSH key (keep secure!)
+- \`${ENVIRONMENT}-ssh-key.pub\` - Public SSH key
+- \`ssh-config\` - SSH configuration file for easy access
+- \`setup-ssh.sh\` - Script to set up SSH access
+
+## Quick Setup
+
+Run the setup script to configure SSH access:
+
+\`\`\`bash
+./setup-ssh.sh
+\`\`\`
+
+Or manually:
+
+\`\`\`bash
+# Start SSH agent
+eval "\$(ssh-agent -s)"
+
+# Add the key
+ssh-add ${ENVIRONMENT}-ssh-key
+\`\`\`
+
+## Connecting to VMs
+
+### Using SSH config (recommended):
+
+\`\`\`bash
+# Connect to manager (Docker Swarm manager)
+ssh -F ssh-config manager-${ENVIRONMENT}
+
+# Connect to worker
+ssh -F ssh-config worker-${ENVIRONMENT}
+
+# Connect to swarm (alias for manager)
+ssh -F ssh-config swarm-${ENVIRONMENT}
+\`\`\`
+
+### Direct connection:
+
+\`\`\`bash
+# Manager VM
+ssh ubuntu@<manager-ip>
+
+# Worker VM  
+ssh ubuntu@<worker-ip>
+\`\`\`
+
+## VM Information
+
+Manager VM: Ubuntu 22.04 LTS
+Worker VM:  Ubuntu 22.04 LTS
+
+## Security Notes
+
+- Keep the private key file (\`${ENVIRONMENT}-ssh-key\`) secure
+- Never commit private keys to version control
+- The \`.gitignore\` file excludes SSH keys from being committed
+
+## Troubleshooting
+
+If you get "Permission denied" errors:
+
+1. Ensure SSH agent is running: \`eval "\$(ssh-agent -s)"\`
+2. Add key to agent: \`ssh-add ${ENVIRONMENT}-ssh-key\`
+3. Check key permissions: \`chmod 600 ${ENVIRONMENT}-ssh-key\`
+
+## Getting VM IPs
+
+If you need the current VM IPs:
+
+\`\`\`bash
+cd ../terraform/deployments/${ENVIRONMENT}
+terraform output swarm_manager_public_ip
+terraform output swarm_worker_public_ip
+\`\`\`
+EOF
+    
+    cat > "$setup_script" << EOF
+#!/bin/bash
+# SSH Setup Script for Pro-Mata Infrastructure
+# This script sets up SSH access to deployed VMs
+
+set -euo pipefail
+
+SCRIPT_DIR="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
+KEY_FILE="\$SCRIPT_DIR/${ENVIRONMENT}-ssh-key"
+CONFIG_FILE="\$SCRIPT_DIR/ssh-config"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+echo -e "\${BLUE}🔑 Setting up SSH access for Pro-Mata ${ENVIRONMENT} infrastructure...\${NC}"
+
+# Check if key file exists
+if [[ ! -f "\$KEY_FILE" ]]; then
+    echo -e "\${RED}❌ SSH key file not found: \$KEY_FILE\${NC}"
+    echo "Please run the deployment script first to extract SSH keys."
+    exit 1
+fi
+
+# Start SSH agent if not running
+if [[ -z "\${SSH_AGENT_PID:-}" ]]; then
+    echo "Starting SSH agent..."
+    eval "\$(ssh-agent -s)"
+fi
+
+# Add key to SSH agent
+echo "Adding SSH key to agent..."
+if ssh-add "\$KEY_FILE"; then
+    echo -e "\${GREEN}✅ SSH key added to agent successfully\${NC}"
+else
+    echo -e "\${RED}❌ Failed to add SSH key to agent\${NC}"
+    exit 1
+fi
+
+echo ""
+echo -e "\${GREEN}✅ SSH access setup complete!\${NC}"
+echo ""
+echo "You can now connect to your VMs using:"
+echo "  ssh -F \$CONFIG_FILE manager-${ENVIRONMENT}"
+echo "  ssh -F \$CONFIG_FILE worker-${ENVIRONMENT}"
+echo "  ssh -F \$CONFIG_FILE swarm-${ENVIRONMENT}"
+echo ""
+echo "Or directly with the IPs shown in Terraform outputs:"
+echo "  ssh ubuntu@<VM_IP>"
+echo ""
+echo "To make this permanent, add the following to your ~/.bashrc or ~/.zshrc:"
+echo "  eval \"\$(ssh-agent -s)\""
+echo "  ssh-add \$HOME/path/to/your/project/ssh-keys/${ENVIRONMENT}-ssh-key"
+EOF
+    
+    chmod +x "$setup_script"
+    success "SSH setup script and documentation created"
 }
 
 # Deploy AWS infrastructure for prod
@@ -291,10 +483,46 @@ main() {
     
     validate_environment
     deploy_terraform
+    setup_ssh_access
     deploy_ansible
     
     success "✅ Full deployment completed for $ENVIRONMENT!"
     log "Infrastructure should be accessible according to your DNS configuration"
+    log "SSH keys have been saved to: $PROJECT_ROOT/ssh-keys/"
+    log "Run: source $PROJECT_ROOT/ssh-keys/setup-ssh.sh"
+    log "Then use: ssh -F $PROJECT_ROOT/ssh-keys/ssh-config manager-dev"
+}
+
+# Setup SSH access after deployment
+setup_ssh_access() {
+    local keys_dir="$PROJECT_ROOT/ssh-keys"
+    local key_file="$keys_dir/${ENVIRONMENT}-ssh-key"
+    
+    if [[ ! -f "$key_file" ]]; then
+        warn "SSH key file not found, skipping SSH setup"
+        return 0
+    fi
+    
+    log "🔐 Setting up SSH access..."
+    
+    # Start SSH agent if not running
+    if [[ -z "${SSH_AGENT_PID:-}" ]]; then
+        log "Starting SSH agent..."
+        eval "$(ssh-agent -s)" || {
+            warn "Failed to start SSH agent"
+            return 0
+        }
+    fi
+    
+    # Add key to SSH agent
+    log "Adding SSH key to agent..."
+    if ssh-add "$key_file" 2>/dev/null; then
+        success "SSH key added to agent successfully"
+    else
+        warn "Failed to add SSH key to agent (may already be added)"
+    fi
+    
+    success "SSH access setup completed"
 }
 
 # Execute main function

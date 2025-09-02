@@ -144,7 +144,59 @@ destroy-staging: ## Destroy staging infrastructure
 	@echo "💥 Destroying staging infrastructure..."
 	@cd terraform/deployments/staging && terraform destroy -var-file=../../../envs/staging/terraform.tfvars -auto-approve
 
-rollback: check-env ## Rollback to previous deployment
-	@echo "🔄 Rolling back $(ENV) deployment..."
-	@./scripts/utils/rollback.sh $(ENV)
+ssh-setup: check-env ## Setup SSH access for environment
+	@echo "🔑 Setting up SSH access for $(ENV)..."
+	@if [ -f "ssh-keys/setup-ssh.sh" ]; then \
+		source ssh-keys/setup-ssh.sh; \
+	else \
+		echo "❌ SSH setup script not found. Run deployment first."; \
+		exit 1; \
+	fi
+
+ssh-extract: check-env ## Extract SSH keys from deployed infrastructure
+	@echo "🔑 Extracting SSH keys for $(ENV)..."
+	@./scripts/setup/setup-ssh.sh $(ENV)
+
+ssh-info: check-env ## Show SSH connection information
+	@echo "🔑 SSH Connection Information for $(ENV):"
+	@echo "========================================"
+	@if [ -f "ssh-keys/ssh-config" ]; then \
+		echo "SSH Config file: ssh-keys/ssh-config"; \
+		echo ""; \
+		echo "Available hosts:"; \
+		grep "^Host " ssh-keys/ssh-config | sed 's/Host //'; \
+		echo ""; \
+		echo "Usage examples:"; \
+		echo "  ssh -F ssh-keys/ssh-config manager-$(ENV)"; \
+		echo "  ssh -F ssh-keys/ssh-config worker-$(ENV)"; \
+		echo "  ssh -F ssh-keys/ssh-config swarm-$(ENV)"; \
+	else \
+		echo "❌ SSH config not found. Run deployment first."; \
+	fi
+
+ssh-keys: check-env ## Show SSH keys location
+	@echo "� SSH Keys for $(ENV):"
+	@echo "======================"
+	@if [ -d "ssh-keys" ]; then \
+		ls -la ssh-keys/; \
+		echo ""; \
+		echo "Private key: ssh-keys/$(ENV)-ssh-key"; \
+		echo "Public key:  ssh-keys/$(ENV)-ssh-key.pub"; \
+		echo "SSH config:  ssh-keys/ssh-config"; \
+		echo "Setup script: ssh-keys/setup-ssh.sh"; \
+	else \
+		echo "❌ SSH keys directory not found. Run deployment first."; \
+	fi
+
+ssh-test: check-env ## Test SSH connections to VMs
+	@echo "🧪 Testing SSH connections for $(ENV)..."
+	@if [ -f "ssh-keys/ssh-config" ]; then \
+		echo "Testing manager connection..."; \
+		ssh -F ssh-keys/ssh-config -o ConnectTimeout=10 manager-$(ENV) "echo '✅ Manager VM: OK' && uptime" 2>/dev/null || echo "❌ Manager VM: Failed"; \
+		echo ""; \
+		echo "Testing worker connection..."; \
+		ssh -F ssh-keys/ssh-config -o ConnectTimeout=10 worker-$(ENV) "echo '✅ Worker VM: OK' && uptime" 2>/dev/null || echo "❌ Worker VM: Failed"; \
+	else \
+		echo "❌ SSH config not found. Run deployment first."; \
+	fi
 

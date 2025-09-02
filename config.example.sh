@@ -96,7 +96,7 @@ postgres_db = "$DB_NAME"
 postgres_user = "$DB_USER"
 
 # Storage (will be made unique automatically)
-storage_account_name = "${PROJECT_NAME}devstg\$(date +%s | tail -c 6)"
+storage_account_name = "promatadevstg$(date +%s | sha256sum | head -c 8)"
 
 # Cloudflare (optional)
 cloudflare_api_token = "$CLOUDFLARE_API_TOKEN"

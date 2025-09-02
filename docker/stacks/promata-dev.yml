@@ -49,6 +49,7 @@ services:
         - traefik.http.routers.traefik.tls.certresolver=letsencrypt
         - traefik.http.routers.traefik.service=api@internal
         - traefik.http.routers.traefik.middlewares=auth
+        - traefik.http.services.traefik.loadbalancer.server.port=8080
         # Basic Auth
         - traefik.http.middlewares.auth.basicauth.users=${TRAEFIK_AUTH_USERS}
         # HTTPS Redirect

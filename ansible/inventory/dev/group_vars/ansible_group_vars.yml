@@ -1,7 +1,7 @@
 # Group Variables for Pro-Mata Development Environment
 ---
 # Environment Configuration
-environment: development
+deployment_env: development
 project_name: pro-mata
 domain_name: "promata.com.br"
 
@@ -14,8 +14,8 @@ backend_image: "norohim/pro-mata-backend-dev:latest"
 frontend_image: "norohim/pro-mata-frontend-dev:latest"
 
 # Replica Configuration
-frontend_replicas: 2
-backend_replicas: 2
+frontend_replicas: 1
+backend_replicas: 1
 
 # Database Configuration
 postgres_db: "{{ vault_postgres_db | default('promata_dev') }}"
@@ -50,7 +50,7 @@ stack_environment:
   DOMAIN_NAME: "{{ domain_name }}"
   
   # Application
-  ENVIRONMENT: "{{ environment }}"
+  ENVIRONMENT: "{{ deployment_env }}"
   BACKEND_IMAGE: "{{ backend_image }}"
   FRONTEND_IMAGE: "{{ frontend_image }}"
   BACKEND_REPLICAS: "{{ backend_replicas }}"

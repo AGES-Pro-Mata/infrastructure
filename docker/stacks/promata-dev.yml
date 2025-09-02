@@ -1,0 +1,268 @@
+# Pro-Mata Simple Development Stack
+# Includes: Traefik, PostgreSQL, Backend, Frontend, PgAdmin, Grafana
+version: "3.8"
+
+services:
+  # Reverse Proxy & Load Balancer - Traefik
+  traefik:
+    image: traefik:v3.0
+    command:
+      - --api.dashboard=true
+      - --api.insecure=false
+      - --providers.docker=true
+      - --providers.docker.swarmMode=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+      - --certificatesresolvers.letsencrypt.acme.email=${LETSENCRYPT_EMAIL}
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+      - --log.level=${TRAEFIK_LOG_LEVEL:-INFO}
+      - --accesslog=true
+      - --metrics.prometheus=true
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_letsencrypt:/letsencrypt
+    networks:
+      - promata_public
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+      labels:
+        # Dashboard
+        - traefik.enable=true
+        - traefik.docker.network=promata_public
+        - traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN_NAME}`)
+        - traefik.http.routers.traefik.entrypoints=websecure
+        - traefik.http.routers.traefik.tls.certresolver=letsencrypt
+        - traefik.http.routers.traefik.service=api@internal
+        - traefik.http.routers.traefik.middlewares=auth
+        # Basic Auth
+        - traefik.http.middlewares.auth.basicauth.users=${TRAEFIK_AUTH_USERS}
+        # HTTPS Redirect
+        - traefik.http.routers.http-catchall.rule=hostregexp(`{host:.+}`)
+        - traefik.http.routers.http-catchall.entrypoints=web
+        - traefik.http.routers.http-catchall.middlewares=redirect-to-https
+        - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
+
+  # PostgreSQL Primary Database
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - promata_database
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.labels.database.primary == true]
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 3
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+
+  # Backend Service - NestJS API
+  backend:
+    image: ${BACKEND_IMAGE}
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-1h}
+      - CORS_ORIGIN=https://${DOMAIN_NAME}
+      - LOG_LEVEL=debug
+    networks:
+      - promata_public
+      - promata_internal
+      - promata_database
+    depends_on:
+      - postgres
+    deploy:
+      replicas: ${BACKEND_REPLICAS:-1}
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 3
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+      labels:
+        # Traefik configuration
+        - traefik.enable=true
+        - traefik.docker.network=promata_public
+        - traefik.http.routers.backend.rule=Host(`api.${DOMAIN_NAME}`)
+        - traefik.http.routers.backend.entrypoints=websecure
+        - traefik.http.routers.backend.tls.certresolver=letsencrypt
+        - traefik.http.services.backend.loadbalancer.server.port=3000
+        # Health check
+        - traefik.http.services.backend.loadbalancer.healthcheck.path=/health
+        - traefik.http.services.backend.loadbalancer.healthcheck.interval=30s
+        # CORS middleware
+        - traefik.http.middlewares.cors.headers.accesscontrolallowmethods=GET,OPTIONS,PUT,POST,DELETE,PATCH
+        - traefik.http.middlewares.cors.headers.accesscontrolalloworiginlist=https://${DOMAIN_NAME}
+        - traefik.http.middlewares.cors.headers.accesscontrolmaxage=100
+        - traefik.http.middlewares.cors.headers.addvaryheader=true
+        - traefik.http.routers.backend.middlewares=cors
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Frontend Service - React
+  frontend:
+    image: ${FRONTEND_IMAGE}
+    environment:
+      - NODE_ENV=production
+      - VITE_API_URL=https://api.${DOMAIN_NAME}
+      - VITE_APP_ENV=development
+    networks:
+      - promata_public
+    deploy:
+      replicas: ${FRONTEND_REPLICAS:-1}
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
+      labels:
+        # Traefik configuration
+        - traefik.enable=true
+        - traefik.docker.network=promata_public
+        - traefik.http.routers.frontend.rule=Host(`${DOMAIN_NAME}`)
+        - traefik.http.routers.frontend.entrypoints=websecure
+        - traefik.http.routers.frontend.tls.certresolver=letsencrypt
+        - traefik.http.services.frontend.loadbalancer.server.port=80
+        # Health check
+        - traefik.http.services.frontend.loadbalancer.healthcheck.path=/
+        - traefik.http.services.frontend.loadbalancer.healthcheck.interval=30s
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # Database Administration - PgAdmin
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_EMAIL}
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_PASSWORD}
+      - PGADMIN_CONFIG_SERVER_MODE=True
+      - PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED=False
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - promata_database
+      - promata_public
+    depends_on:
+      - postgres
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+      labels:
+        # Traefik configuration
+        - traefik.enable=true
+        - traefik.docker.network=promata_public
+        - traefik.http.routers.pgadmin.rule=Host(`pgadmin.${DOMAIN_NAME}`)
+        - traefik.http.routers.pgadmin.entrypoints=websecure
+        - traefik.http.routers.pgadmin.tls.certresolver=letsencrypt
+        - traefik.http.services.pgadmin.loadbalancer.server.port=80
+
+  # Monitoring - Grafana
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_DOMAIN=grafana.${DOMAIN_NAME}
+      - GF_SERVER_ROOT_URL=https://grafana.${DOMAIN_NAME}
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - promata_public
+      - promata_internal
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+      labels:
+        # Traefik configuration
+        - traefik.enable=true
+        - traefik.docker.network=promata_public
+        - traefik.http.routers.grafana.rule=Host(`grafana.${DOMAIN_NAME}`)
+        - traefik.http.routers.grafana.entrypoints=websecure
+        - traefik.http.routers.grafana.tls.certresolver=letsencrypt
+        - traefik.http.services.grafana.loadbalancer.server.port=3000
+
+volumes:
+  postgres_data:
+    driver: local
+  traefik_letsencrypt:
+    driver: local
+  pgadmin_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+networks:
+  promata_public:
+    external: true
+  promata_internal:
+    external: true
+  promata_database:
+    external: true

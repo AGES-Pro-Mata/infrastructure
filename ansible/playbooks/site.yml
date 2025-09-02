@@ -38,10 +38,6 @@
       tags: [monitoring]
 
   post_tasks:
-    - name: Deploy stack files
-      include_tasks: tasks/deploy-stacks.yml
-      tags: [stacks]
-    
     - name: Deploy configuration files
       include_tasks: tasks/ansible_deploy_configs.yml
       tags: [configs]
@@ -84,6 +80,10 @@
       changed_when: network_create.rc == 0
       failed_when: network_create.rc != 0 and 'already exists' not in network_create.stderr
       tags: [networks]
+    
+    - name: Deploy stack files (manager only)
+      include_tasks: tasks/deploy-stacks.yml
+      tags: [stacks]
 
 # Swarm Workers Configuration
 - name: Configure Swarm Workers

@@ -66,7 +66,7 @@
         state: present
         listen_addr: "{{ ansible_default_ipv4.address }}"
         advertise_addr: "{{ ansible_default_ipv4.address }}"
-      when: swarm_info.failed or (swarm_info.swarm_facts is defined and swarm_info.swarm_facts.LocalNodeState != "active")
+      when: not (swarm_info.docker_swarm_active | default(false))
       register: swarm_init_result
       tags: [swarm, init]
     
@@ -123,7 +123,7 @@
         state: join
         join_token: "{{ hostvars[groups['managers'][0]]['worker_token'] }}"
         remote_addrs: "{{ hostvars[groups['managers'][0]]['ansible_default_ipv4']['address'] }}:2377"
-      when: worker_swarm_info.failed or (worker_swarm_info.swarm_facts is defined and worker_swarm_info.swarm_facts.LocalNodeState != "active")
+      when: not (worker_swarm_info.docker_swarm_active | default(false))
       tags: [swarm, join]
     
     - name: Add labels to worker node
@@ -140,7 +140,7 @@
 - name: Deploy Stack Configurations
   hosts: managers
   become: true
-  gather_facts: false
+  gather_facts: true
   
   vars_files:
     - "../inventory/{{ env | default('dev') }}/group_vars/all.yml"
@@ -152,19 +152,28 @@
       tags: [deploy, wait]
     
     - name: Verify swarm nodes
-      docker_node:
+      shell: docker node ls
       register: swarm_nodes
       tags: [deploy, verify]
     
     - name: Display swarm information
       debug:
         msg:
-          - "🐳 Docker Swarm Setup Complete!"
+          - "==> Docker Swarm Setup Complete!"
           - "Manager: {{ ansible_hostname }} ({{ ansible_default_ipv4.address }})"
           - "Workers: {{ groups['workers'] | length }} nodes"
           - "Networks: promata_public, promata_internal, promata_database"
           - "Ready for stack deployment!"
       tags: [deploy, summary]
+
+    - name: Create environment file
+      template:
+        src: ../templates/stack.env.j2
+        dest: /opt/promata/.env
+        mode: '0600'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+      tags: [deploy, env]
 
     - name: Copy stack files to manager
       template:
@@ -174,11 +183,12 @@
         owner: "{{ ansible_user }}"
         group: "{{ ansible_user }}"
       loop:
+        - src: ../templates/proxy-stack.yml.j2
+          dest: /opt/promata/stacks/proxy-stack.yml
         - src: ../templates/database-stack.yml.j2
           dest: /opt/promata/stacks/database-stack.yml
         - src: ../templates/app-stack.yml.j2
           dest: /opt/promata/stacks/app-stack.yml
-      ignore_errors: yes
       tags: [deploy, stacks]
       
     - name: Create deployment script
@@ -188,5 +198,149 @@
         mode: '0755'
         owner: "{{ ansible_user }}"
         group: "{{ ansible_user }}"
-      ignore_errors: yes
       tags: [deploy, scripts]
+
+    - name: Create stack management scripts
+      copy:
+        content: |
+          #!/bin/bash
+          # Pro-Mata Stack Management Script
+          
+          case "$1" in
+            status)
+              echo "==> Docker Stack Status:"
+              docker stack ls
+              echo ""
+              echo "==> Services Status:"
+              docker service ls
+              ;;
+            logs)
+              SERVICE="${2:-}"
+              if [ -z "$SERVICE" ]; then
+                echo "Usage: promata-logs <service-name>"
+                echo "Available services:"
+                docker service ls --format "table {{'{{'}}.Name{{'}}'}}"
+              else
+                docker service logs -f "$SERVICE"
+              fi
+              ;;
+            deploy)
+              echo "==> Starting deployment..."
+              /opt/promata/scripts/deploy-stacks.sh
+              ;;
+            remove)
+              echo "==> Removing all stacks..."
+              docker stack rm promata-app promata-database promata-proxy
+              ;;
+            *)
+              echo "Usage: $0 {status|logs|deploy|remove}"
+              echo "  status  - Show stack and services status"
+              echo "  logs    - Show logs for a service"
+              echo "  deploy  - Deploy all stacks"
+              echo "  remove  - Remove all stacks"
+              ;;
+          esac
+        dest: /usr/local/bin/promata
+        mode: '0755'
+      tags: [deploy, scripts]
+
+    - name: Deploy Traefik proxy stack
+      docker_stack:
+        name: "promata-proxy"
+        compose:
+          - /opt/promata/stacks/proxy-stack.yml
+        state: present
+      environment:
+        DOMAIN_NAME: "{{ domain_name }}"
+        TRAEFIK_LOG_LEVEL: "{{ traefik_log_level }}"
+        TRAEFIK_API_DASHBOARD: "{{ traefik_api_dashboard }}"
+        ACME_EMAIL: "{{ acme_email }}"
+        TRAEFIK_AUTH_USERS: "{{ traefik_auth_users }}"
+      tags: [deploy, proxy]
+
+    - name: Wait for Traefik to be ready
+      uri:
+        url: "http://{{ ansible_default_ipv4.address }}:8080/ping"
+        method: GET
+        timeout: 30
+      register: traefik_health
+      until: traefik_health.status == 200
+      retries: 20
+      delay: 15
+      tags: [deploy, proxy, health]
+
+    - name: Deploy database stack
+      docker_stack:
+        name: "promata-database"
+        compose:
+          - /opt/promata/stacks/database-stack.yml
+        state: present
+      environment:
+        POSTGRES_DB: "{{ postgres_db }}"
+        POSTGRES_USER: "{{ postgres_user }}"
+        POSTGRES_PASSWORD: "{{ postgres_password }}"
+        POSTGRES_REPLICA_USER: "{{ postgres_replica_user }}"
+        POSTGRES_REPLICA_PASSWORD: "{{ postgres_replica_password }}"
+        PGBOUNCER_POOL_MODE: "{{ pgbouncer_pool_mode }}"
+        PGBOUNCER_POOL_SIZE: "{{ pgbouncer_pool_size }}"
+        PGBOUNCER_MAX_CLIENT_CONN: "{{ pgbouncer_max_client_conn }}"
+        PGADMIN_EMAIL: "{{ pgadmin_email }}"
+        PGADMIN_PASSWORD: "{{ pgadmin_password }}"
+        JWT_SECRET: "{{ jwt_secret }}"
+        DOMAIN_NAME: "{{ domain_name }}"
+      tags: [deploy, database]
+
+    - name: Wait for database to be ready
+      wait_for:
+        port: 5432
+        host: "{{ ansible_default_ipv4.address }}"
+        timeout: 300
+        delay: 30
+      tags: [deploy, database, health]
+
+    - name: Deploy application stack
+      docker_stack:
+        name: "promata-app"
+        compose:
+          - /opt/promata/stacks/app-stack.yml
+        state: present
+      environment:
+        BACKEND_IMAGE: "{{ backend_image }}"
+        FRONTEND_IMAGE: "{{ frontend_image }}"
+        BACKEND_REPLICAS: "{{ backend_replicas }}"
+        FRONTEND_REPLICAS: "{{ frontend_replicas }}"
+        POSTGRES_DB: "{{ postgres_db }}"
+        POSTGRES_USER: "{{ postgres_user }}"
+        POSTGRES_PASSWORD: "{{ postgres_password }}"
+        JWT_SECRET: "{{ jwt_secret }}"
+        JWT_EXPIRES_IN: "{{ jwt_expires_in }}"
+        DOMAIN_NAME: "{{ domain_name }}"
+        ENVIRONMENT: "{{ env_name }}"
+      tags: [deploy, app]
+      
+    - name: Final deployment summary
+      debug:
+        msg:
+          - "==> Pro-Mata deployment completed successfully!"
+          - ""
+          - "==> Services deployed:"
+          - "  * Traefik Proxy (Load Balancer + SSL)"
+          - "  * PostgreSQL Database with PgBouncer"
+          - "  * Redis Cache"
+          - "  * Backend API ({{ backend_replicas }} replicas)"
+          - "  * Frontend App ({{ frontend_replicas }} replicas)"
+          - ""
+          - "==> Access URLs:"
+          - "  Frontend: https://{{ domain_name }}"
+          - "  API:      https://api.{{ domain_name }}"
+          - "  Traefik:  https://traefik.{{ domain_name }}"
+          - "  DB Admin: https://db.{{ domain_name }}"
+          - ""
+          - "==> Management:"
+          - "  Status:   promata status"
+          - "  Logs:     promata logs <service>"
+          - "  Deploy:   promata deploy"
+          - ""
+          - "==> Note: SSL certificates may take 1-2 minutes to provision"
+          - "==> Configure Cloudflare DNS to point to: {{ ansible_default_ipv4.address }}"
+      tags: [deploy, summary]

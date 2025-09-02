@@ -7,15 +7,15 @@ set -euo pipefail
 STACK_DIR="/opt/promata/stacks"
 ENV_FILE="/opt/promata/.env"
 
-echo "🚀 Pro-Mata Stack Deployment Starting..."
-echo "Environment: {{ environment }}"
+echo "==> Pro-Mata Stack Deployment Starting..."
+echo "Environment: {{ env_name }}"
 echo "Domain: {{ domain_name }}"
 
 # Source environment variables
 if [ -f "$ENV_FILE" ]; then
     source "$ENV_FILE"
 else
-    echo "❌ Environment file not found at $ENV_FILE"
+    echo "[ERROR] Environment file not found at $ENV_FILE"
     exit 1
 fi
 
@@ -24,12 +24,12 @@ deploy_stack() {
     local stack_name=$1
     local stack_file=$2
     
-    echo "📦 Deploying $stack_name stack..."
+    echo "[DEPLOY] Deploying $stack_name stack..."
     if docker stack deploy -c "$STACK_DIR/$stack_file" --with-registry-auth "$stack_name"; then
-        echo "✅ $stack_name deployed successfully"
+        echo "[SUCCESS] $stack_name deployed successfully"
         return 0
     else
-        echo "❌ Failed to deploy $stack_name"
+        echo "[ERROR] Failed to deploy $stack_name"
         return 1
     fi
 }
@@ -40,37 +40,37 @@ wait_for_stack() {
     local timeout=300
     local count=0
     
-    echo "⏳ Waiting for $stack_name to be ready..."
+    echo "[WAIT] Waiting for $stack_name to be ready..."
     while [ $count -lt $timeout ]; do
-        if docker service ls --filter name="${stack_name}_" --format "table {{.Name}}\t{{.Replicas}}" | grep -q "1/1\|2/2"; then
-            echo "✅ $stack_name is ready"
+        if docker service ls --filter name="${stack_name}_" --format "table {{ "{{" }}.Name{{ "}}" }}\t{{ "{{" }}.Replicas{{ "}}" }}" | grep -q "1/1\|2/2"; then
+            echo "[SUCCESS] $stack_name is ready"
             return 0
         fi
         sleep 10
         count=$((count + 10))
-        echo "⏳ Still waiting... (${count}s/${timeout}s)"
+        echo "[WAIT] Still waiting... (${count}s/${timeout}s)"
     done
     
-    echo "❌ Timeout waiting for $stack_name to be ready"
+    echo "[ERROR] Timeout waiting for $stack_name to be ready"
     return 1
 }
 
 # Deploy stacks in order
-echo "1️⃣ Deploying Proxy Stack (Traefik)..."
+echo "[1/4] Deploying Proxy Stack (Traefik)..."
 if deploy_stack "promata-proxy" "proxy-stack.yml"; then
     wait_for_stack "promata-proxy"
 else
     exit 1
 fi
 
-echo "2️⃣ Deploying Database Stack..."
+echo "[2/4] Deploying Database Stack..."
 if deploy_stack "promata-database" "database-stack.yml"; then
     wait_for_stack "promata-database"
 else
     exit 1
 fi
 
-echo "3️⃣ Deploying Application Stack..."
+echo "[3/4] Deploying Application Stack..."
 if deploy_stack "promata-app" "app-stack.yml"; then
     wait_for_stack "promata-app"
 else
@@ -78,17 +78,17 @@ else
 fi
 
 echo ""
-echo "🎉 All stacks deployed successfully!"
+echo "[SUCCESS] All stacks deployed successfully!"
 echo ""
-echo "📊 Stack Summary:"
+echo "[INFO] Stack Summary:"
 docker stack ls
 echo ""
-echo "🌐 Your application should be available at:"
+echo "[INFO] Your application should be available at:"
 echo "   Frontend: https://{{ domain_name }}"
 echo "   API:      https://api.{{ domain_name }}"
 echo "   Traefik:  https://traefik.{{ domain_name }}"
 echo ""
-echo "⏰ SSL certificates may take 1-2 minutes to provision"
+echo "[INFO] SSL certificates may take 1-2 minutes to provision"
 echo ""
-echo "📋 Check status with: promata-status"
-echo "📋 View logs with:    promata-logs [service-name]"
+echo "[INFO] Check status with: promata-status"
+echo "[INFO] View logs with:    promata-logs [service-name]"

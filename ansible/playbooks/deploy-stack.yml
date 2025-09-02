@@ -1,0 +1,108 @@
+# Pro-Mata Stack Deployment Playbook
+---
+- name: Deploy Pro-Mata Stack
+  hosts: managers
+  become: true
+  gather_facts: true
+  
+  vars_files:
+    - "../inventory/{{ env | default('dev') }}/group_vars/all.yml"
+  
+  tasks:
+    - name: Create Pro-Mata directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0755'
+      loop:
+        - /opt/promata/stacks
+        - /opt/promata/configs
+        - /opt/promata/logs
+        - /opt/promata/data
+
+    - name: Copy production stack file  
+      copy:
+        src: "../../docker/stacks/promata-production.yml"
+        dest: "/opt/promata/stacks/promata-production.yml"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0644'
+
+    - name: Generate dev environment file
+      template:
+        src: "templates/dev.env.j2"
+        dest: /opt/promata/.env
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0600'
+
+    - name: Deploy Pro-Mata production stack
+      shell: |
+        cd /opt/promata
+        export $(cat .env | grep -v '^#' | grep -v '^$' | xargs)
+        docker stack deploy -c stacks/promata-production.yml promata-production --with-registry-auth
+      register: stack_deploy_result
+      
+    - name: Display stack deployment result
+      debug:
+        var: stack_deploy_result.stdout_lines
+      
+    - name: Wait for stack services to initialize
+      pause:
+        seconds: 45
+        prompt: "Waiting for Pro-Mata services to initialize..."
+
+    - name: Verify stack deployment
+      command: docker service ls --filter "label=com.docker.stack.namespace=promata-production"
+      register: stack_services
+      
+    - name: Display deployed services
+      debug:
+        var: stack_services.stdout_lines
+
+    - name: Check critical services health
+      command: docker service ps promata-production_{{ item }} --no-trunc
+      register: service_status
+      loop:
+        - traefik
+        - postgres  
+        - pgadmin
+        - grafana
+      ignore_errors: yes
+
+    - name: Display critical service health
+      debug:
+        msg: "{{ item.item }} service status: {{ item.stdout_lines }}"
+      loop: "{{ service_status.results }}"
+      when: item.stdout_lines is defined
+
+    - name: Test service connectivity
+      uri:
+        url: "https://{{ item }}.{{ domain_name }}"
+        method: GET
+        validate_certs: no
+        timeout: 10
+      register: service_connectivity
+      loop:
+        - grafana
+        - pgadmin
+      ignore_errors: yes
+
+    - name: Display connectivity test results
+      debug:
+        msg: "Service {{ item.item }}: {{ 'ACCESSIBLE' if item.status == 200 or item.status == 308 else 'NOT ACCESSIBLE (' + item.status|string + ')' }}"
+      loop: "{{ service_connectivity.results }}"
+      when: item.status is defined
+
+    - name: Display deployment summary
+      debug:
+        msg:
+          - "🚀 Pro-Mata dev environment deployment completed!"
+          - "🌐 Frontend: https://{{ domain_name }}"
+          - "🔧 API: https://api.{{ domain_name }}"
+          - "📊 Grafana: https://grafana.{{ domain_name }}"
+          - "🗄️  PgAdmin: https://pgadmin.{{ domain_name }}"
+          - "📊 Traefik: https://traefik.{{ domain_name }}"
+          - "🔐 Simple passwords: admin/admin, promata/password123"

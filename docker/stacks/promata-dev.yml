@@ -9,9 +9,8 @@ services:
     command:
       - --api.dashboard=true
       - --api.insecure=false
-      - --providers.docker=true
-      - --providers.docker.swarmMode=true
-      - --providers.docker.exposedbydefault=false
+      - --providers.swarm=true
+      - --providers.swarm.exposedByDefault=false
       - --entrypoints.web.address=:80
       - --entrypoints.websecure.address=:443
       - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
@@ -90,6 +89,31 @@ services:
       retries: 5
       start_period: 30s
 
+  # Database Migration - Init Container (Commented out until schema is ready)
+  # db-migrate:
+  #   image: norohim/pro-mata-migration-dev:latest
+  #   environment:
+  #     - NODE_ENV=development
+  #     - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+  #     - DB_HOST=postgres
+  #     - DB_PORT=5432
+  #     - POSTGRES_USER=${POSTGRES_USER}
+  #     - RUN_SEED=${RUN_SEED:-true}
+  #   networks:
+  #     - promata_database
+  #   depends_on:
+  #     - postgres
+  #   deploy:
+  #     replicas: 1
+  #     placement:
+  #       constraints: [node.role == manager]
+  #     restart_policy:
+  #       condition: none  # Execute apenas uma vez
+  #     resources:
+  #       limits:
+  #         memory: 256M
+  #       reservations:
+  #         memory: 128M
 
   # Backend Service - NestJS API
   backend:
@@ -102,12 +126,14 @@ services:
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-1h}
       - CORS_ORIGIN=https://${DOMAIN_NAME}
       - LOG_LEVEL=debug
+      - DB_REQUIRED=false
     networks:
       - promata_public
       - promata_internal
       - promata_database
-    depends_on:
-      - postgres
+    # depends_on:
+    #   - postgres
+    #   - db-migrate
     deploy:
       replicas: ${BACKEND_REPLICAS:-1}
       restart_policy:
@@ -136,12 +162,12 @@ services:
         - traefik.http.middlewares.cors.headers.accesscontrolmaxage=100
         - traefik.http.middlewares.cors.headers.addvaryheader=true
         - traefik.http.routers.backend.middlewares=cors
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
+    # healthcheck:
+    #   test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3
+    #   start_period: 30s
 
   # Frontend Service - React
   frontend:
@@ -160,9 +186,9 @@ services:
         max_attempts: 3
       resources:
         limits:
-          memory: 128M
+          memory: 512M
         reservations:
-          memory: 64M
+          memory: 256M
       labels:
         # Traefik configuration
         - traefik.enable=true
@@ -170,16 +196,16 @@ services:
         - traefik.http.routers.frontend.rule=Host(`${DOMAIN_NAME}`)
         - traefik.http.routers.frontend.entrypoints=websecure
         - traefik.http.routers.frontend.tls.certresolver=letsencrypt
-        - traefik.http.services.frontend.loadbalancer.server.port=80
+        - traefik.http.services.frontend.loadbalancer.server.port=3000
         # Health check
         - traefik.http.services.frontend.loadbalancer.healthcheck.path=/
         - traefik.http.services.frontend.loadbalancer.healthcheck.interval=30s
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
+    # healthcheck:
+    #   test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3
+    #   start_period: 20s
 
   # Database Administration - PgAdmin
   pgadmin:

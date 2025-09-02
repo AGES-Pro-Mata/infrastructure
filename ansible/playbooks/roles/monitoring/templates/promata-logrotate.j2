@@ -1,0 +1,17 @@
+/opt/promata/logs/*.log {
+    rotate 7
+    daily
+    compress
+    missingok
+    notifempty
+    copytruncate
+}
+
+/var/log/promata/*.log {
+    rotate 7
+    daily
+    compress
+    missingok
+    notifempty
+    copytruncate
+}

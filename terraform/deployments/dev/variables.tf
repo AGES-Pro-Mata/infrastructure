@@ -6,6 +6,12 @@ variable "resource_group_name" {
   default     = "rg-myproject-dev"
 }
 
+variable "azure_resource_group" {
+  description = "Azure resource group name (alias for resource_group_name)"
+  type        = string
+  default     = "rg-myproject-dev"
+}
+
 variable "location" {
   description = "The Azure region where resources will be created"
   type        = string
@@ -122,6 +128,12 @@ variable "enable_cloudflare_dns" {
   description = "Enable Cloudflare DNS management"
   type        = bool
   default     = true
+}
+
+variable "create_page_rules" {
+  description = "Whether to create page rules for optimization"
+  type        = bool
+  default     = false
 }
 
 variable "azure_location" {

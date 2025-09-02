@@ -1,6 +1,6 @@
-# Main Site Playbook - Pro-Mata Infrastructure
+# Complete Docker Swarm Setup for Newly Provisioned VMs
 ---
-- name: Configure Pro-Mata Infrastructure
+- name: Complete Infrastructure Setup - Docker Swarm
   hosts: all
   gather_facts: true
   become: true
@@ -9,10 +9,16 @@
     - "../inventory/{{ env | default('dev') }}/group_vars/all.yml"
   
   pre_tasks:
+    - name: Wait for SSH to be available
+      wait_for_connection:
+        delay: 10
+        timeout: 300
+      
     - name: Update system packages
       apt:
         update_cache: yes
         upgrade: safe
+        cache_valid_time: 3600
       tags: [system, update]
     
     - name: Ensure required directories exist
@@ -29,6 +35,8 @@
         - /opt/promata/scripts
         - /opt/promata/logs
         - /opt/promata/data
+        - /opt/promata/monitoring
+        - /var/log/promata
       tags: [directories]
 
   roles:
@@ -38,17 +46,8 @@
     - role: monitoring
       tags: [monitoring]
 
-  post_tasks:
-    - name: Deploy configuration files
-      include_tasks: tasks/ansible_deploy_configs.yml
-      tags: [configs]
-    
-    - name: Deploy scripts
-      include_tasks: tasks/deploy-script.yml
-      tags: [scripts]
-
-# Swarm Manager Specific Configuration
-- name: Configure Swarm Manager
+# Docker Swarm Manager Setup
+- name: Initialize Docker Swarm on Manager
   hosts: managers
   become: true
   gather_facts: true
@@ -57,12 +56,18 @@
     - "../inventory/{{ env | default('dev') }}/group_vars/all.yml"
   
   tasks:
+    - name: Check if swarm is already initialized
+      docker_swarm_info:
+      register: swarm_info
+      ignore_errors: yes
+      
     - name: Initialize Docker Swarm
       docker_swarm:
         state: present
         listen_addr: "{{ ansible_default_ipv4.address }}"
         advertise_addr: "{{ ansible_default_ipv4.address }}"
-      register: swarm_info
+      when: swarm_info.failed or (swarm_info.swarm_facts is defined and swarm_info.swarm_facts.LocalNodeState != "active")
+      register: swarm_init_result
       tags: [swarm, init]
     
     - name: Get swarm join tokens
@@ -70,22 +75,23 @@
       register: swarm_facts
       tags: [swarm, tokens]
     
-    - name: Set worker join token fact
+    - name: Set join tokens as facts
       set_fact:
         worker_token: "{{ swarm_facts.swarm_facts.JoinTokens.Worker }}"
         manager_token: "{{ swarm_facts.swarm_facts.JoinTokens.Manager }}"
       tags: [swarm, tokens]
     
-    - name: Add node labels to manager
+    - name: Add labels to manager node
       docker_node:
         hostname: "{{ ansible_hostname }}"
         labels:
           database.primary: "true"
           database.replica: "false"
           node.type: "manager"
+          traefik.enable: "true"
       tags: [swarm, labels]
     
-    - name: Create Docker networks
+    - name: Create Docker overlay networks
       docker_network:
         name: "{{ item.name }}"
         driver: "{{ item.driver }}"
@@ -97,8 +103,8 @@
         - { name: "promata_database", driver: "overlay" }
       tags: [networks]
 
-# Swarm Workers Configuration
-- name: Configure Swarm Workers
+# Docker Swarm Workers Setup
+- name: Join Workers to Swarm
   hosts: workers
   become: true
   gather_facts: true
@@ -107,14 +113,20 @@
     - "../inventory/{{ env | default('dev') }}/group_vars/all.yml"
   
   tasks:
+    - name: Check if already part of swarm
+      docker_swarm_info:
+      register: worker_swarm_info
+      ignore_errors: yes
+      
     - name: Join swarm as worker
       docker_swarm:
         state: join
         join_token: "{{ hostvars[groups['managers'][0]]['worker_token'] }}"
         remote_addrs: "{{ hostvars[groups['managers'][0]]['ansible_default_ipv4']['address'] }}:2377"
+      when: worker_swarm_info.failed or (worker_swarm_info.swarm_facts is defined and worker_swarm_info.swarm_facts.LocalNodeState != "active")
       tags: [swarm, join]
     
-    - name: Add node labels to worker
+    - name: Add labels to worker node
       docker_node:
         hostname: "{{ ansible_hostname }}"
         labels:
@@ -124,8 +136,8 @@
       delegate_to: "{{ groups['managers'][0] }}"
       tags: [swarm, labels]
 
-# Deploy Application Stacks
-- name: Deploy Pro-Mata Stacks
+# Deploy Stack Configurations
+- name: Deploy Stack Configurations
   hosts: managers
   become: true
   gather_facts: false
@@ -134,56 +146,47 @@
     - "../inventory/{{ env | default('dev') }}/group_vars/all.yml"
   
   tasks:
-    - name: Deploy proxy stack (Traefik)
-      docker_stack:
-        name: "promata-proxy"
-        compose:
-          - /opt/promata/stacks/proxy-stack.yml
-        state: present
-      environment: "{{ stack_environment }}"
-      tags: [deploy, proxy]
+    - name: Wait for swarm to be fully operational
+      pause:
+        seconds: 30
+      tags: [deploy, wait]
     
-    - name: Wait for Traefik to be ready
-      uri:
-        url: "http://{{ ansible_default_ipv4.address }}:8080/ping"
-        method: GET
-      register: traefik_health
-      until: traefik_health.status == 200
-      retries: 30
-      delay: 10
-      tags: [deploy, proxy, health]
+    - name: Verify swarm nodes
+      docker_node:
+      register: swarm_nodes
+      tags: [deploy, verify]
     
-    - name: Deploy database stack
-      docker_stack:
-        name: "promata-database"
-        compose:
-          - /opt/promata/stacks/database-stack.yml
-        state: present
-      environment: "{{ stack_environment }}"
-      tags: [deploy, database]
-    
-    - name: Wait for database to be ready
-      wait_for:
-        port: 5432
-        host: "{{ ansible_default_ipv4.address }}"
-        timeout: 300
-      tags: [deploy, database, health]
-    
-    - name: Deploy application stack
-      docker_stack:
-        name: "promata-app"
-        compose:
-          - /opt/promata/stacks/app-stack.yml
-        state: present
-      environment: "{{ stack_environment }}"
-      tags: [deploy, app]
-    
-    - name: Display deployment summary
+    - name: Display swarm information
       debug:
         msg:
-          - "🚀 Pro-Mata deployment completed!"
-          - "🌐 Frontend: https://{{ domain_name }}"
-          - "🔧 API: https://api.{{ domain_name }}"
-          - "📊 Traefik: https://traefik.{{ domain_name }}"
-          - "⏰ SSL certificates may take 1-2 minutes to provision"
+          - "🐳 Docker Swarm Setup Complete!"
+          - "Manager: {{ ansible_hostname }} ({{ ansible_default_ipv4.address }})"
+          - "Workers: {{ groups['workers'] | length }} nodes"
+          - "Networks: promata_public, promata_internal, promata_database"
+          - "Ready for stack deployment!"
       tags: [deploy, summary]
+
+    - name: Copy stack files to manager
+      template:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        mode: '0644'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+      loop:
+        - src: ../templates/database-stack.yml.j2
+          dest: /opt/promata/stacks/database-stack.yml
+        - src: ../templates/app-stack.yml.j2
+          dest: /opt/promata/stacks/app-stack.yml
+      ignore_errors: yes
+      tags: [deploy, stacks]
+      
+    - name: Create deployment script
+      template:
+        src: ../templates/deploy-stacks.sh.j2
+        dest: /opt/promata/scripts/deploy-stacks.sh
+        mode: '0755'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+      ignore_errors: yes
+      tags: [deploy, scripts]

@@ -390,6 +390,12 @@ module "cloudflare_dns" {
   security_level  = "medium"
   traefik_proxied = false # Keep Traefik dashboard as DNS only
 
+  # Disable zone settings for now due to read-only conflicts
+  configure_ssl = false
+
+  # Disable page rules for free plan
+  create_page_rules = false
+
   tags = ["dev", "terraform", "promata"]
 
   # Explicit dependency to ensure proper destroy order

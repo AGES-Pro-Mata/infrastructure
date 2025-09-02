@@ -1,0 +1,73 @@
+#!/bin/bash
+# Monitoring Summary Script for Pro-Mata
+# This script provides a summary of system and Docker status
+
+echo "=== Pro-Mata Infrastructure Monitoring Summary ==="
+echo "Timestamp: $(date)"
+echo ""
+
+echo "=== System Information ==="
+echo "Hostname: $(hostname)"
+echo "Uptime: $(uptime -p)"
+echo "Load Average: $(uptime | awk -F'load average:' '{ print $2 }')"
+echo ""
+
+echo "=== Memory Usage ==="
+free -h
+echo ""
+
+echo "=== Disk Usage ==="
+df -h
+echo ""
+
+echo "=== Docker Information ==="
+if systemctl is-active --quiet docker; then
+    echo "Docker Status: Running"
+    echo "Docker Version: $(docker --version)"
+    echo "Running Containers: $(docker ps -q | wc -l)"
+    echo "Total Images: $(docker images -q | wc -l)"
+
+    if docker info --format '{{.Swarm.LocalNodeState}}' | grep -q "active"; then
+        echo "Swarm Status: Active"
+        echo "Swarm Services: $(docker service ls -q | wc -l)"
+        echo ""
+        echo "=== Swarm Nodes ==="
+        docker node ls
+    else
+        echo "Swarm Status: Not active"
+    fi
+else
+    echo "Docker Status: Not running"
+fi
+echo ""
+
+echo "=== Network Information ==="
+ip route show
+echo ""
+
+echo "=== Recent System Logs ==="
+echo "Last 10 lines from /var/log/syslog:"
+tail -10 /var/log/syslog 2>/dev/null || echo "Syslog not available"
+echo ""
+
+echo "=== Recent Docker Logs ==="
+echo "Last 10 lines from Docker monitoring:"
+tail -10 /opt/promata/logs/docker-monitor.log 2>/dev/null || echo "Docker monitoring log not available"
+echo ""
+
+echo "=== Security Status ==="
+if systemctl is-active --quiet fail2ban; then
+    echo "Fail2ban Status: Running"
+    echo "Jails: $(fail2ban-client status | grep 'Jail list' | sed -E 's/^[^:]+:\s+//' | sed 's/,//g')"
+else
+    echo "Fail2ban Status: Not running"
+fi
+
+if ufw status | grep -q "Status: active"; then
+    echo "Firewall Status: Active"
+else
+    echo "Firewall Status: Inactive"
+fi
+
+echo ""
+echo "=== End of Summary ==="

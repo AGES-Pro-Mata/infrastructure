@@ -16,12 +16,6 @@ resource "cloudflare_record" "main" {
   type    = "A"
   ttl     = 1     # Auto TTL
   proxied = true
-  
-  tags = [
-    var.environment,
-    "terraform",
-    "promata"
-  ]
 }
 
 resource "cloudflare_record" "www" {
@@ -32,12 +26,6 @@ resource "cloudflare_record" "www" {
   type    = "A"
   ttl     = 1
   proxied = true
-  
-  tags = [
-    var.environment,
-    "terraform",
-    "promata"
-  ]
 }
 
 resource "cloudflare_record" "api" {
@@ -48,12 +36,6 @@ resource "cloudflare_record" "api" {
   type    = "A"
   ttl     = 1
   proxied = true
-  
-  tags = [
-    var.environment,
-    "terraform",
-    "promata"
-  ]
 }
 
 resource "cloudflare_record" "traefik" {
@@ -64,12 +46,6 @@ resource "cloudflare_record" "traefik" {
   type    = "A"
   ttl     = 1
   proxied = var.traefik_proxied  # Usually false for dashboard
-  
-  tags = [
-    var.environment,
-    "terraform",
-    "promata"
-  ]
 }
 
 resource "cloudflare_record" "pgadmin" {
@@ -80,12 +56,6 @@ resource "cloudflare_record" "pgadmin" {
   type    = "A"
   ttl     = 1
   proxied = true
-  
-  tags = [
-    var.environment,
-    "terraform",
-    "promata"
-  ]
 }
 
 resource "cloudflare_record" "grafana" {
@@ -96,12 +66,6 @@ resource "cloudflare_record" "grafana" {
   type    = "A"
   ttl     = 1
   proxied = true
-  
-  tags = [
-    var.environment,
-    "terraform",
-    "promata"
-  ]
 }
 
 # Environment-specific subdomains
@@ -113,12 +77,6 @@ resource "cloudflare_record" "environment_subdomain" {
   type    = "A"
   ttl     = 1
   proxied = true
-  
-  tags = [
-    var.environment,
-    "terraform",
-    "promata"
-  ]
 }
 
 # Environment-specific API subdomains (api-dev, api-staging)
@@ -130,38 +88,29 @@ resource "cloudflare_record" "api_environment_subdomain" {
   type    = "A"
   ttl     = 1
   proxied = true
-  
-  tags = [
-    var.environment,
-    "terraform",
-    "promata",
-    "api"
-  ]
 }
 
-# SSL/TLS Configuration
-resource "cloudflare_zone_settings_override" "ssl_settings" {
-  count   = var.configure_ssl ? 1 : 0
-  zone_id = var.cloudflare_zone_id
-  
-  settings {
-    ssl                      = var.ssl_mode
-    always_use_https        = "on"
-    min_tls_version         = "1.2"
-    opportunistic_encryption = "on"
-    tls_1_3                 = "zrt"
-    brotli                  = "on"
-    
-    minify {
-      css  = "on"
-      js   = "on"  
-      html = "on"
-    }
-    
-    security_level = var.security_level
-    browser_check  = "on"
-  }
-}
+# SSL/TLS Configuration - DISABLED for free plan compatibility
+# resource "cloudflare_zone_settings_override" "ssl_settings" {
+#   count   = var.configure_ssl ? 1 : 0
+#   zone_id = var.cloudflare_zone_id
+#   
+#   settings {
+#     ssl                      = var.ssl_mode
+#     always_use_https        = "on"
+#     min_tls_version         = "1.2"
+#     tls_1_3                 = "on"
+#     
+#     minify {
+#       css  = "on"
+#       js   = "on"  
+#       html = "on"
+#     }
+#     
+#     security_level = var.security_level
+#     browser_check  = "on"
+#   }
+# }
 
 # Page Rules for optimization
 resource "cloudflare_page_rule" "cache_static_assets" {

@@ -171,7 +171,7 @@ extract_ssh_keys() {
     # Extract private key
     if terraform output -json ssh_private_key &>/dev/null; then
         log "Extracting SSH private key..."
-        terraform output -json ssh_private_key | jq -r '.value' > "$keys_dir/${ENVIRONMENT}-ssh-key"
+        terraform output ssh_private_key > "$keys_dir/${ENVIRONMENT}-ssh-key"
         chmod 600 "$keys_dir/${ENVIRONMENT}-ssh-key"
         success "SSH private key saved to: $keys_dir/${ENVIRONMENT}-ssh-key"
     else
@@ -181,7 +181,7 @@ extract_ssh_keys() {
     # Extract public key
     if terraform output -json ssh_public_key &>/dev/null; then
         log "Extracting SSH public key..."
-        terraform output -json ssh_public_key | jq -r '.value' > "$keys_dir/${ENVIRONMENT}-ssh-key.pub"
+        terraform output ssh_public_key > "$keys_dir/${ENVIRONMENT}-ssh-key.pub"
         chmod 644 "$keys_dir/${ENVIRONMENT}-ssh-key.pub"
         success "SSH public key saved to: $keys_dir/${ENVIRONMENT}-ssh-key.pub"
     else
@@ -211,21 +211,21 @@ create_ssh_config() {
 #        ssh -F $ssh_config worker-${ENVIRONMENT}
 
 Host manager-${ENVIRONMENT}
-    HostName $(terraform output -json swarm_manager_public_ip | jq -r '.value' 2>/dev/null || echo "IP_NOT_FOUND")
+    HostName $(terraform output swarm_manager_public_ip 2>/dev/null || echo "IP_NOT_FOUND")
     User ubuntu
     IdentityFile $keys_dir/${ENVIRONMENT}-ssh-key
     StrictHostKeyChecking no
     UserKnownHostsFile /dev/null
 
 Host worker-${ENVIRONMENT}
-    HostName $(terraform output -json swarm_worker_public_ip | jq -r '.value' 2>/dev/null || echo "IP_NOT_FOUND")
+    HostName $(terraform output swarm_worker_public_ip 2>/dev/null || echo "IP_NOT_FOUND")
     User ubuntu
     IdentityFile $keys_dir/${ENVIRONMENT}-ssh-key
     StrictHostKeyChecking no
     UserKnownHostsFile /dev/null
 
 Host swarm-${ENVIRONMENT}
-    HostName $(terraform output -json swarm_manager_public_ip | jq -r '.value' 2>/dev/null || echo "IP_NOT_FOUND")
+    HostName $(terraform output swarm_manager_public_ip 2>/dev/null || echo "IP_NOT_FOUND")
     User ubuntu
     IdentityFile $keys_dir/${ENVIRONMENT}-ssh-key
     StrictHostKeyChecking no

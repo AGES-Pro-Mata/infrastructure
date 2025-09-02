@@ -5,6 +5,7 @@ Este documento contém instruções detalhadas para adaptar esta infraestrutura 
 ## 📋 Pré-requisitos
 
 ### 1. Ferramentas Necessárias
+
 ```bash
 # Terraform (versão 1.8+)
 wget https://releases.hashicorp.com/terraform/1.8.0/terraform_1.8.0_linux_amd64.zip
@@ -25,6 +26,7 @@ sudo apt install -y make
 ```
 
 ### 2. Contas e Serviços
+
 - ✅ **Azure Subscription** ativa
 - ✅ **DockerHub Account** (para suas imagens)
 - ✅ **Cloudflare Account** (gratuito - opcional para DNS)
@@ -65,6 +67,7 @@ No seu repositório GitHub, vá em **Settings > Secrets and variables > Actions*
 | `ANSIBLE_VAULT_PASSWORD` | Uma senha forte | Para criptografar secrets (opcional) |
 
 **Exemplo do AZURE_CREDENTIALS:**
+
 ```json
 {
   "clientId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
@@ -79,6 +82,7 @@ No seu repositório GitHub, vá em **Settings > Secrets and variables > Actions*
 #### 3.1. Atualizar Imagens Docker
 
 Em `envs/dev/terraform.tfvars`:
+
 ```hcl
 # Substituir YOUR_DOCKERHUB_ORG pela sua organização
 backend_image = "SUA_ORG/pro-mata-backend-dev:latest"
@@ -89,6 +93,7 @@ migration_image = "SUA_ORG/pro-mata-migration-dev:latest"
 #### 3.2. Configurar Subscription ID
 
 Em `envs/dev/terraform.tfvars`:
+
 ```hcl
 # Substituir pelo seu Subscription ID
 azure_subscription_id = "sua-subscription-id-aqui"
@@ -97,6 +102,7 @@ azure_subscription_id = "sua-subscription-id-aqui"
 #### 3.3. Configurar Domínio (Opcional)
 
 Se você tem um domínio:
+
 ```hcl
 domain_name = "seudominio.com.br"
 # Configurações Cloudflare (se usar)
@@ -107,6 +113,7 @@ cloudflare_zone_id = "seu-zone-id-aqui"
 #### 3.4. Atualizar Nome do Projeto
 
 Em `envs/dev/terraform.tfvars`:
+
 ```hcl
 project_name = "seu-projeto"
 azure_resource_group = "seu-projeto-dev-rg"
@@ -115,6 +122,7 @@ azure_resource_group = "seu-projeto-dev-rg"
 ## 🚀 Deploy
 
 ### Deploy Local
+
 ```bash
 # Teste local (requer Azure CLI logado)
 make deploy ENV=dev
@@ -123,19 +131,21 @@ make deploy ENV=dev
 ### Deploy via GitHub Actions
 
 O deploy acontece automaticamente quando você:
+
 1. Fizer push para `main` ou `dev`
 2. Executar workflow manual em **Actions > Deploy Development Environment**
 
 ## 🌐 Configuração de DNS com Cloudflare (Opcional)
 
 ### Por que usar Cloudflare?
+
 - ✅ **Gratuito** para uso básico
 - ✅ **SSL automático**
 - ✅ **CDN global**
 - ✅ **Proteção DDoS**
 - ✅ **Cache inteligente**
 
-### Configuração:
+### Configuração
 
 1. **Criar conta no Cloudflare** (gratuito)
 
@@ -148,6 +158,7 @@ O deploy acontece automaticamente quando você:
    - Aguardar propagação (até 24h)
 
 4. **Obter credenciais do Cloudflare**
+
    ```bash
    # API Token (recomendado)
    # No painel Cloudflare: My Profile > API Tokens > Create Token
@@ -157,6 +168,7 @@ O deploy acontece automaticamente quando você:
    ```
 
 5. **Adicionar ao terraform.tfvars**
+
    ```hcl
    cloudflare_api_token = "seu-token-aqui"
    cloudflare_zone_id = "zone-id-do-seu-dominio"
@@ -184,10 +196,11 @@ terraform output
 ### URLs de Acesso (exemplo)
 
 Após o deploy bem-sucedido:
-- **Frontend**: https://seudominio.com.br
-- **API**: https://api.seudominio.com.br  
-- **Traefik Dashboard**: https://traefik.seudominio.com.br
-- **Grafana**: https://grafana.seudominio.com.br
+
+- **Frontend**: <https://seudominio.com.br>
+- **API**: <https://api.seudominio.com.br>
+- **Traefik Dashboard**: <https://traefik.seudominio.com.br>
+- **Grafana**: <https://grafana.seudominio.com.br>
 
 ## 🔒 Segurança
 
@@ -211,25 +224,29 @@ Após o deploy bem-sucedido:
 
 ### Problemas Comuns
 
-#### 1. "Storage account name already exists"
+#### 1. Storage account name already exists
+
 ```bash
 # Editar envs/dev/terraform.tfvars
 storage_account_name = "meuprojetodevstg$(date +%s | tail -c 6)"
 ```
 
 #### 2. "Subscription not authorized"
+
 ```bash
 # Verificar se Service Principal tem permissões corretas
 az role assignment list --assignee <client-id> --subscription <subscription-id>
 ```
 
 #### 3. "Docker images not found"
+
 ```bash
 # Verificar se as imagens existem no DockerHub
 docker pull SUA_ORG/pro-mata-backend-dev:latest
 ```
 
 #### 4. Pipeline falha
+
 ```bash
 # Verificar logs detalhados em GitHub Actions
 # Verificar se todos os secrets estão configurados
@@ -261,7 +278,7 @@ make backup ENV=dev
 
 ### Estrutura do Projeto
 
-```
+```plain
 infrastructure/
 ├── envs/
 │   └── dev/

@@ -82,8 +82,8 @@
 - name: Install Docker Python library
   pip:
     name:
-      - docker
-      - docker-compose
+      - docker>=6.0.0
+      - requests
     state: present
 
 - name: Create Docker log rotation
@@ -101,12 +101,12 @@
   debug:
     msg: "Docker installed: {{ docker_version_output.stdout }}"
 
-- name: Verify Docker service is running
-  command: docker info
-  register: docker_info_output
+- name: Test Docker functionality
+  command: docker run --rm hello-world
+  register: docker_test_output
   changed_when: false
   ignore_errors: yes
 
-- name: Display Docker service status
+- name: Display Docker test result
   debug:
-    msg: "Docker service is {{ 'running' if docker_info_output.rc == 0 else 'not accessible via API' }}"
+    msg: "Docker test: {{ 'successful' if docker_test_output.rc == 0 else 'failed - may need group membership refresh' }}"

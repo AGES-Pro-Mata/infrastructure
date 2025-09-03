@@ -58,7 +58,7 @@ get_terraform_outputs() {
     
     # Refresh state first (safe operation)
     log "Refreshing Terraform state..."
-    terraform refresh -auto-approve || warn "State refresh failed, continuing with existing state"
+    terraform refresh --auto-approve || warn "State refresh failed, continuing with existing state"
     
     # Check if state has resources
     if ! terraform show >/dev/null 2>&1; then

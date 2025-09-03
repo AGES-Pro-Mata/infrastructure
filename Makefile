@@ -133,15 +133,15 @@ update-dev: check-env ## Update development environment
 
 destroy-dev: ## Destroy development infrastructure
 	@echo "💥 Destroying dev infrastructure..."
-	@cd terraform/deployments/dev && terraform destroy -var-file=../../../envs/dev/terraform.tfvars -auto-approve
+	@cd terraform/deployments/dev && terraform destroy -var-file=../../../envs/dev/terraform.tfvars --auto-approve
 
 destroy-prod: ## Destroy production infrastructure
 	@echo "💥 Destroying prod infrastructure..."
-	@cd terraform/deployments/prod && terraform destroy -var-file=../../../envs/prod/terraform.tfvars -auto-approve
+	@cd terraform/deployments/prod && terraform destroy -var-file=../../../envs/prod/terraform.tfvars --auto-approve
 
 destroy-staging: ## Destroy staging infrastructure
 	@echo "💥 Destroying staging infrastructure..."
-	@cd terraform/deployments/staging && terraform destroy -var-file=../../../envs/staging/terraform.tfvars -auto-approve
+	@cd terraform/deployments/staging && terraform destroy -var-file=../../../envs/staging/terraform.tfvars --auto-approve
 
 ssh-setup: check-env ## Setup SSH access for environment
 	@echo "🔑 Setting up SSH access for $(ENV)..."

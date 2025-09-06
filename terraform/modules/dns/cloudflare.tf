@@ -15,7 +15,7 @@ resource "cloudflare_record" "main" {
   content = var.server_public_ip
   type    = "A"
   ttl     = 1
-  proxied = true
+  proxied = var.main_domain_proxied
 
   tags = [
     var.environment,
@@ -32,7 +32,7 @@ resource "cloudflare_record" "www" {
   content = var.server_public_ip
   type    = "A"
   ttl     = 1
-  proxied = true
+  proxied = var.dns_records_proxied
 
   tags = [
     var.environment,
@@ -48,7 +48,7 @@ resource "cloudflare_record" "api" {
   content = var.server_public_ip
   type    = "A"
   ttl     = 1
-  proxied = true
+  proxied = var.api_proxied
 
   tags = [
     var.environment,
@@ -80,7 +80,7 @@ resource "cloudflare_record" "pgadmin" {
   content = var.server_public_ip
   type    = "A"
   ttl     = 1
-  proxied = true
+  proxied = var.dns_records_proxied
 
   tags = [
     var.environment,
@@ -96,12 +96,63 @@ resource "cloudflare_record" "grafana" {
   content = var.server_public_ip
   type    = "A"
   ttl     = 1
-  proxied = true
+  proxied = var.dns_records_proxied
 
   tags = [
     var.environment,
     "terraform",
     "promata"
+  ]
+}
+
+resource "cloudflare_record" "prometheus" {
+  count   = var.create_dns_records ? 1 : 0
+  zone_id = var.cloudflare_zone_id
+  name    = "prometheus"
+  content = var.server_public_ip
+  type    = "A"
+  ttl     = 1
+  proxied = var.dns_records_proxied
+
+  tags = [
+    var.environment,
+    "terraform",
+    "promata",
+    "monitoring"
+  ]
+}
+
+resource "cloudflare_record" "metabase" {
+  count   = var.create_dns_records ? 1 : 0
+  zone_id = var.cloudflare_zone_id
+  name    = "metabase"
+  content = var.server_public_ip
+  type    = "A"
+  ttl     = 1
+  proxied = var.dns_records_proxied
+
+  tags = [
+    var.environment,
+    "terraform",
+    "promata",
+    "analytics"
+  ]
+}
+
+resource "cloudflare_record" "analytics" {
+  count   = var.create_dns_records ? 1 : 0
+  zone_id = var.cloudflare_zone_id
+  name    = "analytics"
+  content = var.server_public_ip
+  type    = "A"
+  ttl     = 1
+  proxied = var.dns_records_proxied
+
+  tags = [
+    var.environment,
+    "terraform",
+    "promata",
+    "umami"
   ]
 }
 
@@ -113,7 +164,7 @@ resource "cloudflare_record" "environment_subdomain" {
   content = var.server_public_ip
   type    = "A"
   ttl     = 1
-  proxied = true
+  proxied = var.dns_records_proxied
 
   tags = [
     var.environment,
@@ -130,7 +181,7 @@ resource "cloudflare_record" "api_environment_subdomain" {
   content = var.server_public_ip
   type    = "A"
   ttl     = 1
-  proxied = true
+  proxied = var.dns_records_proxied
 
   tags = [
     var.environment,

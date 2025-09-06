@@ -15,7 +15,7 @@ resource "cloudflare_record" "main" {
   content = var.server_public_ip
   type    = "A"
   ttl     = 1     # Auto TTL
-  proxied = true
+  proxied = var.main_domain_proxied
 }
 
 resource "cloudflare_record" "www" {
@@ -25,7 +25,7 @@ resource "cloudflare_record" "www" {
   content = var.server_public_ip
   type    = "A"
   ttl     = 1
-  proxied = true
+  proxied = var.dns_records_proxied
 }
 
 resource "cloudflare_record" "api" {
@@ -35,7 +35,7 @@ resource "cloudflare_record" "api" {
   content = var.server_public_ip
   type    = "A"
   ttl     = 1
-  proxied = true
+  proxied = var.api_proxied
 }
 
 resource "cloudflare_record" "traefik" {
@@ -55,7 +55,7 @@ resource "cloudflare_record" "pgadmin" {
   content = var.server_public_ip
   type    = "A"
   ttl     = 1
-  proxied = true
+  proxied = var.dns_records_proxied
 }
 
 resource "cloudflare_record" "grafana" {
@@ -65,7 +65,37 @@ resource "cloudflare_record" "grafana" {
   content = var.server_public_ip
   type    = "A"
   ttl     = 1
-  proxied = true
+  proxied = var.dns_records_proxied
+}
+
+resource "cloudflare_record" "prometheus" {
+  count   = var.create_dns_records ? 1 : 0
+  zone_id = var.cloudflare_zone_id
+  name    = "prometheus"
+  content = var.server_public_ip
+  type    = "A"
+  ttl     = 1
+  proxied = var.dns_records_proxied
+}
+
+resource "cloudflare_record" "metabase" {
+  count   = var.create_dns_records ? 1 : 0
+  zone_id = var.cloudflare_zone_id
+  name    = "metabase"
+  content = var.server_public_ip
+  type    = "A"
+  ttl     = 1
+  proxied = var.dns_records_proxied
+}
+
+resource "cloudflare_record" "analytics" {
+  count   = var.create_dns_records ? 1 : 0
+  zone_id = var.cloudflare_zone_id
+  name    = "analytics"
+  content = var.server_public_ip
+  type    = "A"
+  ttl     = 1
+  proxied = var.dns_records_proxied
 }
 
 # Environment-specific subdomains
@@ -76,7 +106,7 @@ resource "cloudflare_record" "environment_subdomain" {
   content = var.server_public_ip
   type    = "A"
   ttl     = 1
-  proxied = true
+  proxied = var.dns_records_proxied
 }
 
 # Environment-specific API subdomains (api-dev, api-staging)
@@ -87,7 +117,7 @@ resource "cloudflare_record" "api_environment_subdomain" {
   content = var.server_public_ip
   type    = "A"
   ttl     = 1
-  proxied = true
+  proxied = var.dns_records_proxied
 }
 
 # SSL/TLS Configuration - DISABLED for free plan compatibility

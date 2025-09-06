@@ -3,13 +3,13 @@
 variable "resource_group_name" {
   description = "The name of the resource group"
   type        = string
-  default     = "rg-myproject-dev"
+  default     = "rg-pro-mata-dev"
 }
 
 variable "azure_resource_group" {
   description = "Azure resource group name (alias for resource_group_name)"
   type        = string
-  default     = "rg-myproject-dev"
+  default     = "rg-pro-mata-dev"
 }
 
 variable "location" {
@@ -27,7 +27,7 @@ variable "environment" {
 variable "project_name" {
   description = "Project name"
   type        = string
-  default     = "myproject"
+  default     = "pro-mata"
 }
 
 variable "vm_size" {
@@ -41,7 +41,7 @@ variable "vm_size" {
 variable "storage_account_name" {
   description = "Name of the storage account (must be globally unique)"
   type        = string
-  default     = "myprojectdevstore"
+  default     = "promatadevstg"
 
   validation {
     condition     = can(regex("^[a-z0-9]{3,24}$", var.storage_account_name))
@@ -59,10 +59,10 @@ variable "common_tags" {
   description = "Common tags for all resources"
   type        = map(string)
   default = {
-    Project     = "myproject"
+    Project     = "pro-mata"
     Environment = "dev"
     ManagedBy   = "terraform"
-    Owner       = "myproject-team"
+    Owner       = "pro-mata-team"
   }
 }
 
@@ -70,32 +70,32 @@ variable "common_tags" {
 variable "postgres_db" {
   description = "PostgreSQL database name"
   type        = string
-  default     = "myproject_dev"
+  default     = "promata_dev"
 }
 
 variable "postgres_user" {
   description = "PostgreSQL username"
   type        = string
-  default     = "myproject"
+  default     = "promata"
 }
 
 # Application configuration
 variable "domain_name" {
   description = "Domain name for the application"
   type        = string
-  default     = "dev.example.com"
+  default     = "promata.com.br"
 }
 
 variable "backend_image" {
   description = "Backend Docker image"
   type        = string
-  default     = "YOUR_DOCKERHUB_ORG/myproject-backend-dev:latest"
+  default     = "norohim/pro-mata-backend-dev:latest"
 }
 
 variable "frontend_image" {
   description = "Frontend Docker image"
   type        = string
-  default     = "YOUR_DOCKERHUB_ORG/myproject-frontend-dev:latest"
+  default     = "norohim/pro-mata-frontend-dev:latest"
 }
 
 variable "backend_replicas" {
@@ -151,5 +151,5 @@ variable "monitoring_enabled" {
 variable "migration_image" {
   description = "Migration Docker image"
   type        = string
-  default     = "YOUR_DOCKERHUB_ORG/myproject-migration-dev:latest"
+  default     = "norohim/pro-mata-migration-dev:latest"
 }

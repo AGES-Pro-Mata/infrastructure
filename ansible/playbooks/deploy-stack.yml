@@ -23,6 +23,94 @@
         - /opt/promata/logs
         - /opt/promata/data
 
+    # Docker Swarm Setup
+    - name: Disable live-restore for swarm mode
+      lineinfile:
+        path: /etc/docker/daemon.json
+        regexp: '"live-restore": true'
+        line: '  "live-restore": false'
+        backup: yes
+      register: docker_config_updated
+      
+    - name: Restart Docker if config changed
+      systemd:
+        name: docker
+        state: restarted
+      when: docker_config_updated.changed
+      
+    - name: Wait for Docker to restart
+      pause:
+        seconds: 10
+      when: docker_config_updated.changed
+
+    - name: Check if Docker Swarm is already initialized
+      command: docker info --format '{{ "{{.Swarm.LocalNodeState}}" }}'
+      register: swarm_status
+      changed_when: false
+      
+    - name: Initialize Docker Swarm
+      command: docker swarm init --advertise-addr {{ ansible_default_ipv4.address }}
+      register: swarm_init
+      when: swarm_status.stdout != "active"
+      
+    - name: Get worker join token
+      command: docker swarm join-token worker -q
+      register: worker_join_token
+      when: swarm_status.stdout != "active"
+      
+    - name: Add database node labels to manager
+      command: docker node update --label-add database.primary=true {{ ansible_hostname }}
+      when: swarm_status.stdout != "active"
+
+- name: Join workers to swarm
+  hosts: workers
+  become: true
+  gather_facts: true
+  
+  tasks:
+    - name: Disable live-restore for swarm mode on worker
+      lineinfile:
+        path: /etc/docker/daemon.json
+        regexp: '"live-restore": true'
+        line: '  "live-restore": false'
+        backup: yes
+      register: docker_config_updated_worker
+      
+    - name: Restart Docker on worker if config changed
+      systemd:
+        name: docker
+        state: restarted
+      when: docker_config_updated_worker.changed
+      
+    - name: Wait for Docker to restart on worker
+      pause:
+        seconds: 10
+      when: docker_config_updated_worker.changed
+
+    - name: Check if worker is already in swarm
+      command: docker info --format '{{ "{{.Swarm.LocalNodeState}}" }}'
+      register: worker_swarm_status
+      changed_when: false
+      
+    - name: Join worker to swarm
+      command: docker swarm join --token {{ hostvars[groups['managers'][0]]['worker_join_token']['stdout'] }} {{ hostvars[groups['managers'][0]]['ansible_default_ipv4']['address'] }}:2377
+      when: worker_swarm_status.stdout != "active" and hostvars[groups['managers'][0]]['worker_join_token'] is defined
+
+- name: Complete swarm setup and deploy stack
+  hosts: managers
+  become: true
+  gather_facts: true
+  
+  vars_files:
+    - "../inventory/{{ env | default('dev') }}/group_vars/all.yml"
+  
+  tasks:
+    - name: Add database replica label to worker nodes
+      command: docker node update --label-add database.replica=true {{ item }}
+      loop: "{{ groups['workers'] | map('extract', hostvars, 'ansible_hostname') | list }}"
+      when: groups['workers'] is defined
+      ignore_errors: yes
+
     - name: Create Docker networks
       docker_network:
         name: "{{ item }}"

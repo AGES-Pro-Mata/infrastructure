@@ -93,11 +93,11 @@ services:
         max_attempts: 3
       resources:
         limits:
-          memory: 1.5G
-          cpus: '1.0'
+          memory: 800M
+          cpus: '0.8'
         reservations:
-          memory: 1G
-          cpus: '0.5'
+          memory: 512M
+          cpus: '0.4'
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
@@ -134,11 +134,11 @@ services:
         max_attempts: 3
       resources:
         limits:
-          memory: 1G
-          cpus: '0.75'
-        reservations:
-          memory: 512M
+          memory: 600M
           cpus: '0.5'
+        reservations:
+          memory: 384M
+          cpus: '0.25'
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 15s
@@ -489,11 +489,6 @@ services:
         reservations:
           memory: 256M
           cpus: '0.25'
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
       labels:
         - traefik.enable=true
         - traefik.docker.network=promata_public
@@ -502,6 +497,11 @@ services:
         - traefik.http.routers.metabase.tls.certresolver=letsencrypt
         - traefik.http.routers.metabase.tls=true
         - traefik.http.services.metabase.loadbalancer.server.port=3000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   pgadmin:
     image: dpage/pgadmin4:latest

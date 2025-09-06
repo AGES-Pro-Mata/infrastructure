@@ -101,9 +101,11 @@
       delegate_to: "{{ groups['managers'][0] }}"
       run_once: true
 
-    - name: Check if worker is already in a swarm
-      docker_swarm_info:
-      register: worker_swarm_info
+    - name: Check if worker is already in a swarm (using shell command)
+      shell: docker info --format '{{ '{{' }}.Swarm.LocalNodeState{{ '}}' }}'
+      register: worker_swarm_status
+      changed_when: false
+      failed_when: false
 
     - name: Join workers to Swarm
       docker_swarm:
@@ -111,7 +113,7 @@
         join_token: "{{ swarm_info.swarm_facts.JoinTokens.Worker }}"
         remote_addrs:
           - "{{ hostvars[groups['managers'][0]]['private_ip'] }}:2377"
-      when: not worker_swarm_info.docker_swarm_active
+      when: worker_swarm_status.stdout != "active"
     
     - name: Wait for worker node to be available in swarm
       shell: docker node ls --format "{{ '{{' }}.Hostname{{ '}}' }}" | grep -q "{{ ansible_hostname }}"

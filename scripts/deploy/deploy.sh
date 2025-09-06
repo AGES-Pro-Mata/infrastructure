@@ -79,27 +79,8 @@ validate_environment() {
     log "Environment dir: $ENV_DIR"
     log "Terraform dir: $TF_DIR"
     
-    # Debug: List what's actually available and handle terraform directory creation
-    log "Listing terraform directory structure:"
-    
-    # Check for terraform directory or terraform config archive
-    if [[ ! -d "$PROJECT_ROOT/terraform" ]]; then
-        warn "Terraform configuration directory not found"
-        
-        # Try to extract if terraform.zip exists (config archive, not binary)
-        if [[ -f "$PROJECT_ROOT/terraform.zip" ]]; then
-            log "Found terraform.zip, attempting extraction..."
-            cd "$PROJECT_ROOT"
-            if unzip -q terraform.zip; then
-                success "✅ Successfully extracted terraform configuration from terraform.zip"
-            else
-                error "❌ Failed to extract terraform.zip"
-                exit 1
-            fi
-        else
-            warn "No terraform.zip archive found for configuration extraction"
-        fi
-    fi
+    # Debug: List what's actually available
+    log "Checking terraform directory structure:"
     
     if [[ -d "$PROJECT_ROOT/terraform" ]]; then
         log "✅ Terraform directory found at: $PROJECT_ROOT/terraform"

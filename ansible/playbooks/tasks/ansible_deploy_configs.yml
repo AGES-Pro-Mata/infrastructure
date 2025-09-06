@@ -16,7 +16,9 @@
     - /opt/promata/configs/traefik
     - /opt/promata/configs/pgadmin
 
-- name: Deploy PostgreSQL primary configuration
+# PostgreSQL configuration now baked into infrastructure database images
+# Keeping for potential override/customization scenarios
+- name: Deploy PostgreSQL primary configuration (for overrides/customization)
   template:
     src: "{{ item.src }}"
     dest: "/opt/promata/configs/postgresql/primary/{{ item.dest }}"
@@ -26,25 +28,27 @@
   loop:
     - { src: "postgresql.conf.j2", dest: "postgresql.conf" }
     - { src: "pg_hba.conf.j2", dest: "pg_hba.conf" }
+  when: deploy_custom_postgresql_config | default(false)
 
-- name: Deploy PostgreSQL initialization script
+# PostgreSQL initialization script (also handled by infrastructure database images)
+- name: Deploy PostgreSQL initialization script (for custom setups)
   template:
     src: init-replication.sh.j2
     dest: /opt/promata/configs/postgresql/init-replication.sh
     mode: '0755'
     owner: "{{ ansible_user }}"
     group: "{{ ansible_user }}"
+  when: deploy_custom_postgresql_config | default(false)
 
-- name: Deploy PgBouncer configuration
-  template:
-    src: "{{ item.src }}"
-    dest: "/opt/promata/configs/pgbouncer/{{ item.dest }}"
-    mode: '0644'
+# PgBouncer configuration now handled by infrastructure database images
+# Keeping directory structure for potential future use
+- name: Create PgBouncer config directory (for future use)
+  file:
+    path: "/opt/promata/configs/pgbouncer"
+    state: directory
     owner: "{{ ansible_user }}"
     group: "{{ ansible_user }}"
-  loop:
-    - { src: "pgbouncer.ini.j2", dest: "pgbouncer.ini" }
-    - { src: "userlist.txt.j2", dest: "userlist.txt" }
+    mode: '0755'
 
 - name: Deploy PgAdmin servers configuration
   template:

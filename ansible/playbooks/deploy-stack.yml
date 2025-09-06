@@ -19,13 +19,33 @@
       loop:
         - /opt/promata/stacks
         - /opt/promata/configs
+        - /opt/promata/configs/prometheus
         - /opt/promata/logs
         - /opt/promata/data
 
-    - name: Copy production stack file  
+    - name: Create Docker networks
+      docker_network:
+        name: "{{ item }}"
+        driver: overlay
+        scope: swarm
+        attachable: true
+      loop:
+        - promata_public
+        - promata_internal
+        - promata_database
+
+    - name: Copy stack file based on environment
       copy:
-        src: "../../docker/stacks/promata-production.yml"
-        dest: "/opt/promata/stacks/promata-production.yml"
+        src: "../../docker/stacks/{{ stack_file | default('dev-complete.yml') }}"
+        dest: "/opt/promata/stacks/{{ stack_file | default('dev-complete.yml') }}"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0644'
+
+    - name: Copy Prometheus configuration
+      copy:
+        src: "../../docker/configs/prometheus/prometheus.yml"
+        dest: "/opt/promata/configs/prometheus/prometheus.yml"
         owner: "{{ ansible_user }}"
         group: "{{ ansible_user }}"
         mode: '0644'
@@ -38,11 +58,11 @@
         group: "{{ ansible_user }}"
         mode: '0600'
 
-    - name: Deploy Pro-Mata production stack
+    - name: Deploy Pro-Mata stack
       shell: |
         cd /opt/promata
         export $(cat .env | grep -v '^#' | grep -v '^$' | xargs)
-        docker stack deploy -c stacks/promata-production.yml promata-production --with-registry-auth
+        docker stack deploy -c stacks/{{ stack_file | default('dev-complete.yml') }} promata-{{ env | default('dev') }} --with-registry-auth
       register: stack_deploy_result
       
     - name: Display stack deployment result
@@ -55,7 +75,7 @@
         prompt: "Waiting for Pro-Mata services to initialize..."
 
     - name: Verify stack deployment
-      command: docker service ls --filter "label=com.docker.stack.namespace=promata-production"
+      command: docker service ls --filter "label=com.docker.stack.namespace=promata-{{ env | default('dev') }}"
       register: stack_services
       
     - name: Display deployed services
@@ -63,7 +83,7 @@
         var: stack_services.stdout_lines
 
     - name: Check critical services health
-      command: docker service ps promata-production_{{ item }} --no-trunc
+      command: docker service ps promata-{{ env | default('dev') }}_{{ item }} --no-trunc
       register: service_status
       loop:
         - traefik

@@ -497,10 +497,22 @@ main() {
     log "  Terraform dir: $TF_DIR"
     
     if [[ ! -d "$TF_DIR" ]]; then
-        error "❌ CRITICAL: Terraform directory still not found after all attempts: $TF_DIR"
+        error "❌ CRITICAL: Terraform directory not found: $TF_DIR"
         error "Available directories in project root:"
         ls -la "$PROJECT_ROOT/" 2>/dev/null || ls -la
-        exit 1
+        
+        # For now, continue with Ansible-only deployment for dev environment
+        if [[ "$ENVIRONMENT" == "dev" ]]; then
+            warn "⚠️ Terraform directory missing. Using Ansible-only deployment for dev environment."
+            warn "This is a temporary workaround. The terraform directory should be added to the repository."
+            # Set flag to skip terraform deployment
+            SKIP_TERRAFORM=true
+        else
+            error "❌ Terraform is required for $ENVIRONMENT environment"
+            exit 1
+        fi
+    else
+        SKIP_TERRAFORM=false
     fi
     
     if [[ ! -d "$ENV_DIR" ]]; then
@@ -513,15 +525,28 @@ main() {
     success "✅ Path verification passed"
     
     validate_environment
-    deploy_terraform
-    setup_ssh_access
+    
+    if [[ "$SKIP_TERRAFORM" != "true" ]]; then
+        deploy_terraform
+        setup_ssh_access
+    else
+        warn "⚠️ Skipping Terraform deployment (directory not found)"
+        warn "⚠️ Skipping SSH setup (no Terraform outputs available)"
+    fi
+    
     deploy_ansible
     
-    success "✅ Full deployment completed for $ENVIRONMENT!"
-    log "Infrastructure should be accessible according to your DNS configuration"
-    log "SSH keys have been saved to: $PROJECT_ROOT/ssh-keys/"
-    log "Run: source $PROJECT_ROOT/ssh-keys/setup-ssh.sh"
-    log "Then use: ssh -F $PROJECT_ROOT/ssh-keys/ssh-config manager-dev"
+    if [[ "$SKIP_TERRAFORM" == "true" ]]; then
+        warn "⚠️ Deployment completed with Ansible-only (Terraform skipped)"
+        warn "⚠️ Note: Infrastructure resources may need to be created manually"
+        warn "⚠️ SSH keys not available without Terraform deployment"
+    else
+        success "✅ Full deployment completed for $ENVIRONMENT!"
+        log "Infrastructure should be accessible according to your DNS configuration"
+        log "SSH keys have been saved to: $PROJECT_ROOT/ssh-keys/"
+        log "Run: source $PROJECT_ROOT/ssh-keys/setup-ssh.sh"
+        log "Then use: ssh -F $PROJECT_ROOT/ssh-keys/ssh-config manager-dev"
+    fi
 }
 
 # Setup SSH access after deployment

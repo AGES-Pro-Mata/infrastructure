@@ -138,18 +138,26 @@ jobs:
 
       - name: Setup Tools
         run: |
+          # Install required packages
+          sudo apt update
+          sudo apt install -y software-properties-common make unzip curl
+          
           # Install Terraform
-          wget https://releases.hashicorp.com/terraform/${{ env.TERRAFORM_VERSION }}/terraform_${{ env.TERRAFORM_VERSION }}_linux_amd64.zip -O terraform.zip
-          unzip -o terraform.zip || true
+          wget https://releases.hashicorp.com/terraform/${{ env.TERRAFORM_VERSION }}/terraform_${{ env.TERRAFORM_VERSION }}_linux_amd64.zip -O terraform-binary.zip
+          unzip -o terraform-binary.zip || true
           sudo rm -rf /usr/local/bin/terraform 2>/dev/null || true
           sudo mv terraform /usr/local/bin/
           chmod +x /usr/local/bin/terraform
           
-          # Install Ansible and Make
-          sudo apt update
-          sudo apt install -y software-properties-common make
+          # Install Ansible
           sudo add-apt-repository --yes --update ppa:ansible/ansible
           sudo apt install -y ansible
+          
+          # Extract terraform directory if it exists as zip
+          if [ -f "terraform.zip" ]; then
+            echo "📦 Extracting terraform.zip..."
+            unzip -o terraform.zip
+          fi
 
       - name: Azure Login
         uses: azure/login@v2

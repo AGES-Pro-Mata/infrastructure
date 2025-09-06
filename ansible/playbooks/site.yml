@@ -140,8 +140,10 @@
   
   tasks:
     - name: Deploy complete Pro-Mata stack
-      command: docker stack deploy --compose-file /opt/promata/stacks/promata-complete.yml promata-complete
-      environment: "{{ stack_environment }}"
+      shell: |
+        cd /opt/promata
+        export $(cat .env | grep -v '^#' | grep -v '^$' | xargs)
+        docker stack deploy --compose-file /opt/promata/stacks/promata-complete.yml promata-complete
       register: stack_deploy
       changed_when: stack_deploy.rc == 0
       tags: [deploy, complete]

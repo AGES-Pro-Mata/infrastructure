@@ -29,8 +29,11 @@ init: check-env ## Initialize environment
 	@./scripts/setup/init-environment.sh $(ENV)
 
 deploy: check-env ## Deploy infrastructure
-	@echo "🚀 Deploying $(ENV) environment..."
-	@./scripts/deploy/deploy.sh $(ENV)
+	@echo "🚀 Deploying $(ENV) environment with dev-complete stack..."
+	@ansible-playbook -i $(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml \
+		-e @$(ENV_DIR)/ansible-vars.yml \
+		-e stack_file=dev-complete.yml \
+		$(ANSIBLE_DIR)/playbooks/deploy-stack.yml
 
 deploy-terraform: check-env ## Deploy only Terraform
 	@echo "🏗️  Deploying Terraform for $(ENV)..."
@@ -42,7 +45,8 @@ deploy-ansible: check-env ## Deploy only Ansible
 	@echo "🔧 Deploying Ansible for $(ENV)..."
 	@ansible-playbook -i $(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml \
 		-e @$(ENV_DIR)/ansible-vars.yml \
-		$(ANSIBLE_DIR)/playbooks/site.yml
+		-e stack_file=dev-complete.yml \
+		$(ANSIBLE_DIR)/playbooks/deploy-stack.yml
 
 validate: check-env ## Validate infrastructure
 	@echo "🔍 Validating $(ENV) environment..."
@@ -107,8 +111,11 @@ deploy-automated: check-env ## Automated deployment for CI/CD
 	@./scripts/deploy/deploy.sh $(ENV)
 
 stacks-deploy: check-env ## Deploy only application stacks
-	@echo "📦 Deploying application stacks for $(ENV)..."
-	@./scripts/deploy/deploy-stacks.sh $(ENV)
+	@echo "📦 Deploying dev-complete stack for $(ENV)..."
+	@ansible-playbook -i $(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml \
+		-e @$(ENV_DIR)/ansible-vars.yml \
+		-e stack_file=dev-complete.yml \
+		$(ANSIBLE_DIR)/playbooks/deploy-stack.yml
 
 health: check-env ## Health check for environment
 	@echo "🏥 Running health checks for $(ENV)..."
@@ -128,8 +135,11 @@ show-deployment-info: check-env ## Show deployment information
 	fi
 
 update-dev: check-env ## Update development environment
-	@echo "🔄 Updating $(ENV) environment..."
-	@./scripts/deploy/deploy-stacks.sh $(ENV)
+	@echo "🔄 Updating $(ENV) environment with dev-complete stack..."
+	@ansible-playbook -i $(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml \
+		-e @$(ENV_DIR)/ansible-vars.yml \
+		-e stack_file=dev-complete.yml \
+		$(ANSIBLE_DIR)/playbooks/deploy-stack.yml
 
 destroy-dev: ## Destroy development infrastructure
 	@echo "💥 Destroying dev infrastructure..."

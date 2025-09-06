@@ -1,0 +1,417 @@
+# Pro-Mata Development Complete Stack
+# Comprehensive development environment with monitoring, analytics, and HA database
+version: "3.8"
+
+services:
+  # === REVERSE PROXY & ROUTING ===
+  traefik:
+    image: traefik:v3.0
+    command:
+      - --api.dashboard=true
+      - --api.debug=true
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --providers.docker=true
+      - --providers.docker.swarmMode=true
+      - --providers.docker.exposedbydefault=false
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+      - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.letsencrypt.acme.caserver=${ACME_CA_SERVER:-https://acme-staging-v02.api.letsencrypt.org/directory}
+      - --metrics.prometheus=true
+      - --metrics.prometheus.addrouterslabels=true
+      - --global.sendanonymoususage=false
+    ports:
+      - target: 80
+        published: 80
+        mode: host
+      - target: 443
+        published: 443
+        mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_letsencrypt:/letsencrypt
+    networks:
+      - promata_public
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
+      labels:
+        - traefik.enable=true
+        - traefik.docker.network=promata_public
+        - traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN_NAME}`)
+        - traefik.http.routers.traefik.entrypoints=websecure
+        - traefik.http.routers.traefik.tls.certresolver=letsencrypt
+        - traefik.http.services.traefik.loadbalancer.server.port=8080
+
+  # === DATABASE CLUSTER ===
+  postgres-primary:
+    image: norohim/pro-mata-database-infrastructure:latest
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_REPLICATION_USER=${POSTGRES_REPLICATION_USER}
+      - POSTGRES_REPLICATION_PASSWORD=${POSTGRES_REPLICATION_PASSWORD}
+      - PGUSER=${POSTGRES_USER}
+      - POSTGRES_INITDB_ARGS=--auth-host=md5
+      - POSTGRES_HOST_AUTH_METHOD=md5
+      - POSTGRES_ROLE=primary
+    volumes:
+      - postgres_primary_data:/var/lib/postgresql/data
+      - postgres_config:/etc/postgresql
+    networks:
+      - promata_database
+    deploy:
+      placement:
+        constraints:
+          - node.labels.database.primary == true
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-replica:
+    image: norohim/pro-mata-database-infrastructure:latest
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_REPLICATION_USER=${POSTGRES_REPLICATION_USER}
+      - POSTGRES_REPLICATION_PASSWORD=${POSTGRES_REPLICATION_PASSWORD}
+      - PGUSER=${POSTGRES_USER}
+      - POSTGRES_HOST_AUTH_METHOD=md5
+      - POSTGRES_ROLE=replica
+      - POSTGRES_PRIMARY_HOST=postgres-primary
+      - POSTGRES_PRIMARY_PORT=5432
+    volumes:
+      - postgres_replica_data:/var/lib/postgresql/data
+      - postgres_config:/etc/postgresql
+    networks:
+      - promata_database
+    depends_on:
+      - postgres-primary
+    deploy:
+      placement:
+        constraints:
+          - node.labels.database.replica == true
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 3
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # === CONNECTION POOLING ===
+  pgbouncer:
+    image: pgbouncer/pgbouncer:latest
+    environment:
+      - DATABASES_HOST=postgres-primary
+      - DATABASES_PORT=5432
+      - DATABASES_USER=${POSTGRES_USER}
+      - DATABASES_PASSWORD=${POSTGRES_PASSWORD}
+      - DATABASES_DBNAME=${POSTGRES_DB}
+      - POOL_MODE=transaction
+      - SERVER_RESET_QUERY=DISCARD ALL
+      - MAX_CLIENT_CONN=100
+      - DEFAULT_POOL_SIZE=20
+      - SERVER_LIFETIME=3600
+      - SERVER_IDLE_TIMEOUT=600
+      - LISTEN_ADDR=0.0.0.0
+      - LISTEN_PORT=6432
+    networks:
+      - promata_database
+      - promata_internal
+    depends_on:
+      - postgres-primary
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+
+  # === APPLICATION SERVICES ===
+  frontend:
+    image: norohim/pro-mata-frontend-dev:latest
+    environment:
+      - NODE_ENV=production
+      - VITE_API_URL=https://api.${DOMAIN_NAME}
+      - VITE_APP_ENV=development
+      - VITE_UMAMI_URL=https://analytics.${DOMAIN_NAME}
+      - VITE_UMAMI_WEBSITE_ID=${UMAMI_WEBSITE_ID}
+      - VITE_ENABLE_ANALYTICS=true
+    networks:
+      - promata_public
+      - promata_internal
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
+      labels:
+        - traefik.enable=true
+        - traefik.docker.network=promata_public
+        - traefik.http.routers.frontend.rule=Host(`${DOMAIN_NAME}`)
+        - traefik.http.routers.frontend.entrypoints=websecure
+        - traefik.http.routers.frontend.tls.certresolver=letsencrypt
+        - traefik.http.services.frontend.loadbalancer.server.port=8080
+        - traefik.http.services.frontend.loadbalancer.healthcheck.path=/health
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  backend:
+    image: norohim/pro-mata-backend-dev:latest
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pgbouncer:6432/${POSTGRES_DB}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES_IN=1h
+      - CORS_ORIGIN=https://${DOMAIN_NAME}
+      - UMAMI_URL=https://analytics.${DOMAIN_NAME}
+      - UMAMI_WEBSITE_ID=${UMAMI_WEBSITE_ID}
+      - UMAMI_API_KEY=${UMAMI_API_KEY}
+      - ENABLE_ANALYTICS=true
+    networks:
+      - promata_public
+      - promata_internal
+      - promata_database
+    depends_on:
+      - pgbouncer
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+      labels:
+        - traefik.enable=true
+        - traefik.docker.network=promata_public
+        - traefik.http.routers.backend.rule=Host(`api.${DOMAIN_NAME}`)
+        - traefik.http.routers.backend.entrypoints=websecure
+        - traefik.http.routers.backend.tls.certresolver=letsencrypt
+        - traefik.http.services.backend.loadbalancer.server.port=3000
+        - traefik.http.services.backend.loadbalancer.healthcheck.path=/health
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # === MONITORING STACK ===
+  node-exporter:
+    image: prom/node-exporter:latest
+    command:
+      - '--path.rootfs=/host'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    volumes:
+      - /:/host:ro,rslave
+    networks:
+      - promata_internal
+    deploy:
+      mode: global
+      restart_policy:
+        condition: on-failure
+
+  prometheus:
+    image: prom/prometheus:latest
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    volumes:
+      - prometheus_config:/etc/prometheus
+      - prometheus_data:/prometheus
+    networks:
+      - promata_internal
+      - promata_public
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      labels:
+        - traefik.enable=true
+        - traefik.docker.network=promata_public
+        - traefik.http.routers.prometheus.rule=Host(`prometheus.${DOMAIN_NAME}`)
+        - traefik.http.routers.prometheus.entrypoints=websecure
+        - traefik.http.routers.prometheus.tls.certresolver=letsencrypt
+        - traefik.http.services.prometheus.loadbalancer.server.port=9090
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_DOMAIN=grafana.${DOMAIN_NAME}
+      - GF_SERVER_ROOT_URL=https://grafana.${DOMAIN_NAME}
+      - GF_DATABASE_TYPE=postgres
+      - GF_DATABASE_HOST=pgbouncer:6432
+      - GF_DATABASE_NAME=${POSTGRES_DB}
+      - GF_DATABASE_USER=${POSTGRES_USER}
+      - GF_DATABASE_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - promata_internal
+      - promata_public
+      - promata_database
+    depends_on:
+      - prometheus
+      - pgbouncer
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      labels:
+        - traefik.enable=true
+        - traefik.docker.network=promata_public
+        - traefik.http.routers.grafana.rule=Host(`grafana.${DOMAIN_NAME}`)
+        - traefik.http.routers.grafana.entrypoints=websecure
+        - traefik.http.routers.grafana.tls.certresolver=letsencrypt
+        - traefik.http.services.grafana.loadbalancer.server.port=3000
+
+  # === ANALYTICS ===
+  umami:
+    image: ghcr.io/umami-software/umami:postgresql-latest
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pgbouncer:6432/${POSTGRES_DB}
+      - DATABASE_TYPE=postgresql
+      - APP_SECRET=${UMAMI_APP_SECRET}
+      - HOSTNAME=0.0.0.0
+      - PORT=3000
+    networks:
+      - promata_database
+      - promata_public
+    depends_on:
+      - pgbouncer
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      labels:
+        - traefik.enable=true
+        - traefik.docker.network=promata_public
+        - traefik.http.routers.umami.rule=Host(`analytics.${DOMAIN_NAME}`)
+        - traefik.http.routers.umami.entrypoints=websecure
+        - traefik.http.routers.umami.tls.certresolver=letsencrypt
+        - traefik.http.services.umami.loadbalancer.server.port=3000
+
+  metabase:
+    image: metabase/metabase:latest
+    environment:
+      - MB_DB_TYPE=postgres
+      - MB_DB_DBNAME=${POSTGRES_DB}
+      - MB_DB_PORT=6432
+      - MB_DB_USER=${POSTGRES_USER}
+      - MB_DB_PASS=${POSTGRES_PASSWORD}
+      - MB_DB_HOST=pgbouncer
+      - MB_ENCRYPTION_SECRET_KEY=${METABASE_SECRET_KEY}
+      - JAVA_OPTS=-Xmx1g
+    volumes:
+      - metabase_data:/metabase-data
+    networks:
+      - promata_database
+      - promata_public
+    depends_on:
+      - pgbouncer
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+      labels:
+        - traefik.enable=true
+        - traefik.docker.network=promata_public
+        - traefik.http.routers.metabase.rule=Host(`metabase.${DOMAIN_NAME}`)
+        - traefik.http.routers.metabase.entrypoints=websecure
+        - traefik.http.routers.metabase.tls.certresolver=letsencrypt
+        - traefik.http.services.metabase.loadbalancer.server.port=3000
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_EMAIL:-admin@promata.dev}
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_PASSWORD}
+      - PGADMIN_CONFIG_SERVER_MODE=True
+      - PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED=False
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - promata_database
+      - promata_public
+    depends_on:
+      - pgbouncer
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+      labels:
+        - traefik.enable=true
+        - traefik.docker.network=promata_public
+        - traefik.http.routers.pgadmin.rule=Host(`pgadmin.${DOMAIN_NAME}`)
+        - traefik.http.routers.pgadmin.entrypoints=websecure
+        - traefik.http.routers.pgadmin.tls.certresolver=letsencrypt
+        - traefik.http.services.pgadmin.loadbalancer.server.port=80
+
+networks:
+  promata_public:
+    external: true
+  promata_internal:
+    external: true
+  promata_database:
+    external: true
+
+volumes:
+  postgres_primary_data:
+    driver: local
+  postgres_replica_data:
+    driver: local
+  postgres_config:
+    driver: local
+  traefik_letsencrypt:
+    driver: local
+  prometheus_data:
+    driver: local
+  prometheus_config:
+    driver: local
+  grafana_data:
+    driver: local
+  metabase_data:
+    driver: local
+  pgadmin_data:
+    driver: local

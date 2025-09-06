@@ -77,6 +77,24 @@ variable "traefik_proxied" {
   default     = false # Usually DNS only for dashboard
 }
 
+variable "dns_records_proxied" {
+  description = "Whether to proxy DNS records through Cloudflare (orange cloud vs grey cloud)"
+  type        = bool
+  default     = false # Default to grey cloud for Traefik SSL termination
+}
+
+variable "main_domain_proxied" {
+  description = "Whether to proxy main domain through Cloudflare"
+  type        = bool
+  default     = false # Let Traefik handle SSL
+}
+
+variable "api_proxied" {
+  description = "Whether to proxy API subdomain through Cloudflare"
+  type        = bool
+  default     = false # Let Traefik handle SSL
+}
+
 variable "create_page_rules" {
   description = "Whether to create page rules for optimization"
   type        = bool

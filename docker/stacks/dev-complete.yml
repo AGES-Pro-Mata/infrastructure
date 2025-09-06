@@ -55,7 +55,7 @@ services:
         # Global HTTP to HTTPS redirect
         - traefik.http.routers.http-catchall.rule=hostregexp(`{host:.+}`)
         - traefik.http.routers.http-catchall.entrypoints=web
-        - traefik.http.routers.http-catchall.middlewares=redirect-to-httpsiddlewares=redirect-to-https
+        - traefik.http.routers.http-catchall.middlewares=redirect-to-https
         - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
         - traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true
         # Traefik dashboard
@@ -191,6 +191,7 @@ services:
       - VITE_APP_ENV=development
       - VITE_UMAMI_URL=https://analytics.${DOMAIN_NAME}
       - VITE_UMAMI_WEBSITE_ID=${UMAMI_WEBSITE_ID:-}
+      - VITE_UMAMI_SCRIPT_URL=${VITE_UMAMI_SCRIPT_URL}
       - VITE_ENABLE_ANALYTICS=true
     networks:
       - promata_public

@@ -36,20 +36,28 @@ warn() {
 # Fix for GitHub Actions path duplication - more robust approach
 if [[ "${GITHUB_ACTIONS:-false}" == "true" ]]; then
     # In GitHub Actions, the workspace is /home/runner/work/{repo}/{repo}
-    # We need to find the actual project root
-    if [[ "$SCRIPT_DIR" == *"/infrastructure/infrastructure/"* ]]; then
-        # Remove the duplicate infrastructure path
-        PROJECT_ROOT="${SCRIPT_DIR%/infrastructure/scripts/deploy}"
-        # Ensure we don't have the duplicate
-        if [[ "$PROJECT_ROOT" == *"/infrastructure/infrastructure" ]]; then
-            PROJECT_ROOT="${PROJECT_ROOT%/infrastructure}"
-        fi
+    CURRENT_DIR="$(pwd)"
+    log "Current directory in GitHub Actions: $CURRENT_DIR"
+    log "Script directory: $SCRIPT_DIR"
+    
+    # Check if we're in the duplicated path structure
+    if [[ "$CURRENT_DIR" == *"/infrastructure/infrastructure" ]]; then
+        # We're in the duplicated structure, use the inner infrastructure directory
+        PROJECT_ROOT="$CURRENT_DIR"
+        log "Using current directory as project root (inner infrastructure): $PROJECT_ROOT"
+    elif [[ "$CURRENT_DIR" == *"/infrastructure" ]] && [[ ! "$CURRENT_DIR" == *"/infrastructure/infrastructure" ]]; then
+        # We're in the correct infrastructure directory
+        PROJECT_ROOT="$CURRENT_DIR"
+        log "Using current directory as project root: $PROJECT_ROOT"
     else
-        # Check if we're in the correct workspace
-        if [[ "$(pwd)" == *"/infrastructure" ]]; then
-            PROJECT_ROOT="$(pwd)"
+        # Try to find infrastructure directory
+        if [[ -d "$CURRENT_DIR/infrastructure" ]]; then
+            PROJECT_ROOT="$CURRENT_DIR/infrastructure"
+            log "Found infrastructure subdirectory: $PROJECT_ROOT"
         else
-            PROJECT_ROOT="$(pwd)/infrastructure"
+            # Fallback to script-based detection
+            PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
+            log "Using script-based detection: $PROJECT_ROOT"
         fi
     fi
 else
@@ -74,15 +82,27 @@ validate_environment() {
     # Debug: List what's actually available
     log "Listing terraform directory structure:"
     if [[ -d "$PROJECT_ROOT/terraform" ]]; then
-        find "$PROJECT_ROOT/terraform" -type d -name "*dev*" | head -5 || true
+        log "✅ Terraform directory found at: $PROJECT_ROOT/terraform"
         log "Contents of terraform directory:"
         ls -la "$PROJECT_ROOT/terraform/" || true
         if [[ -d "$PROJECT_ROOT/terraform/deployments" ]]; then
+            log "✅ Deployments directory found"
             log "Contents of terraform/deployments:"
             ls -la "$PROJECT_ROOT/terraform/deployments/" || true
+            if [[ -d "$PROJECT_ROOT/terraform/deployments/dev" ]]; then
+                log "✅ Dev deployment directory found"
+                log "Contents of terraform/deployments/dev:"
+                ls -la "$PROJECT_ROOT/terraform/deployments/dev/" || true
+            else
+                error "❌ Dev deployment directory not found: $PROJECT_ROOT/terraform/deployments/dev"
+            fi
+        else
+            error "❌ Deployments directory not found: $PROJECT_ROOT/terraform/deployments"
         fi
     else
-        error "Terraform directory not found at: $PROJECT_ROOT/terraform"
+        error "❌ Terraform directory not found at: $PROJECT_ROOT/terraform"
+        log "Available directories in project root:"
+        ls -la "$PROJECT_ROOT/" || true
     fi
     
     case "$ENVIRONMENT" in

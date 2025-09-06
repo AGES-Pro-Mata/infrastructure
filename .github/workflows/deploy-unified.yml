@@ -8,7 +8,7 @@ on:
         description: 'Target Environment'
         required: true
         type: choice
-        options: ['dev', 'staging', 'prod']
+        options: ['dev', 'prod']
         default: 'dev'
       action:
         description: 'Action to perform'
@@ -178,7 +178,8 @@ jobs:
           # Application Images
           backend_image = "${{ needs.config.outputs.backend_image }}"
           frontend_image = "${{ needs.config.outputs.frontend_image }}"
-          migration_image = "norohim/pro-mata-migration-${{ needs.config.outputs.environment }}:latest"
+          database_base_image = "norohim/pro-mata-database-${{ needs.config.outputs.environment }}:latest"
+          database_infrastructure_image = "norohim/pro-mata-database-infrastructure-${{ needs.config.outputs.environment }}:latest"
           
           # Replicas
           backend_replicas = 1
@@ -192,6 +193,12 @@ jobs:
           cloudflare_api_token = "${{ secrets.CLOUDFLARE_API_TOKEN || 'null' }}"
           cloudflare_zone_id = "${{ secrets.CLOUDFLARE_ZONE_ID || 'null' }}"
           enable_cloudflare_dns = false
+          
+          # Analytics Configuration
+          enable_analytics = true
+          umami_website_id = "${{ secrets.UMAMI_WEBSITE_ID || 'dev-website-id' }}"
+          umami_hash_salt = "${{ secrets.UMAMI_HASH_SALT || 'default-salt' }}"
+          umami_db_password = "${{ secrets.UMAMI_DB_PASSWORD || 'dev-password' }}"
           
           # Storage
           storage_account_name = "promata${{ needs.config.outputs.environment }}stg$(date +%s | tail -c 6)"

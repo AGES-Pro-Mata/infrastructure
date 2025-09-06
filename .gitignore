@@ -1,13 +1,22 @@
 # Pro-Mata Infrastructure - Secure .gitignore
 
 # === TERRAFORM ===
+# Terraform state files (sensitive)
 *.tfstate
 *.tfstate.*
 *.tfvars.local
+
+# Terraform runtime directories and cache
 .terraform/
-.terraform.lock.hcl
 terraform.rc
 .terraformrc
+
+# Terraform plans (can be regenerated, contain sensitive info)
+*.tfplan
+tfplan
+
+# Terraform lock files (can be regenerated)
+.terraform.lock.hcl
 
 # === ANSIBLE ===
 *.retry

@@ -11,9 +11,9 @@ services:
       - --api.debug=true
       - --entrypoints.web.address=:80
       - --entrypoints.websecure.address=:443
-      - --providers.docker=true
-      - --providers.docker.swarmMode=true
-      - --providers.docker.exposedbydefault=false
+      - --providers.swarm=true
+      - --providers.swarm.exposedbydefault=false
+      - --providers.swarm.endpoint=unix:///var/run/docker.sock
       - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
       - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
       - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}
@@ -38,6 +38,13 @@ services:
       placement:
         constraints:
           - node.role == manager
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
       labels:
         - traefik.enable=true
         - traefik.docker.network=promata_public
@@ -48,7 +55,7 @@ services:
 
   # === DATABASE CLUSTER ===
   postgres-primary:
-    image: norohim/pro-mata-database-infrastructure:v1.1.0
+    image: norohim/pro-mata-database-infrastructure:v1.1.1
     environment:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
@@ -78,39 +85,39 @@ services:
       timeout: 5s
       retries: 5
 
-  postgres-replica:
-    image: norohim/pro-mata-database-infrastructure:v1.1.0
-    environment:
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_REPLICATION_USER=${POSTGRES_REPLICATION_USER}
-      - POSTGRES_REPLICATION_PASSWORD=${POSTGRES_REPLICATION_PASSWORD}
-      - PGUSER=${POSTGRES_USER}
-      - POSTGRES_HOST_AUTH_METHOD=md5
-      - POSTGRES_ROLE=replica
-      - POSTGRES_PRIMARY_HOST=postgres-primary
-      - POSTGRES_PRIMARY_PORT=5432
-    volumes:
-      - postgres_replica_data:/var/lib/postgresql/data
-      - postgres_config:/etc/postgresql
-    networks:
-      - promata_database
-    depends_on:
-      - postgres-primary
-    deploy:
-      placement:
-        constraints:
-          - node.labels.database.replica == true
-      restart_policy:
-        condition: on-failure
-        delay: 10s
-        max_attempts: 3
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
+  # postgres-replica:
+  #   image: norohim/pro-mata-database-infrastructure:v1.1.1
+  #   environment:
+  #     - POSTGRES_DB=${POSTGRES_DB}
+  #     - POSTGRES_USER=${POSTGRES_USER}
+  #     - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+  #     - POSTGRES_REPLICATION_USER=${POSTGRES_REPLICATION_USER}
+  #     - POSTGRES_REPLICATION_PASSWORD=${POSTGRES_REPLICATION_PASSWORD}
+  #     - PGUSER=${POSTGRES_USER}
+  #     - POSTGRES_HOST_AUTH_METHOD=md5
+  #     - POSTGRES_ROLE=replica
+  #     - POSTGRES_PRIMARY_HOST=postgres-primary
+  #     - POSTGRES_PRIMARY_PORT=5432
+  #   volumes:
+  #     - postgres_replica_data:/var/lib/postgresql/data
+  #     - postgres_config:/etc/postgresql
+  #   networks:
+  #     - promata_database
+  #   depends_on:
+  #     - postgres-primary
+  #   deploy:
+  #     placement:
+  #       constraints:
+  #         - node.labels.database.replica == true
+  #     restart_policy:
+  #       condition: on-failure
+  #       delay: 10s
+  #       max_attempts: 3
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+  #     interval: 15s
+  #     timeout: 5s
+  #     retries: 3
 
   # === CONNECTION POOLING ===
   pgbouncer:
@@ -153,29 +160,32 @@ services:
     networks:
       - promata_public
       - promata_internal
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     deploy:
       replicas: 1
       restart_policy:
         condition: on-failure
         delay: 5s
+        max_attempts: 3
       resources:
         limits:
-          memory: 128M
+          memory: 512M
+          cpus: '0.5'
         reservations:
-          memory: 64M
+          memory: 256M
+          cpus: '0.25'
       labels:
         - traefik.enable=true
         - traefik.docker.network=promata_public
         - traefik.http.routers.frontend.rule=Host(`${DOMAIN_NAME}`)
         - traefik.http.routers.frontend.entrypoints=websecure
         - traefik.http.routers.frontend.tls.certresolver=letsencrypt
-        - traefik.http.services.frontend.loadbalancer.server.port=8080
-        - traefik.http.services.frontend.loadbalancer.healthcheck.path=/health
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+        - traefik.http.services.frontend.loadbalancer.server.port=3000
 
   backend:
     image: norohim/pro-mata-backend-dev:latest
@@ -201,11 +211,14 @@ services:
       restart_policy:
         condition: on-failure
         delay: 10s
+        max_attempts: 3
       resources:
         limits:
-          memory: 512M
+          memory: 1G
+          cpus: '1.0'
         reservations:
-          memory: 256M
+          memory: 512M
+          cpus: '0.5'
       labels:
         - traefik.enable=true
         - traefik.docker.network=promata_public
@@ -214,11 +227,14 @@ services:
         - traefik.http.routers.backend.tls.certresolver=letsencrypt
         - traefik.http.services.backend.loadbalancer.server.port=3000
         - traefik.http.services.backend.loadbalancer.healthcheck.path=/health
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+        - traefik.http.services.backend.loadbalancer.healthcheck.interval=30s
+        - traefik.http.services.backend.loadbalancer.healthcheck.timeout=10s
+    # Temporarily disable Docker healthcheck to rely on Traefik healthcheck
+    # healthcheck:
+    #   test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3
 
   # === MONITORING STACK ===
   node-exporter:
@@ -297,10 +313,35 @@ services:
         - traefik.http.services.grafana.loadbalancer.server.port=3000
 
   # === ANALYTICS ===
+  umami-db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=umami
+      - POSTGRES_USER=umami
+      - POSTGRES_PASSWORD=umami
+    volumes:
+      - umami_db_data:/var/lib/postgresql/data
+    networks:
+      - promata_database
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U umami -d umami"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   umami:
     image: ghcr.io/umami-software/umami:postgresql-latest
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pgbouncer:6432/${POSTGRES_DB}
+      - DATABASE_URL=postgresql://umami:umami@umami-db:5432/umami
       - DATABASE_TYPE=postgresql
       - APP_SECRET=${UMAMI_APP_SECRET}
       - HOSTNAME=0.0.0.0
@@ -309,11 +350,16 @@ services:
       - promata_database
       - promata_public
     depends_on:
-      - pgbouncer
+      - umami-db
     deploy:
       replicas: 1
       restart_policy:
         condition: on-failure
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
       labels:
         - traefik.enable=true
         - traefik.docker.network=promata_public
@@ -321,12 +367,17 @@ services:
         - traefik.http.routers.umami.entrypoints=websecure
         - traefik.http.routers.umami.tls.certresolver=letsencrypt
         - traefik.http.services.umami.loadbalancer.server.port=3000
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/heartbeat || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   metabase:
     image: metabase/metabase:latest
     environment:
       - MB_DB_TYPE=postgres
-      - MB_DB_DBNAME=${POSTGRES_DB}
+      - MB_DB_DBNAME=metabase
       - MB_DB_PORT=6432
       - MB_DB_USER=${POSTGRES_USER}
       - MB_DB_PASS=${POSTGRES_PASSWORD}
@@ -412,4 +463,6 @@ volumes:
   metabase_data:
     driver: local
   pgadmin_data:
+    driver: local
+  umami_db_data:
     driver: local

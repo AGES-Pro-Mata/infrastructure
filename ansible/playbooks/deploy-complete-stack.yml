@@ -1,0 +1,155 @@
+---
+- name: Deploy Pro-Mata Complete Stack
+  hosts: managers
+  become: true
+  vars:
+    env_file_path: "../../../envs/dev/.env"
+  
+  tasks:
+    - name: Check if environment file exists
+      stat:
+        path: "{{ env_file_path }}"
+      delegate_to: localhost
+      become: false
+      register: env_file_check
+
+    - name: Fail if environment file doesn't exist
+      fail:
+        msg: "Environment file not found: {{ env_file_path }}"
+      when: not env_file_check.stat.exists
+
+    - name: Load environment variables
+      shell: "cat {{ env_file_path }}"
+      delegate_to: localhost
+      become: false
+      register: env_content
+      changed_when: false
+
+    - name: Parse environment variables
+      set_fact:
+        env_vars: "{{ env_content.stdout | regex_findall('([A-Z_]+)=(.*)') | items2dict }}"
+
+    - name: Create Pro-Mata directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - /opt/promata
+        - /opt/promata/configs
+        - /opt/promata/db-scripts
+        - /opt/promata/logs
+
+    - name: Copy environment file
+      copy:
+        src: "{{ env_file_path }}"
+        dest: /opt/promata/.env
+        mode: '0600'
+
+    - name: Copy configurations
+      copy:
+        src: ../../../docker/configs/
+        dest: /opt/promata/configs/
+        mode: preserve
+
+    - name: Copy stack file
+      copy:
+        src: ../../../docker/stacks/dev-complete.yml
+        dest: /opt/promata/dev-complete.yml
+        mode: '0644'
+
+    - name: Remove any existing failed services
+      shell: |
+        docker service ls --filter desired-state=running --format '{{.Name}} {{.Replicas}}' | \
+        grep '0/' | awk '{print $1}' | xargs -r docker service rm || true
+      ignore_errors: true
+
+    - name: Deploy Docker stack
+      shell: |
+        cd /opt/promata
+        docker stack deploy -c dev-complete.yml promata-dev
+      register: stack_deploy_result
+
+    - name: Wait for PostgreSQL to be ready
+      shell: |
+        for i in {1..60}; do
+          if docker exec $(docker ps -qf "name=promata-dev_postgres-primary" | head -1) pg_isready -U "{{ env_vars.POSTGRES_USER }}" -d "{{ env_vars.POSTGRES_DB }}" >/dev/null 2>&1; then
+            echo "PostgreSQL is ready!"
+            exit 0
+          fi
+          echo "Waiting for PostgreSQL... attempt $i/60"
+          sleep 5
+        done
+        echo "PostgreSQL failed to become ready"
+        exit 1
+      register: postgres_wait_result
+
+    - name: Setup Metabase database
+      shell: |
+        docker exec $(docker ps -qf "name=promata-dev_postgres-primary" | head -1) psql -U "{{ env_vars.POSTGRES_USER }}" -d "{{ env_vars.POSTGRES_DB }}" -c "
+          DROP DATABASE IF EXISTS metabase;
+          CREATE DATABASE metabase OWNER {{ env_vars.POSTGRES_USER }};
+          GRANT ALL PRIVILEGES ON DATABASE metabase TO {{ env_vars.POSTGRES_USER }};
+        "
+      register: metabase_db_result
+
+    - name: Restart PgBouncer to pick up new database
+      shell: |
+        docker service update --force promata-dev_pgbouncer
+      register: pgbouncer_restart_result
+
+    - name: Wait for PgBouncer to be ready
+      shell: |
+        for i in {1..30}; do
+          if docker service ls --filter name=promata-dev_pgbouncer --format '{{.Replicas}}' | grep -q '^[1-9]/[1-9]'; then
+            echo "PgBouncer is ready!"
+            exit 0
+          fi
+          echo "Waiting for PgBouncer... attempt $i/30"
+          sleep 2
+        done
+        echo "PgBouncer failed to become ready"
+        exit 1
+
+    - name: Restart Metabase service
+      shell: |
+        docker service update --force promata-dev_metabase
+      register: metabase_restart_result
+
+    - name: Wait for all services to be ready
+      shell: |
+        echo "Checking service status..."
+        for service in traefik postgres-primary pgbouncer backend frontend umami umami-db; do
+          echo "Checking $service..."
+          for i in {1..30}; do
+            if docker service ls --filter name=promata-dev_$service --format '{{.Replicas}}' | grep -q '^[1-9]/[1-9]'; then
+              echo "✓ $service is ready"
+              break
+            fi
+            if [[ $i -eq 30 ]]; then
+              echo "✗ $service failed to become ready"
+            fi
+            sleep 2
+          done
+        done
+      register: services_check_result
+
+    - name: Display final service status
+      shell: |
+        echo "=== Final Service Status ==="
+        docker service ls | grep promata-dev
+        echo ""
+        echo "=== Service URLs ==="
+        echo "Frontend:     https://{{ env_vars.DOMAIN_NAME }}"
+        echo "Backend API:  https://api.{{ env_vars.DOMAIN_NAME }}"
+        echo "Analytics:    https://analytics.{{ env_vars.DOMAIN_NAME }}"
+        echo "Grafana:      https://grafana.{{ env_vars.DOMAIN_NAME }}"
+        echo "Prometheus:   https://prometheus.{{ env_vars.DOMAIN_NAME }}"
+        echo "Metabase:     https://metabase.{{ env_vars.DOMAIN_NAME }}"
+        echo "PgAdmin:      https://pgadmin.{{ env_vars.DOMAIN_NAME }}"
+        echo "Traefik:      https://traefik.{{ env_vars.DOMAIN_NAME }}"
+      register: final_status
+
+    - name: Show deployment results
+      debug:
+        var: final_status.stdout_lines

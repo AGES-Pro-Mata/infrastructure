@@ -142,23 +142,20 @@ jobs:
           sudo apt update
           sudo apt install -y software-properties-common make unzip curl
           
-          # Install Terraform binary (renamed to avoid confusion with terraform config directory)
-          wget https://releases.hashicorp.com/terraform/${{ env.TERRAFORM_VERSION }}/terraform_${{ env.TERRAFORM_VERSION }}_linux_amd64.zip -O tf-binary.zip
-          unzip -o tf-binary.zip || true
+          # Install Terraform binary (extract to temporary location to avoid conflicts)
+          mkdir -p /tmp/terraform-install
+          cd /tmp/terraform-install
+          wget https://releases.hashicorp.com/terraform/${{ env.TERRAFORM_VERSION }}/terraform_${{ env.TERRAFORM_VERSION }}_linux_amd64.zip -O terraform-binary.zip
+          unzip -o terraform-binary.zip
           sudo rm -rf /usr/local/bin/terraform 2>/dev/null || true
-          sudo mv terraform /usr/local/bin/
-          chmod +x /usr/local/bin/terraform
-          rm -f tf-binary.zip
+          sudo cp terraform /usr/local/bin/
+          sudo chmod +x /usr/local/bin/terraform
+          cd -
+          rm -rf /tmp/terraform-install
           
           # Install Ansible
           sudo add-apt-repository --yes --update ppa:ansible/ansible
           sudo apt install -y ansible
-          
-          # Extract terraform directory if it exists as zip
-          if [ -f "terraform.zip" ]; then
-            echo "📦 Extracting terraform.zip..."
-            unzip -o terraform.zip
-          fi
 
       - name: Azure Login
         uses: azure/login@v2

@@ -142,12 +142,13 @@ jobs:
           sudo apt update
           sudo apt install -y software-properties-common make unzip curl
           
-          # Install Terraform
-          wget https://releases.hashicorp.com/terraform/${{ env.TERRAFORM_VERSION }}/terraform_${{ env.TERRAFORM_VERSION }}_linux_amd64.zip -O terraform-binary.zip
-          unzip -o terraform-binary.zip || true
+          # Install Terraform binary (renamed to avoid confusion with terraform config directory)
+          wget https://releases.hashicorp.com/terraform/${{ env.TERRAFORM_VERSION }}/terraform_${{ env.TERRAFORM_VERSION }}_linux_amd64.zip -O tf-binary.zip
+          unzip -o tf-binary.zip || true
           sudo rm -rf /usr/local/bin/terraform 2>/dev/null || true
           sudo mv terraform /usr/local/bin/
           chmod +x /usr/local/bin/terraform
+          rm -f tf-binary.zip
           
           # Install Ansible
           sudo add-apt-repository --yes --update ppa:ansible/ansible

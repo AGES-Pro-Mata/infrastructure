@@ -1,4 +1,4 @@
-name: Build Database Image
+name: Build Infrastructure Database Image
 
 on:
   push:
@@ -16,14 +16,22 @@ on:
         options:
         - dev
         - prod
+      backend_image_tag:
+        description: 'Backend base image tag to use (default: latest)'
+        required: false
+        default: 'latest'
+        type: string
+  repository_dispatch:
+    types: [backend-database-built]
 
 env:
   DOCKER_REGISTRY: docker.io
-  IMAGE_NAME: norohim/pro-mata-database
+  BASE_IMAGE_NAME: norohim/pro-mata-database
+  INFRA_IMAGE_NAME: norohim/pro-mata-database-infrastructure
 
 jobs:
   build-database:
-    name: 🐘 Build PostgreSQL Database Image
+    name: 🐘 Build Infrastructure PostgreSQL Database Image
     runs-on: ubuntu-latest
     
     steps:
@@ -43,38 +51,59 @@ jobs:
       - name: Set Environment Configuration
         id: config
         run: |
+          # Determine backend image tag
+          BACKEND_TAG="${{ github.event.inputs.backend_image_tag || 'latest' }}"
+          
           if [ "${{ github.ref_name }}" = "main" ] || [ "${{ github.event.inputs.environment }}" = "prod" ]; then
             echo "environment=production" >> $GITHUB_OUTPUT
-            echo "image_name=norohim/pro-mata-database" >> $GITHUB_OUTPUT
+            echo "image_name=${{ env.INFRA_IMAGE_NAME }}" >> $GITHUB_OUTPUT
             echo "image_tag=latest" >> $GITHUB_OUTPUT
+            echo "backend_base_image=${{ env.BASE_IMAGE_NAME }}:${BACKEND_TAG}" >> $GITHUB_OUTPUT
           else
             echo "environment=development" >> $GITHUB_OUTPUT
-            echo "image_name=norohim/pro-mata-database-dev" >> $GITHUB_OUTPUT
+            echo "image_name=${{ env.INFRA_IMAGE_NAME }}-dev" >> $GITHUB_OUTPUT
             echo "image_tag=latest" >> $GITHUB_OUTPUT
+            echo "backend_base_image=${{ env.BASE_IMAGE_NAME }}-dev:${BACKEND_TAG}" >> $GITHUB_OUTPUT
           fi
+          
+          echo "backend_tag=${BACKEND_TAG}" >> $GITHUB_OUTPUT
+          
+      - name: Pull Backend Base Image
+        run: |
+          echo "🔽 Pulling backend base image: ${{ steps.config.outputs.backend_base_image }}"
+          docker pull ${{ steps.config.outputs.backend_base_image }}
 
-      - name: Build and Push Database Image
+      - name: Update Dockerfile with Dynamic Base Image
+        run: |
+          # Create a temporary Dockerfile with the correct base image
+          sed "s|FROM norohim/pro-mata-database:latest|FROM ${{ steps.config.outputs.backend_base_image }}|g" \
+            docker/database/Dockerfile.extended > docker/database/Dockerfile.temp
+
+      - name: Build and Push Infrastructure Database Image
         uses: docker/build-push-action@v5
         with:
           context: docker/database
+          file: docker/database/Dockerfile.temp
           push: true
           tags: |
             ${{ steps.config.outputs.image_name }}:${{ steps.config.outputs.image_tag }}
             ${{ steps.config.outputs.image_name }}:${{ github.sha }}
           labels: |
             org.label-schema.build-date=${{ github.run_date }}
-            org.label-schema.name=pro-mata-database
-            org.label-schema.description=Pro-Mata PostgreSQL Custom Database Image
+            org.label-schema.name=pro-mata-database-infrastructure
+            org.label-schema.description=Pro-Mata Infrastructure PostgreSQL Database Image
             org.label-schema.vcs-ref=${{ github.sha }}
             org.label-schema.version=${{ steps.config.outputs.image_tag }}
             org.label-schema.vendor=AGES PUCRS
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            org.label-schema.base-image=${{ steps.config.outputs.backend_base_image }}
+          cache-from: type=gha,scope=infrastructure-db
+          cache-to: type=gha,mode=max,scope=infrastructure-db
           platforms: linux/amd64,linux/arm64
           build-args: |
             BUILD_DATE=${{ github.run_date }}
             VCS_REF=${{ github.sha }}
             VERSION=${{ steps.config.outputs.image_tag }}
+            BASE_IMAGE=${{ steps.config.outputs.backend_base_image }}
 
       - name: Test Database Image
         run: |
@@ -91,11 +120,13 @@ jobs:
 
       - name: Build Summary
         run: |
-          echo "## 🐘 Database Image Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## 🐘 Infrastructure Database Image Build Summary" >> $GITHUB_STEP_SUMMARY
           echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| **Image** | ${{ steps.config.outputs.image_name }}:${{ steps.config.outputs.image_tag }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Infrastructure Image** | ${{ steps.config.outputs.image_name }}:${{ steps.config.outputs.image_tag }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Base Image** | ${{ steps.config.outputs.backend_base_image }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **Environment** | ${{ steps.config.outputs.environment }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Backend Tag** | ${{ steps.config.outputs.backend_tag }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **Commit** | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **Built At** | ${{ github.run_date }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **Platforms** | linux/amd64, linux/arm64 |" >> $GITHUB_STEP_SUMMARY

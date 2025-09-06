@@ -12,6 +12,10 @@ services:
       - VITE_API_URL=https://api.${DOMAIN_NAME}
       - VITE_APP_ENV=${ENVIRONMENT}
       - VITE_APP_VERSION=${FRONTEND_VERSION:-latest}
+      # Umami Analytics Configuration
+      - VITE_UMAMI_URL=https://analytics.${DOMAIN_NAME}
+      - VITE_UMAMI_WEBSITE_ID=${UMAMI_WEBSITE_ID}
+      - VITE_ENABLE_ANALYTICS=${ENABLE_ANALYTICS:-true}
     
     networks:
       - promata_public
@@ -66,6 +70,11 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-1h}
       - CORS_ORIGIN=https://${DOMAIN_NAME}
+      # Umami Analytics Configuration for server-side tracking
+      - UMAMI_URL=https://analytics.${DOMAIN_NAME}
+      - UMAMI_WEBSITE_ID=${UMAMI_WEBSITE_ID}
+      - UMAMI_API_KEY=${UMAMI_API_KEY}
+      - ENABLE_ANALYTICS=${ENABLE_ANALYTICS:-true}
     
     networks:
       - promata_public

@@ -5,13 +5,16 @@ version: "3.8"
 services:
   # Database Migration Init Container
   db-migrate:
-    image: norohim/pro-mata-migration:${MIGRATE_VERSION:-latest}
+    image: norohim/pro-mata-database:${BACKEND_DB_VERSION:-latest}
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-primary:5432/${POSTGRES_DB}
-      - DB_HOST=postgres-primary
-      - DB_PORT=5432
+      - POSTGRES_HOST=postgres-primary
+      - POSTGRES_PORT=5432
       - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - MIGRATION_MODE=true  # Run in migration-only mode
       - RUN_SEED=${RUN_SEED:-false}
     networks:
       - promata_database
@@ -29,9 +32,9 @@ services:
         reservations:
           memory: 128M
 
-  # PostgreSQL Primary (Master)
+  # PostgreSQL Primary (Master) - Now using infrastructure-extended image
   postgres-primary:
-    image: norohim/pro-mata-database-dev:${DB_VERSION:-latest}
+    image: norohim/pro-mata-database-infrastructure${ENVIRONMENT_SUFFIX}:${INFRA_DB_VERSION:-latest}
     environment:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
@@ -43,9 +46,10 @@ services:
       
     volumes:
       - postgres_primary_data:/var/lib/postgresql/data
-      - ./configs/postgresql/primary/postgresql.conf:/etc/postgresql/postgresql.conf
-      - ./configs/postgresql/primary/pg_hba.conf:/etc/postgresql/pg_hba.conf
-      - ./configs/postgresql/init-replication.sh:/docker-entrypoint-initdb.d/init-replication.sh
+      # Configurations now baked into infrastructure image
+      # - ./configs/postgresql/primary/postgresql.conf:/etc/postgresql/postgresql.conf
+      # - ./configs/postgresql/primary/pg_hba.conf:/etc/postgresql/pg_hba.conf
+      # - ./configs/postgresql/init-replication.sh:/docker-entrypoint-initdb.d/init-replication.sh
     
     networks:
       - promata_database
@@ -73,7 +77,7 @@ services:
 
   # PostgreSQL Replica (Standby)
   postgres-replica:
-    image: norohim/pro-mata-database-dev:${DB_VERSION:-latest}
+    image: norohim/pro-mata-database-infrastructure${ENVIRONMENT_SUFFIX}:${INFRA_DB_VERSION:-latest}
     environment:
       - PGUSER=${POSTGRES_REPLICA_USER:-replicator}
       - POSTGRES_USER=${POSTGRES_USER}
@@ -85,8 +89,9 @@ services:
       
     volumes:
       - postgres_replica_data:/var/lib/postgresql/data
-      - ./configs/postgresql/replica/recovery.conf:/var/lib/postgresql/data/recovery.conf
-      - ./configs/postgresql/replica/setup-replica.sh:/docker-entrypoint-initdb.d/setup-replica.sh
+      # Configurations now baked into infrastructure image
+      # - ./configs/postgresql/replica/recovery.conf:/var/lib/postgresql/data/recovery.conf
+      # - ./configs/postgresql/replica/setup-replica.sh:/docker-entrypoint-initdb.d/setup-replica.sh
     
     networks:
       - promata_database

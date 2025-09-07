@@ -7,98 +7,96 @@ terraform {
   }
 }
 
-# DNS Records
-resource "cloudflare_record" "main" {
-  count   = var.create_dns_records ? 1 : 0
-  zone_id = var.cloudflare_zone_id
-  name    = "@"  # Root domain
-  content = var.server_public_ip
-  type    = "A"
-  ttl     = 1     # Auto TTL
-  proxied = var.main_domain_proxied
+# Define all services exposed by the stack dynamically
+locals {
+  # Services exposed by our Docker stack with their configurations
+  services = {
+    # Main domain (frontend)
+    "@" = {
+      description = "Main application frontend"
+      service     = "frontend"
+      port        = 3000
+      proxied     = true  # Always proxied (orange cloud)
+    }
+    # WWW redirect
+    "www" = {
+      description = "WWW redirect to main domain"
+      service     = "frontend"
+      port        = 3000
+      proxied     = true  # Always proxied (orange cloud)
+    }
+    # API Backend
+    "api" = {
+      description = "Backend API service"
+      service     = "backend"
+      port        = 3000
+      proxied     = true  # Always proxied (orange cloud)
+    }
+    # Traefik Dashboard
+    "traefik" = {
+      description = "Traefik reverse proxy dashboard"
+      service     = "traefik"
+      port        = 8080
+      proxied     = true  # Always proxied (orange cloud)
+    }
+    # Monitoring Stack
+    "prometheus" = {
+      description = "Prometheus monitoring"
+      service     = "prometheus"
+      port        = 9090
+      proxied     = true  # Always proxied (orange cloud)
+    }
+    "grafana" = {
+      description = "Grafana monitoring dashboard"
+      service     = "grafana"
+      port        = 3000
+      proxied     = true  # Always proxied (orange cloud)
+    }
+    # Analytics
+    "analytics" = {
+      description = "Umami analytics dashboard"
+      service     = "umami"
+      port        = 3000
+      proxied     = true  # Always proxied (orange cloud)
+    }
+    "metabase" = {
+      description = "Metabase analytics dashboard"
+      service     = "metabase"
+      port        = 3000
+      proxied     = true  # Always proxied (orange cloud)
+    }
+    # Database Management
+    "pgadmin" = {
+      description = "PostgreSQL administration"
+      service     = "pgadmin"
+      port        = 80
+      proxied     = true  # Always proxied (orange cloud)
+    }
+  }
 }
 
-resource "cloudflare_record" "www" {
-  count   = var.create_dns_records ? 1 : 0
+# Create DNS records for all services dynamically
+resource "cloudflare_record" "services" {
+  for_each = var.create_dns_records ? local.services : {}
+  
   zone_id = var.cloudflare_zone_id
-  name    = "www"
-  content = var.server_public_ip
-  type    = "A"
-  ttl     = 1
-  proxied = var.dns_records_proxied
-}
-
-resource "cloudflare_record" "api" {
-  count   = var.create_dns_records ? 1 : 0
-  zone_id = var.cloudflare_zone_id
-  name    = "api"
-  content = var.server_public_ip
-  type    = "A"
-  ttl     = 1
-  proxied = var.api_proxied
-}
-
-resource "cloudflare_record" "traefik" {
-  count   = var.create_dns_records ? 1 : 0
-  zone_id = var.cloudflare_zone_id
-  name    = "traefik"
-  content = var.server_public_ip
-  type    = "A"
-  ttl     = 1
-  proxied = var.traefik_proxied  # Usually false for dashboard
-}
-
-resource "cloudflare_record" "pgadmin" {
-  count   = var.create_dns_records ? 1 : 0
-  zone_id = var.cloudflare_zone_id
-  name    = "pgadmin"
-  content = var.server_public_ip
-  type    = "A"
-  ttl     = 1
-  proxied = var.dns_records_proxied
-}
-
-resource "cloudflare_record" "grafana" {
-  count   = var.create_dns_records ? 1 : 0
-  zone_id = var.cloudflare_zone_id
-  name    = "grafana"
-  content = var.server_public_ip
-  type    = "A"
-  ttl     = 1
-  proxied = var.dns_records_proxied
-}
-
-resource "cloudflare_record" "prometheus" {
-  count   = var.create_dns_records ? 1 : 0
-  zone_id = var.cloudflare_zone_id
-  name    = "prometheus"
-  content = var.server_public_ip
-  type    = "A"
-  ttl     = 1
-  proxied = var.dns_records_proxied
-}
-
-resource "cloudflare_record" "metabase" {
-  count   = var.create_dns_records ? 1 : 0
-  zone_id = var.cloudflare_zone_id
-  name    = "metabase"
-  content = var.server_public_ip
-  type    = "A"
-  ttl     = 1
-  proxied = var.dns_records_proxied
-}
-
-resource "cloudflare_record" "analytics" {
-  count   = var.create_dns_records ? 1 : 0
-  zone_id = var.cloudflare_zone_id
-  name    = "analytics"
+  name    = each.key
   content = var.server_public_ip
   type    = "A"
   ttl     = 1
-  proxied = var.dns_records_proxied
+  proxied = each.value.proxied
+  comment = "${each.value.description} - Port ${each.value.port} - Service: ${each.value.service}"
+
+  # Tags disabled for free plan compatibility (quota limit is 0)
+  # tags = [
+  #   var.environment,
+  #   "terraform",
+  #   "promata",
+  #   each.value.service
+  # ]
 }
 
-# Environment-specific subdomains
+# Environment-specific subdomains (only for non-prod environments)
 resource "cloudflare_record" "environment_subdomain" {
   count   = var.create_dns_records && var.environment != "prod" ? 1 : 0
   zone_id = var.cloudflare_zone_id
@@ -106,7 +104,15 @@ resource "cloudflare_record" "environment_subdomain" {
   content = var.server_public_ip
   type    = "A"
   ttl     = 1
-  proxied = var.dns_records_proxied
+  proxied = true  # Always proxied
+  comment = "Environment-specific subdomain for ${var.environment}"
+
+  # Tags disabled for free plan compatibility (quota limit is 0)
+  # tags = [
+  #   var.environment,
+  #   "terraform",
+  #   "promata"
+  # ]
 }
 
 # Environment-specific API subdomains (api-dev, api-staging)
@@ -117,7 +123,16 @@ resource "cloudflare_record" "api_environment_subdomain" {
   content = var.server_public_ip
   type    = "A"
   ttl     = 1
-  proxied = var.dns_records_proxied
+  proxied = true  # Always proxied
+  comment = "Environment-specific API subdomain for ${var.environment}"
+
+  # Tags disabled for free plan compatibility (quota limit is 0)
+  # tags = [
+  #   var.environment,
+  #   "terraform",
+  #   "promata",
+  #   "api"
+  # ]
 }
 
 # SSL/TLS Configuration - DISABLED for free plan compatibility

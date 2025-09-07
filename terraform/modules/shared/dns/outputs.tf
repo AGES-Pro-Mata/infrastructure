@@ -1,35 +1,12 @@
 output "dns_records" {
   description = "DNS records created"
   value = var.create_dns_records ? {
-    main = {
-      name    = cloudflare_record.main[0].name
-      content = cloudflare_record.main[0].content
-      proxied = cloudflare_record.main[0].proxied
-    }
-    www = {
-      name    = cloudflare_record.www[0].name
-      content = cloudflare_record.www[0].content
-      proxied = cloudflare_record.www[0].proxied
-    }
-    api = {
-      name    = cloudflare_record.api[0].name
-      content = cloudflare_record.api[0].content
-      proxied = cloudflare_record.api[0].proxied
-    }
-    traefik = {
-      name    = cloudflare_record.traefik[0].name
-      content = cloudflare_record.traefik[0].content
-      proxied = cloudflare_record.traefik[0].proxied
-    }
-    pgadmin = {
-      name    = cloudflare_record.pgadmin[0].name
-      content = cloudflare_record.pgadmin[0].content
-      proxied = cloudflare_record.pgadmin[0].proxied
-    }
-    grafana = {
-      name    = cloudflare_record.grafana[0].name
-      content = cloudflare_record.grafana[0].content
-      proxied = cloudflare_record.grafana[0].proxied
+    for service_name, record in cloudflare_record.services : service_name => {
+      name    = record.name
+      content = record.content
+      proxied = record.proxied
+      service = local.services[service_name].service
+      port    = local.services[service_name].port
     }
   } : {}
 }
@@ -64,13 +41,7 @@ output "cloudflare_zone_id" {
 output "domain_urls" {
   description = "All configured domain URLs"
   value = var.create_dns_records ? {
-    main        = "https://${var.domain_name}"
-    www         = "https://www.${var.domain_name}"
-    api         = "https://api.${var.domain_name}"
-    traefik     = "https://traefik.${var.domain_name}"
-    pgadmin     = "https://pgadmin.${var.domain_name}"
-    grafana     = "https://grafana.${var.domain_name}"
-    environment = var.environment != "prod" ? "https://${var.environment}.${var.domain_name}" : null
-    api_environment = var.environment != "prod" ? "https://api-${var.environment}.${var.domain_name}" : null
+    for service_name, config in local.services : service_name => 
+      service_name == "@" ? "https://${var.domain_name}" : "https://${service_name}.${var.domain_name}"
   } : {}
 }

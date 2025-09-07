@@ -1,30 +1,38 @@
-# Pro-Mata Development Environment Variables
-# Copy this file to terraform.tfvars and update with actual values
-
-# Project Configuration
-project_name = "pro-mata"
-environment = "dev"
-domain_name = "promata.com.br"
+# Generated from config.sh
+# Tue 02 Sep 2025 03:46:47 AM -03
 
 # Azure Configuration
-resource_group_name = "rg-pro-mata-dev"
-storage_account_name = "promatadevstg"
+environment = "dev"
+project_name = "pro-mata"
+domain_name = "promata.com.br"
+resource_group_name = "rg-myproject-dev"
 location = "East US 2"
-vm_size = "Standard_B2s"  # Keep current size to avoid recreation
+vm_size = "Standard_B2s"
 
-# Cloudflare Configuration (Required for DNS)
-cloudflare_api_token = "YOUR_CLOUDFLARE_API_TOKEN_HERE"
-cloudflare_zone_id = "YOUR_CLOUDFLARE_ZONE_ID_HERE"
-enable_cloudflare_dns = true
-
-# Application Configuration
+# Application Images
 backend_image = "norohim/pro-mata-backend-dev:latest"
 frontend_image = "norohim/pro-mata-frontend-dev:latest"
-migration_image = "norohim/pro-mata-migration-dev:latest"
+migration_image = "norohim/pro-mata-database-dev:latest"
 
-# Database Configuration
+# Replicas
+backend_replicas = 1
+frontend_replicas = 1
+
+# Database
 postgres_db = "promata_dev"
 postgres_user = "promata"
+
+# Storage (will be made unique automatically)
+storage_account_name = "promatadevstg"
+
+# Cloudflare (optional)
+cloudflare_api_token = "oycrpCKXpVQmDq_6V2ArnidSxImWxvkzJhxhhBtl"
+cloudflare_zone_id = "c59ab9e254cc4d555f265d1d111f95ed"
+enable_cloudflare_dns = true
+create_page_rules = false
+
+# Monitoring
+monitoring_enabled = true
 
 # Tags
 common_tags = {
@@ -33,7 +41,3 @@ common_tags = {
   ManagedBy   = "terraform"
   Owner       = "pro-mata-team"
 }
-
-# Disable features that might cause issues
-create_page_rules = false
-monitoring_enabled = true

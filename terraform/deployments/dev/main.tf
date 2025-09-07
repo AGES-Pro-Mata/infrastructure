@@ -388,7 +388,7 @@ module "cloudflare_dns" {
   # SSL Configuration
   ssl_mode        = "flexible" # Start with flexible, can upgrade to full later
   security_level  = "medium"
-  traefik_proxied = false # Keep Traefik dashboard as DNS only
+  traefik_proxied = true # Enable orange cloud (proxied) for Traefik dashboard
 
   # Disable zone settings for now due to read-only conflicts
   configure_ssl = false

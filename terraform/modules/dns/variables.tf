@@ -74,25 +74,25 @@ variable "security_level" {
 variable "traefik_proxied" {
   description = "Whether to proxy Traefik dashboard through Cloudflare"
   type        = bool
-  default     = false # Usually DNS only for dashboard
+  default     = true # Enable orange cloud (proxied) for Traefik dashboard
 }
 
 variable "dns_records_proxied" {
   description = "Whether to proxy DNS records through Cloudflare (orange cloud vs grey cloud)"
   type        = bool
-  default     = false # Default to grey cloud for Traefik SSL termination
+  default     = true # Default to orange cloud (proxied) for all services
 }
 
 variable "main_domain_proxied" {
   description = "Whether to proxy main domain through Cloudflare"
   type        = bool
-  default     = false # Let Traefik handle SSL
+  default     = true # Enable orange cloud (proxied) for main domain
 }
 
 variable "api_proxied" {
   description = "Whether to proxy API subdomain through Cloudflare"
   type        = bool
-  default     = false # Let Traefik handle SSL
+  default     = true # Enable orange cloud (proxied) for API
 }
 
 variable "create_page_rules" {

@@ -355,13 +355,14 @@ services:
       labels:
         - traefik.enable=true
         - traefik.docker.network=promata_public
-        
-        # Router principal
-        - traefik.http.routers.backend.rule=Host(`api.{{ domain_name }}`)
+
+        - traefik.http.routers.backend.rule=Host(\`api.{{ domain_name }}\`) && PathPrefix(\`/api\`)
+        - traefik.http.middlewares.backend-stripprefix.stripprefix.prefixes=/api
         - traefik.http.routers.backend.entrypoints=websecure
         - traefik.http.routers.backend.tls.certresolver=letsencrypt
         - traefik.http.routers.backend.tls=true
-        - traefik.http.routers.backend.middlewares=security-headers
+        - traefik.http.routers.backend.middlewares=backend-stripprefix,security-headers
+        
         
         # Service configuration
         - traefik.http.services.backend.loadbalancer.server.port=3000

@@ -28,11 +28,13 @@ init: check-env ## Initialize environment
 	@echo "🔧 Initializing $(ENV) environment..."
 	@./scripts/setup/init-environment.sh $(ENV)
 
-deploy: check-env ## Deploy infrastructure
+deploy: check-env ## Deploy complete infrastructure with database initialization
 	@echo "🚀 Deploying $(ENV) environment with dev-complete stack..."
+	@echo "📊 This will deploy the full stack including database cluster with initialization scripts"
 	@ansible-playbook -i $(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml \
 		-e @$(ENV_DIR)/ansible-vars.yml \
 		-e stack_file=dev-complete.yml \
+		-e env=$(ENV) \
 		$(ANSIBLE_DIR)/playbooks/deploy-stack.yml
 
 deploy-terraform: check-env ## Deploy only Terraform
@@ -41,11 +43,12 @@ deploy-terraform: check-env ## Deploy only Terraform
 	@cd $(TF_DIR) && terraform plan -var-file=../../../$(ENV_DIR)/terraform.tfvars
 	@cd $(TF_DIR) && terraform apply -var-file=../../../$(ENV_DIR)/terraform.tfvars
 
-deploy-ansible: check-env ## Deploy only Ansible
-	@echo "🔧 Deploying Ansible for $(ENV)..."
+deploy-ansible: check-env ## Deploy only Ansible stack
+	@echo "🔧 Deploying Ansible for $(ENV) with dev-complete stack..."
 	@ansible-playbook -i $(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml \
 		-e @$(ENV_DIR)/ansible-vars.yml \
 		-e stack_file=dev-complete.yml \
+		-e env=$(ENV) \
 		$(ANSIBLE_DIR)/playbooks/deploy-stack.yml
 
 validate: check-env ## Validate infrastructure
@@ -75,6 +78,25 @@ clean: ## Clean temporary files
 	@find . -name "*.tmp" -delete
 	@find . -name ".terraform" -type d -exec rm -rf {} + 2>/dev/null || true
 	@find . -name "terraform.tfstate.backup" -delete
+
+clean-volumes: check-env ## Remove Docker volumes to force database reinitialization
+	@echo "🗑️  WARNING: This will remove all data volumes for $(ENV) environment!"
+	@echo "🔄 Database initialization scripts will run on next deployment"
+	@read -p "Are you sure? Type 'yes' to continue: " confirm && [ "$$confirm" = "yes" ] || exit 1
+	@docker volume rm promata-$(ENV)_postgres_primary_data promata-$(ENV)_postgres_replica_data 2>/dev/null || true
+	@docker volume rm promata-$(ENV)_postgres_config 2>/dev/null || true
+	@docker volume rm promata-$(ENV)_grafana_data promata-$(ENV)_prometheus_data 2>/dev/null || true
+	@docker volume rm promata-$(ENV)_metabase_data promata-$(ENV)_pgadmin_data 2>/dev/null || true
+	@docker volume rm promata-$(ENV)_umami_db_data 2>/dev/null || true
+	@echo "✅ Volumes cleaned. Database will reinitialize on next deployment."
+
+reset-database: check-env ## Reset database completely (removes stack and volumes)
+	@echo "🔄 Resetting database for $(ENV) environment..."
+	@docker stack rm promata-$(ENV) 2>/dev/null || true
+	@echo "⏳ Waiting for stack removal..."
+	@sleep 15
+	@$(MAKE) clean-volumes ENV=$(ENV)
+	@echo "✅ Database reset complete. Ready for fresh deployment."
 
 # Development commands
 dev-init: ## Initialize development environment

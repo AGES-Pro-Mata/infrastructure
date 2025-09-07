@@ -3,26 +3,49 @@
 version: "3.8"
 
 services:
-  # === REVERSE PROXY & ROUTING ===
+
   traefik:
     image: traefik:v3.0
     command:
+      # API e Dashboard
       - --api.dashboard=true
-      - --api.debug=true
-      - --api.insecure=true
+      - --api.debug=false
+      - --api.insecure=false
+      
+      # Entrypoints
       - --entrypoints.web.address=:80
       - --entrypoints.websecure.address=:443
+      
+      # Providers
       - --providers.swarm=true
       - --providers.swarm.exposedbydefault=false
       - --providers.swarm.endpoint=unix:///var/run/docker.sock
+      - --providers.swarm.watch=true
+      
+      # Certificados Let's Encrypt
       - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
       - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
       - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}
       - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
-      - --certificatesresolvers.letsencrypt.acme.caserver=${ACME_CA_SERVER:-https://acme-staging-v02.api.letsencrypt.org/directory}
+      - --certificatesresolvers.letsencrypt.acme.caserver=https://acme-v02.api.letsencrypt.org/directory
+      
+      # Certificados Let's Encrypt Staging (para testes)
+      - --certificatesresolvers.letsencrypt-staging.acme.httpchallenge=true
+      - --certificatesresolvers.letsencrypt-staging.acme.httpchallenge.entrypoint=web
+      - --certificatesresolvers.letsencrypt-staging.acme.email=${ACME_EMAIL}
+      - --certificatesresolvers.letsencrypt-staging.acme.storage=/letsencrypt/acme-staging.json
+      - --certificatesresolvers.letsencrypt-staging.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory
+      
+      # Logs e Métricas
+      - --log.level=${TRAEFIK_LOG_LEVEL:-INFO}
+      - --accesslog=true
       - --metrics.prometheus=true
       - --metrics.prometheus.addrouterslabels=true
+      
+      # Segurança
       - --global.sendanonymoususage=false
+      - --serversTransport.insecureSkipVerify=false
+      
     ports:
       - target: 80
         published: 80
@@ -33,11 +56,18 @@ services:
       - target: 8080
         published: 8080
         mode: host
+        
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - traefik_letsencrypt:/letsencrypt
+      
     networks:
       - promata_public
+      
+    environment:
+      - ACME_EMAIL=${ACME_EMAIL}
+      - TRAEFIK_LOG_LEVEL=${TRAEFIK_LOG_LEVEL:-INFO}
+      
     deploy:
       placement:
         constraints:
@@ -52,17 +82,33 @@ services:
       labels:
         - traefik.enable=true
         - traefik.docker.network=promata_public
-        # Global HTTP to HTTPS redirect
+        
+        # Middleware para redirects HTTPS
+        - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
+        - traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true
+        
+        # Middleware de segurança
+        - traefik.http.middlewares.security-headers.headers.customRequestHeaders.X-Forwarded-Proto=https
+        - traefik.http.middlewares.security-headers.headers.SSLRedirect=true
+        - traefik.http.middlewares.security-headers.headers.STSSeconds=31536000
+        - traefik.http.middlewares.security-headers.headers.STSIncludeSubdomains=true
+        - traefik.http.middlewares.security-headers.headers.STSPreload=true
+        - traefik.http.middlewares.security-headers.headers.forceSTSHeader=true
+        
+        # Middleware de autenticação para dashboard
+        - traefik.http.middlewares.traefik-auth.basicauth.users=${TRAEFIK_AUTH_USERS}
+        
+        # Router global para redirect HTTP -> HTTPS
         - traefik.http.routers.http-catchall.rule=hostregexp(`{host:.+}`)
         - traefik.http.routers.http-catchall.entrypoints=web
         - traefik.http.routers.http-catchall.middlewares=redirect-to-https
-        - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
-        - traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true
-        # Traefik dashboard
+        
+        # Dashboard do Traefik
         - traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN_NAME}`)
         - traefik.http.routers.traefik.entrypoints=websecure
-        - traefik.http.routers.traefik.tls.certresolver=letsencrypt
-        - traefik.http.services.traefik.loadbalancer.server.port=8080
+        - traefik.http.routers.traefik.tls.certresolver=${CERT_RESOLVER:-letsencrypt}
+        - traefik.http.routers.traefik.tls=true
+        - traefik.http.routers.traefik.middlewares=traefik-auth,security-headers
         - traefik.http.routers.traefik.service=api@internal
 
   # === DATABASE CLUSTER ===
@@ -229,22 +275,55 @@ services:
   backend:
     image: norohim/pro-mata-backend-dev:latest
     environment:
-      - NODE_ENV=production
+      # Configuração básica
+      - NODE_ENV=development
       - PORT=3000
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pgbouncer:6432/${POSTGRES_DB}
+      
+      # Configuração de banco - CORRIGIDA
+      # PROBLEMA: JWT_SECRET não estava definido (logs mostram "JWT_SECRET was not setted")
       - JWT_SECRET=${JWT_SECRET}
-      - JWT_EXPIRES_IN=1h
-      - CORS_ORIGIN=https://${DOMAIN_NAME}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-1h}
+      
+      # Database URL com PgBouncer
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pgbouncer:6432/${POSTGRES_DB}
+      
+      # Configuração alternativa para conexão direta (para debug)
+      - DATABASE_HOST=postgres-primary
+      - DATABASE_PORT=5432
+      - DATABASE_NAME=${POSTGRES_DB}
+      - DATABASE_USER=${POSTGRES_USER}
+      - DATABASE_PASSWORD=${POSTGRES_PASSWORD}
+      
+      # Pool de conexão
+      - DATABASE_POOL_MIN=2
+      - DATABASE_POOL_MAX=10
+      - DATABASE_POOL_IDLE_TIMEOUT=30000
+      
+      # CORS
+      - CORS_ORIGIN=https://${DOMAIN_NAME},https://traefik.${DOMAIN_NAME}
+      - CORS_CREDENTIALS=true
+      
+      # Analytics (opcional)
       - UMAMI_URL=https://analytics.${DOMAIN_NAME}
       - UMAMI_WEBSITE_ID=${UMAMI_WEBSITE_ID:-}
       - UMAMI_API_KEY=${UMAMI_API_KEY:-}
-      - ENABLE_ANALYTICS=true
+      - ENABLE_ANALYTICS=${ENABLE_ANALYTICS:-false}
+      
+      # Logs e Debug
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - DEBUG=${DEBUG:-false}
+      
+      # Health check
+      - HEALTH_CHECK_ENDPOINT=/health
+      
     networks:
       - promata_public
-      - promata_internal
+      - promata_internal  
       - promata_database
+      
     depends_on:
       - pgbouncer
+
     deploy:
       replicas: 2
       placement:
@@ -252,31 +331,45 @@ services:
       restart_policy:
         condition: on-failure
         delay: 10s
-        max_attempts: 3
+        max_attempts: 5  # Aumentado para permitir mais tentativas
+        window: 120s
       resources:
         limits:
           memory: 800M
           cpus: '0.8'
         reservations:
-          memory: 400M
-          cpus: '0.4'
+          memory: 300M  # Diminuído para permitir inicialização mais fácil
+          cpus: '0.2'
       labels:
         - traefik.enable=true
         - traefik.docker.network=promata_public
-        - traefik.http.routers.backend.rule=Host(`${API_SUBDOMAIN}.${DOMAIN_NAME}`)
+        
+        # Router principal
+        - traefik.http.routers.backend.rule=Host(`api.${DOMAIN_NAME}`)
         - traefik.http.routers.backend.entrypoints=websecure
         - traefik.http.routers.backend.tls.certresolver=letsencrypt
         - traefik.http.routers.backend.tls=true
+        - traefik.http.routers.backend.middlewares=security-headers
+        
+        # Service configuration
         - traefik.http.services.backend.loadbalancer.server.port=3000
         - traefik.http.services.backend.loadbalancer.healthcheck.path=/health
         - traefik.http.services.backend.loadbalancer.healthcheck.interval=30s
         - traefik.http.services.backend.loadbalancer.healthcheck.timeout=10s
+        
+        # CORS headers para API
+        - traefik.http.middlewares.api-cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,PATCH,OPTIONS
+        - traefik.http.middlewares.api-cors.headers.accesscontrolalloworiginlist=https://${DOMAIN_NAME}
+        - traefik.http.middlewares.api-cors.headers.accesscontrolallowcredentials=true
+        - traefik.http.middlewares.api-cors.headers.accesscontrolallowheaders=*
+        - traefik.http.middlewares.api-cors.headers.accesscontrolexposeheaders=*
+        
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 40s
+      retries: 5
+      start_period: 60s  # Aumentado para dar tempo de inicialização
 
   # === MONITORING STACK ===
   node-exporter:

@@ -214,7 +214,7 @@ services:
     depends_on:
       - postgres-primary
     deploy:
-      replicas: 2
+      replicas: ${PGBOUNCER_REPLICAS:-1}
       placement:
         max_replicas_per_node: 1
       restart_policy:
@@ -228,7 +228,11 @@ services:
           memory: 128M
           cpus: '0.1'
     healthcheck:
-      test: ["CMD-SHELL", "psql postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:6432/${POSTGRES_DB} -c 'SELECT 1;'"]
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 6432"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   # === APPLICATION SERVICES ===
   frontend:
@@ -251,7 +255,7 @@ services:
       retries: 3
       start_period: 40s
     deploy:
-      replicas: 2
+      replicas: ${FRONTEND_REPLICAS:-1}
       placement:
         max_replicas_per_node: 1
       restart_policy:
@@ -329,7 +333,7 @@ services:
       - pgbouncer
 
     deploy:
-      replicas: 2
+      replicas: ${BACKEND_REPLICAS:-1}
       placement:
         max_replicas_per_node: 1
       restart_policy:

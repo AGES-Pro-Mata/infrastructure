@@ -200,7 +200,7 @@ services:
       - DATABASES_USER=${POSTGRES_USER}
       - DATABASES_PASSWORD=${POSTGRES_PASSWORD}
       - DATABASES_DBNAME=${POSTGRES_DB}
-      - POOL_MODE=transaction
+      - POOL_MODE=session
       - SERVER_RESET_QUERY=DISCARD ALL
       - MAX_CLIENT_CONN=100
       - DEFAULT_POOL_SIZE=20
@@ -227,13 +227,15 @@ services:
         reservations:
           memory: 128M
           cpus: '0.1'
+    healthcheck:
+      test: ["CMD-SHELL", "psql postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:6432/${POSTGRES_DB} -c 'SELECT 1;'"]
 
   # === APPLICATION SERVICES ===
   frontend:
     image: norohim/pro-mata-frontend-dev:latest
     environment:
       - NODE_ENV=development
-      - VITE_API_URL=https://${API_SUBDOMAIN}.${DOMAIN_NAME}
+      - VITE_API_URL=https://api.${DOMAIN_NAME}
       - VITE_APP_ENV=development
       - VITE_UMAMI_URL=https://analytics.${DOMAIN_NAME}
       - VITE_UMAMI_WEBSITE_ID=${UMAMI_WEBSITE_ID:-}
@@ -278,6 +280,8 @@ services:
       # Configuração básica
       - NODE_ENV=development
       - PORT=3000
+
+      - API_SUBDOMAIN=api 
       
       # Configuração de banco - CORRIGIDA
       # PROBLEMA: JWT_SECRET não estava definido (logs mostram "JWT_SECRET was not setted")
@@ -559,12 +563,12 @@ services:
     environment:
       - MB_DB_TYPE=postgres
       - MB_DB_DBNAME=${POSTGRES_DB}
-      - MB_DB_PORT=6432
+      - MB_DB_PORT=5432
       - MB_DB_USER=${POSTGRES_USER}
       - MB_DB_PASS=${POSTGRES_PASSWORD}
-      - MB_DB_HOST=pgbouncer
+      - MB_DB_HOST=postgres-primary
       - MB_ENCRYPTION_SECRET_KEY=${METABASE_SECRET_KEY:-your-secret-key-change-this}
-      - JAVA_OPTS=-Xmx512m
+      - JAVA_OPTS=-Xmx768m -Xms256m
     volumes:
       - metabase_data:/metabase-data
     networks:

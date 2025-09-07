@@ -372,12 +372,12 @@ services:
         - traefik.http.middlewares.api-cors.headers.accesscontrolallowheaders=*
         - traefik.http.middlewares.api-cors.headers.accesscontrolexposeheaders=*
         
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s  # Aumentado para dar tempo de inicialização
+    # healthcheck:
+    #   test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 5
+    #   start_period: 60s  # Aumentado para dar tempo de inicialização
 
   # === MONITORING STACK ===
   node-exporter:
@@ -586,11 +586,11 @@ services:
         condition: on-failure
       resources:
         limits:
-          memory: 512M
-          cpus: '0.5'
+          memory: 768M
+          cpus: '0.75'
         reservations:
-          memory: 256M
-          cpus: '0.25'
+          memory: 384M
+          cpus: '0.375'
       labels:
         - traefik.enable=true
         - traefik.docker.network=promata_public
@@ -599,11 +599,6 @@ services:
         - traefik.http.routers.metabase.tls.certresolver=letsencrypt
         - traefik.http.routers.metabase.tls=true
         - traefik.http.services.metabase.loadbalancer.server.port=3000
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
   pgadmin:
     image: dpage/pgadmin4:latest

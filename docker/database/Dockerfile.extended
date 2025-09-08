@@ -1,5 +1,5 @@
 # Pro-Mata Infrastructure Database - Extends Backend Base Image
-FROM norohim/pro-mata-database:latest
+FROM norohim/pro-mata-database-dev:latest
 
 # Metadata labels for infrastructure-specific image
 LABEL org.label-schema.name="pro-mata-database-infrastructure" \
@@ -11,6 +11,8 @@ LABEL org.label-schema.name="pro-mata-database-infrastructure" \
 RUN apk add --no-cache \
     # Backup and monitoring tools
     postgresql-contrib \
+    # PostGIS for spatial data support
+    postgis \
     # Network utilities for cluster management
     netcat-openbsd \
     # Process monitoring
@@ -33,11 +35,12 @@ RUN chmod +x /usr/local/bin/docker-entrypoint-infrastructure.sh && \
     chmod +x /docker-entrypoint-initdb.d/*.sh 2>/dev/null || true && \
     chmod 644 /etc/postgresql/*.conf && \
     chown -R postgres:postgres /var/lib/postgresql/backups && \
-    chown -R postgres:postgres /var/lib/postgresql/scripts
+    chown -R postgres:postgres /var/lib/postgresql/scripts && \
+    chown postgres:postgres /etc/postgresql/*.conf
 
 # Set environment variables for infrastructure deployment
 # Note: Sensitive values should be set via runtime environment, not build-time
-ENV POSTGRES_INITDB_ARGS="--encoding=UTF-8 --lc-collate=pt_BR.UTF-8 --lc-ctype=pt_BR.UTF-8"
+ENV POSTGRES_INITDB_ARGS="--encoding=UTF-8 --lc-collate=C.UTF-8 --lc-ctype=C.UTF-8"
 ENV CLUSTER_NAME="promata-cluster"
 
 # Enhanced health check for production
@@ -47,5 +50,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
 # Override entrypoint to use infrastructure-specific initialization
 ENTRYPOINT ["docker-entrypoint-infrastructure.sh"]
 
-# Start PostgreSQL with custom configuration
-CMD ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
+# Start PostgreSQL with default configuration from entrypoint
+CMD ["postgres"]

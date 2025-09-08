@@ -32,9 +32,9 @@ services:
         reservations:
           memory: 128M
 
-  # PostgreSQL Primary (Master) - Now using infrastructure-extended image
+  # PostgreSQL Primary (Master) - Using infrastructure-extended image
   postgres-primary:
-    image: norohim/pro-mata-database-infrastructure${ENVIRONMENT_SUFFIX}:${INFRA_DB_VERSION:-latest}
+    image: norohim/pro-mata-database-infrastructure:latest
     environment:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
@@ -43,6 +43,7 @@ services:
       - POSTGRES_REPLICATION_PASSWORD=${POSTGRES_REPLICA_PASSWORD}
       - POSTGRES_REPLICATION_MODE=master
       - PGUSER=${POSTGRES_USER}
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C.UTF-8 --lc-ctype=C.UTF-8
       
     volumes:
       - postgres_primary_data:/var/lib/postgresql/data
@@ -77,7 +78,7 @@ services:
 
   # PostgreSQL Replica (Standby)
   postgres-replica:
-    image: norohim/pro-mata-database-infrastructure${ENVIRONMENT_SUFFIX}:${INFRA_DB_VERSION:-latest}
+    image: norohim/pro-mata-database-infrastructure:latest
     environment:
       - PGUSER=${POSTGRES_REPLICA_USER:-replicator}
       - POSTGRES_USER=${POSTGRES_USER}

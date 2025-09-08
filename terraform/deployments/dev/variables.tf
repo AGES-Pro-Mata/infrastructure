@@ -153,3 +153,210 @@ variable "migration_image" {
   type        = string
   default     = "norohim/pro-mata-migration-dev:latest"
 }
+
+# Additional variables from .env configuration
+
+variable "env_color" {
+  description = "Environment color for UI differentiation"
+  type        = string
+  default     = "blue"
+}
+
+variable "env_prefix" {
+  description = "Environment prefix"
+  type        = string
+  default     = "dev"
+}
+
+variable "subdomain_prefix" {
+  description = "Subdomain prefix for the domain"
+  type        = string
+  default     = ""
+}
+
+variable "api_subdomain" {
+  description = "API subdomain"
+  type        = string
+  default     = "api"
+}
+
+variable "admin_subdomain" {
+  description = "Admin subdomain"
+  type        = string
+  default     = "admin"
+}
+
+variable "azure_subscription_id" {
+  description = "Azure subscription ID"
+  type        = string
+  sensitive   = true
+}
+
+variable "database_image" {
+  description = "Database Docker image"
+  type        = string
+  default     = "norohim/pro-mata-database-infrastructure:latest"
+}
+
+variable "app_version" {
+  description = "Application version"
+  type        = string
+  default     = "latest"
+}
+
+variable "postgres_password" {
+  description = "PostgreSQL password"
+  type        = string
+  sensitive   = true
+  default     = "promata_dev_password_change_me"
+}
+
+variable "postgres_replica_user" {
+  description = "PostgreSQL replication user"
+  type        = string
+  default     = "replicator"
+}
+
+variable "postgres_replica_password" {
+  description = "PostgreSQL replication password"
+  type        = string
+  sensitive   = true
+  default     = "replica_dev_password_change_me"
+}
+
+variable "database_size" {
+  description = "Database size/tier"
+  type        = string
+  default     = "Basic"
+}
+
+variable "jwt_secret" {
+  description = "JWT secret key"
+  type        = string
+  sensitive   = true
+  default     = "your-super-secret-jwt-key-change-this-in-production"
+}
+
+variable "jwt_expires_in" {
+  description = "JWT token expiration time"
+  type        = string
+  default     = "24h"
+}
+
+variable "pgbouncer_pool_mode" {
+  description = "PgBouncer pool mode"
+  type        = string
+  default     = "session"
+}
+
+variable "pgbouncer_pool_size" {
+  description = "PgBouncer pool size"
+  type        = number
+  default     = 20
+}
+
+variable "pgbouncer_max_client_conn" {
+  description = "PgBouncer maximum client connections"
+  type        = number
+  default     = 100
+}
+
+variable "pgadmin_email" {
+  description = "PgAdmin email"
+  type        = string
+  default     = "admin@promata.com.br"
+}
+
+variable "pgadmin_password" {
+  description = "PgAdmin password"
+  type        = string
+  sensitive   = true
+  default     = "pgadmin_dev_password_change_me"
+}
+
+variable "traefik_log_level" {
+  description = "Traefik log level"
+  type        = string
+  default     = "INFO"
+}
+
+variable "traefik_api_dashboard" {
+  description = "Enable Traefik API dashboard"
+  type        = bool
+  default     = true
+}
+
+variable "traefik_auth_users" {
+  description = "Traefik authentication users"
+  type        = string
+  sensitive   = true
+  default     = "admin:$$2y$$10$$example_hash_change_this"
+}
+
+variable "acme_email" {
+  description = "ACME email for SSL certificates"
+  type        = string
+  default     = "admin@promata.com.br"
+}
+
+variable "prometheus_retention" {
+  description = "Prometheus data retention period"
+  type        = string
+  default     = "7d"
+}
+
+variable "grafana_admin_password" {
+  description = "Grafana admin password"
+  type        = string
+  sensitive   = true
+  default     = "grafana_dev_password_change_me"
+}
+
+variable "umami_api_key" {
+  description = "Umami API key"
+  type        = string
+  default     = ""
+}
+
+variable "umami_db_password" {
+  description = "Umami database password"
+  type        = string
+  sensitive   = true
+  default     = "umami_dev_password_change_me"
+}
+
+variable "ssl_enabled" {
+  description = "Enable SSL/TLS"
+  type        = bool
+  default     = true
+}
+
+variable "ssl_mode" {
+  description = "SSL mode configuration"
+  type        = string
+  default     = "flexible"
+}
+
+variable "backup_enabled" {
+  description = "Enable backup functionality"
+  type        = bool
+  default     = true
+}
+
+variable "backup_retention_days" {
+  description = "Backup retention period in days"
+  type        = number
+  default     = 7
+}
+
+variable "server_public_ip" {
+  description = "Server public IP address"
+  type        = string
+  default     = "0.0.0.0"
+}
+
+variable "create_dns_records" {
+  description = "Whether to create DNS records"
+  type        = bool
+  default     = true
+}

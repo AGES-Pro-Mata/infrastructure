@@ -24,6 +24,17 @@ infrastructure_init() {
     # Set proper ownership
     chown -R postgres:postgres /var/lib/postgresql/backups
     
+    # Copy PostgreSQL configuration files to proper locations
+    if [ -f "/etc/postgresql/postgresql.conf" ]; then
+        echo "📄 Using custom PostgreSQL configuration..."
+        # Configuration will be used by postgres command, not initdb
+    fi
+    
+    if [ -f "/etc/postgresql/pg_hba.conf" ]; then
+        echo "📄 Using custom pg_hba configuration..."
+        # Configuration will be used by postgres command, not initdb
+    fi
+    
     # Set up enhanced log rotation for infrastructure
     cat > /etc/logrotate.d/postgresql-infrastructure << 'EOF'
 /var/lib/postgresql/data/log/*.log {
@@ -91,19 +102,9 @@ main() {
     # Run infrastructure-specific initialization
     infrastructure_init
     
-    # Setup replication if needed
-    setup_production_replication
-    
-    # Check if we should use base migration functionality
-    if [ "$MIGRATION_MODE" = "true" ] || [ "$AUTO_MIGRATE" = "true" ]; then
-        echo "🔄 Delegating to base image migration functionality..."
-        # Call the base entrypoint with migration support
-        exec /app/start-database.sh "$@"
-    else
-        # Direct PostgreSQL startup with infrastructure config
-        echo "🗄️  Starting PostgreSQL with infrastructure configuration..."
-        exec docker-entrypoint.sh "$@"
-    fi
+    # Always delegate to base image entrypoint which handles everything correctly
+    echo "� Delegating to base image entrypoint..."
+    exec docker-entrypoint.sh "$@"
 }
 
 # Execute main function

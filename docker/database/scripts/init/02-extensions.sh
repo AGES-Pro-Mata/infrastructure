@@ -1,6 +1,6 @@
 #!/bin/bash
 # Pro-Mata PostgreSQL Extensions Installation
-set -e
+# Note: Using continue-on-error approach for optional extensions
 
 echo "🔧 Instalando extensões PostgreSQL para Pro-Mata..."
 
@@ -9,6 +9,7 @@ install_extensions() {
     local db_name=$1
     echo "📦 Instalando extensões em $db_name..."
     
+    # Core extensions (required)
     psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$db_name" <<-EOSQL
         -- UUID generation
         CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -24,14 +25,20 @@ install_extensions() {
         -- Statistics and monitoring
         CREATE EXTENSION IF NOT EXISTS "pg_stat_statements";
         
-        -- PostGIS for geospatial data (Pro-Mata research locations)
-        CREATE EXTENSION IF NOT EXISTS "postgis";
-        CREATE EXTENSION IF NOT EXISTS "postgis_topology";
-        
         -- Additional useful extensions
         CREATE EXTENSION IF NOT EXISTS "ltree";
         CREATE EXTENSION IF NOT EXISTS "hstore";
-        
+EOSQL
+
+    # PostGIS (optional - may fail if not installed)
+    echo "📦 Tentando instalar PostGIS em $db_name..."
+    psql --username "$POSTGRES_USER" --dbname "$db_name" <<-EOSQL 2>/dev/null || echo "⚠️  PostGIS não disponível em $db_name - continuando sem geospatial"
+        CREATE EXTENSION IF NOT EXISTS "postgis";
+        CREATE EXTENSION IF NOT EXISTS "postgis_topology";
+EOSQL
+
+    # Database configuration (required)
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$db_name" <<-EOSQL
         -- Configurações específicas para fuso horário brasileiro
         ALTER DATABASE ${db_name} SET timezone TO 'America/Sao_Paulo';
         ALTER DATABASE ${db_name} SET datestyle TO 'ISO, DMY';

@@ -41,7 +41,7 @@ deploy-terraform: check-env ## Deploy only Terraform
 	@echo "🏗️  Deploying Terraform for $(ENV)..."
 	@cd $(TF_DIR) && terraform init -backend-config=../../backends/$(ENV)-backend.hcl
 	@cd $(TF_DIR) && terraform plan -var-file=../../../$(ENV_DIR)/terraform.tfvars
-	@cd $(TF_DIR) && terraform apply -var-file=../../../$(ENV_DIR)/terraform.tfvars
+	@cd $(TF_DIR) && terraform apply -var-file=../../../$(ENV_DIR)/terraform.tfvars --auto-approve
 
 deploy-ansible: check-env ## Deploy only Ansible stack
 	@echo "🔧 Deploying Ansible for $(ENV) with dev-complete stack..."
@@ -105,6 +105,9 @@ dev-init: ## Initialize development environment
 dev-deploy: ## Deploy development environment
 	@$(MAKE) deploy ENV=dev
 
+dev-deploy-full: ## Complete dev deployment: Terraform → Update vars → Ansible
+	@$(MAKE) deploy-full ENV=dev
+
 dev-validate: ## Validate development environment
 	@$(MAKE) validate ENV=dev
 
@@ -131,6 +134,111 @@ validate-migration: ## Validate migration
 deploy-automated: check-env ## Automated deployment for CI/CD
 	@echo "🤖 Starting automated deployment for $(ENV)..."
 	@./scripts/deploy/deploy.sh $(ENV)
+
+deploy-full: check-env ## Complete deployment: Terraform → Extract SSH → Update vars → Ansible
+	@echo "🚀 Starting complete deployment for $(ENV)..."
+	@echo "📋 Steps: 1) Terraform 2) Extract SSH keys 3) Update inventory/vars 4) Ansible"
+	@echo ""
+	@echo "🏗️  Step 1/4: Deploying Terraform infrastructure..."
+	@$(MAKE) deploy-terraform ENV=$(ENV)
+	@echo ""
+	@echo "� Step 2/4: Extracting SSH keys from Terraform..."
+	@$(MAKE) extract-ssh-keys ENV=$(ENV)
+	@echo ""
+	@echo "🔄 Step 3/4: Updating Ansible inventory from Terraform outputs..."
+	@$(MAKE) update-inventory ENV=$(ENV)
+	@echo ""
+	@echo "🔧 Step 4/4: Deploying application stack with Ansible..."
+	@$(MAKE) deploy-ansible ENV=$(ENV)
+	@echo ""
+	@echo "✅ Complete deployment finished for $(ENV)!"
+	@$(MAKE) show-deployment-info ENV=$(ENV)
+
+update-inventory: check-env ## Update Ansible inventory from Terraform outputs
+	@echo "🔄 Updating Ansible inventory for $(ENV) from Terraform outputs..."
+	@cd $(TF_DIR) && \
+	if terraform output > /dev/null 2>&1; then \
+		echo "📊 Extracting Terraform outputs..."; \
+		MANAGER_IP=$$(terraform output -raw swarm_manager_public_ip 2>/dev/null || echo ""); \
+		WORKER_IP=$$(terraform output -raw swarm_worker_public_ip 2>/dev/null || echo ""); \
+		MANAGER_PRIVATE_IP=$$(terraform output -raw swarm_manager_private_ip 2>/dev/null || echo ""); \
+		WORKER_PRIVATE_IP=$$(terraform output -raw swarm_worker_private_ip 2>/dev/null || echo ""); \
+		DOMAIN_NAME=$$(terraform output -raw domain_name 2>/dev/null || echo "promata.com.br"); \
+		if [ -n "$$MANAGER_IP" ] && [ -n "$$WORKER_IP" ]; then \
+			echo "🔧 Updating inventory file..."; \
+			mkdir -p ../../../$(ANSIBLE_DIR)/inventory/$(ENV); \
+			echo "# Generated Ansible Inventory for Pro-Mata $(ENV) Environment" > ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "# Auto-generated from Terraform outputs - do not edit manually" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "# Generated: $$(date)" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "---" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "all:" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "  vars:" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "    ansible_user: ubuntu" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "    ansible_ssh_private_key_file: \"$$(realpath ../../../.ssh/dev_private_key)\"" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "    ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "    env: $(ENV)" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "    domain_name: \"$$DOMAIN_NAME\"" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "    manager_public_ip: \"$$MANAGER_IP\"" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "    manager_private_ip: \"$$MANAGER_PRIVATE_IP\"" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "    worker_public_ip: \"$$WORKER_IP\"" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "    worker_private_ip: \"$$WORKER_PRIVATE_IP\"" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "  children:" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "    promata_$(ENV):" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "      children:" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "        managers:" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "          hosts:" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "            swarm-manager:" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "              ansible_host: $$MANAGER_IP" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "              private_ip: $$MANAGER_PRIVATE_IP" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "              node_role: manager" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "        workers:" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "          hosts:" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "            swarm-worker-1:" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "              ansible_host: $$WORKER_IP" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "              private_ip: $$WORKER_PRIVATE_IP" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "              node_role: worker" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "    # Convenience groups for easier targeting" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "    swarm_managers:" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "      hosts:" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "        swarm-manager:" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "    swarm_workers:" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "      hosts:" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "        swarm-worker-1:" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "    swarm_nodes:" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "      children:" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "        swarm_managers:" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "        swarm_workers:" >> ../../../$(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml; \
+			echo "✅ Inventory updated with IPs: Manager=$$MANAGER_IP, Worker=$$WORKER_IP"; \
+		else \
+			echo "❌ Failed to get VM IPs from Terraform output"; \
+			exit 1; \
+		fi; \
+	else \
+		echo "❌ No Terraform outputs found. Run 'make deploy-terraform ENV=$(ENV)' first"; \
+		exit 1; \
+	fi
+
+extract-ssh-keys: check-env ## Extract SSH keys from Terraform and setup access
+	@echo "🔑 Extracting SSH keys from Terraform for $(ENV)..."
+	@cd $(TF_DIR) && \
+	if terraform output ssh_private_key > /dev/null 2>&1; then \
+		echo "📄 Extracting SSH private key..."; \
+		mkdir -p ../../../.ssh; \
+		terraform output -raw ssh_private_key > ../../../.ssh/dev_private_key; \
+		chmod 600 ../../../.ssh/dev_private_key; \
+		echo "📄 Extracting SSH public key..."; \
+		terraform output -raw ssh_public_key > ../../../.ssh/dev_private_key.pub; \
+		chmod 644 ../../../.ssh/dev_private_key.pub; \
+		echo "✅ SSH keys extracted to .ssh/"; \
+	else \
+		echo "❌ SSH keys not found in Terraform output"; \
+		exit 1; \
+	fi
 
 stacks-deploy: check-env ## Deploy only application stacks
 	@echo "📦 Deploying dev-complete stack for $(ENV)..."

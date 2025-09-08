@@ -149,8 +149,13 @@ services:
       - POSTGRES_HOST_AUTH_METHOD=md5
       - POSTGRES_ROLE=primary
     volumes:
+{% if ansible_environment == 'prod' %}
+      # Production: Keep data volumes for persistence
       - postgres_primary_data:/var/lib/postgresql/data
       - postgres_config:/etc/postgresql
+{% else %}
+      # Development: All volumes removed to force fresh initialization
+{% endif %}
     networks:
       - promata_database
       - promata_internal
@@ -190,8 +195,13 @@ services:
       - POSTGRES_PRIMARY_HOST=postgres-primary
       - POSTGRES_PRIMARY_PORT=5432
     volumes:
+{% if ansible_environment == 'prod' %}
+      # Production: Keep data volumes for persistence
       - postgres_replica_data:/var/lib/postgresql/data
       - postgres_config:/etc/postgresql
+{% else %}
+      # Development: All volumes removed to force fresh initialization
+{% endif %}
     networks:
       - promata_database
     depends_on:
@@ -652,21 +662,21 @@ services:
         - traefik.http.routers.pgadmin.tls=true
         - traefik.http.services.pgadmin.loadbalancer.server.port=80
 
-networks:
-  promata_public:
-    external: true
-  promata_internal:
-    external: true
-  promata_database:
-    external: true
-
 volumes:
+{% if ansible_environment == 'prod' %}
+  # Production: Keep data volumes for persistence
   postgres_primary_data:
     driver: local
   postgres_replica_data:
     driver: local
   postgres_config:
     driver: local
+{% else %}
+  # Development: No data volumes to force fresh initialization
+  # This ensures init scripts in /docker-entrypoint-initdb.d/ always run
+  postgres_config:
+    driver: local
+{% endif %}
   traefik_letsencrypt:
     driver: local
   prometheus_data:
@@ -679,37 +689,3 @@ volumes:
     driver: local
   umami_db_data:
     driver: local
-
-networks:
-  database_tier:
-    external: true
-  app_tier:
-    external: true
-  proxy_tier:
-    external: true
-  monitoring_tier:
-    external: true
-
-volumes:
-  postgres_primary_data:
-    driver: local
-{% if postgres_replica_count | default(0) | int > 0 %}
-  postgres_replica_data:
-    driver: local
-{% endif %}
-  postgres_backups:
-    driver: local
-{% if redis_enabled | default(true) %}
-  redis_data:
-    driver: local
-{% endif %}
-  traefik_letsencrypt:
-    driver: local
-{% if monitoring_enabled | default(true) %}
-  prometheus_data:
-    driver: local
-  prometheus_config:
-    driver: local
-  grafana_data:
-    driver: local
-{% endif %}

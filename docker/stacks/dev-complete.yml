@@ -143,9 +143,6 @@ services:
       - POSTGRES_INITDB_ARGS=--auth-host=md5
       - POSTGRES_HOST_AUTH_METHOD=md5
       - POSTGRES_ROLE=primary
-    volumes:
-      - postgres_primary_data:/var/lib/postgresql/data
-      - postgres_config:/etc/postgresql
     networks:
       - promata_database
       - promata_internal
@@ -166,10 +163,10 @@ services:
           cpus: '0.2'
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 30s
-      timeout: 10s
+      interval: 45s
+      timeout: 15s
       retries: 3
-      start_period: 60s
+      start_period: 120s
 
   postgres-replica:
     image: norohim/pro-mata-database-infrastructure:latest
@@ -184,9 +181,6 @@ services:
       - POSTGRES_ROLE=replica
       - POSTGRES_PRIMARY_HOST=postgres-primary
       - POSTGRES_PRIMARY_PORT=5432
-    volumes:
-      - postgres_replica_data:/var/lib/postgresql/data
-      - postgres_config:/etc/postgresql
     networks:
       - promata_database
       - promata_internal
@@ -209,9 +203,10 @@ services:
           cpus: '0.25'
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 15s
-      timeout: 5s
+      interval: 30s
+      timeout: 10s
       retries: 3
+      start_period: 180s
 
   # === CONNECTION POOLING ===
   pgbouncer:
@@ -222,10 +217,10 @@ services:
       - DATABASES_USER=${POSTGRES_USER}
       - DATABASES_PASSWORD=${POSTGRES_PASSWORD}
       - DATABASES_DBNAME=${POSTGRES_DB}
-      - POOL_MODE=${PGBOUNCER_POOL_MODE:-transaction}
+      - POOL_MODE=${PGBOUNCER_POOL_MODE:-session}
       - SERVER_RESET_QUERY=DISCARD ALL
-      - MAX_CLIENT_CONN=${PGBOUNCER_MAX_CLIENT_CONN:-200}
-      - DEFAULT_POOL_SIZE=${PGBOUNCER_POOL_SIZE:-25}
+      - MAX_CLIENT_CONN=${PGBOUNCER_MAX_CLIENT_CONN:-100}
+      - DEFAULT_POOL_SIZE=${PGBOUNCER_POOL_SIZE:-20}
       - RESERVE_POOL_SIZE=5
       - RESERVE_POOL_TIMEOUT=5
       - LOG_CONNECTIONS=1
@@ -234,6 +229,15 @@ services:
       - SERVER_IDLE_TIMEOUT=600
       - LISTEN_ADDR=0.0.0.0
       - LISTEN_PORT=6432
+      - AUTH_TYPE=md5
+      - AUTH_HBA_FILE=
+      - AUTH_QUERY=SELECT usename, passwd FROM pg_shadow WHERE usename=$$1
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 6432 || exit 1"]
+      interval: 45s
+      timeout: 15s
+      retries: 3
+      start_period: 90s
     networks:
       - promata_database
       - promata_internal
@@ -256,12 +260,6 @@ services:
         reservations:
           memory: 128M
           cpus: '0.1'
-    healthcheck:
-      test: ["CMD-SHELL", "psql -h localhost -p 6432 -U ${POSTGRES_USER} -d pgbouncer -c 'SHOW STATS'"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
 
   # === APPLICATION SERVICES ===
   frontend:
@@ -279,10 +277,10 @@ services:
       - promata_public
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/"]
-      interval: 30s
-      timeout: 10s
+      interval: 45s
+      timeout: 15s
       retries: 3
-      start_period: 20s
+      start_period: 30s
     deploy:
       replicas: ${FRONTEND_REPLICAS:-2}
       placement:
@@ -316,7 +314,7 @@ services:
         - traefik.http.routers.frontend.middlewares=security-headers
         - traefik.http.services.frontend.loadbalancer.server.port=80
         - traefik.http.services.frontend.loadbalancer.healthcheck.path=/
-        - traefik.http.services.frontend.loadbalancer.healthcheck.interval=30s
+        - traefik.http.services.frontend.loadbalancer.healthcheck.interval=60s
 
   backend:
     image: norohim/pro-mata-backend-dev:latest
@@ -412,15 +410,15 @@ services:
         # Service configuration
         - traefik.http.services.backend.loadbalancer.server.port=3000
         - traefik.http.services.backend.loadbalancer.healthcheck.path=/health
-        - traefik.http.services.backend.loadbalancer.healthcheck.interval=30s
-        - traefik.http.services.backend.loadbalancer.healthcheck.timeout=10s
+        - traefik.http.services.backend.loadbalancer.healthcheck.interval=60s
+        - traefik.http.services.backend.loadbalancer.healthcheck.timeout=15s
         
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 120s
 
   # === MONITORING STACK ===
   node-exporter:
@@ -495,9 +493,10 @@ services:
         - traefik.http.services.prometheus.loadbalancer.server.port=9090
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
-      interval: 30s
-      timeout: 10s
+      interval: 60s
+      timeout: 15s
       retries: 3
+      start_period: 30s
 
   grafana:
     image: grafana/grafana:latest
@@ -540,9 +539,10 @@ services:
         - traefik.http.services.grafana.loadbalancer.server.port=3000
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
-      interval: 30s
-      timeout: 10s
+      interval: 60s
+      timeout: 15s
       retries: 3
+      start_period: 60s
 
   # === ANALYTICS ===
   umami-db:
@@ -566,9 +566,10 @@ services:
           memory: 256M
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${UMAMI_DB_USER} -d ${UMAMI_DB_NAME}"]
-      interval: 30s
-      timeout: 10s
+      interval: 45s
+      timeout: 15s
       retries: 3
+      start_period: 60s
 
   umami:
     image: ghcr.io/umami-software/umami:postgresql-latest
@@ -604,9 +605,10 @@ services:
         - traefik.http.services.umami.loadbalancer.server.port=3000
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:3000/api/heartbeat || exit 1"]
-      interval: 30s
-      timeout: 10s
+      interval: 60s
+      timeout: 15s
       retries: 3
+      start_period: 45s
 
   metabase:
     image: metabase/metabase:latest
@@ -693,14 +695,9 @@ services:
         - traefik.http.routers.pgadmin.tls=true
         - traefik.http.routers.pgadmin.middlewares=security-headers
         - traefik.http.services.pgadmin.loadbalancer.server.port=80
-
 volumes:
-  postgres_primary_data:
-    driver: local
-  postgres_replica_data:
-    driver: local
-  postgres_config:
-    driver: local
+  # PostgreSQL data and config volumes removed to force fresh initialization on each deployment
+  # This ensures init scripts in /docker-entrypoint-initdb.d/ always run for development
   traefik_letsencrypt:
     driver: local
   prometheus_data:

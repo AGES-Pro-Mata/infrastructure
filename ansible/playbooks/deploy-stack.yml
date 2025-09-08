@@ -20,6 +20,12 @@
         - /opt/promata/stacks
         - /opt/promata/configs
         - /opt/promata/configs/prometheus
+        - /opt/promata/configs/grafana
+        - /opt/promata/configs/grafana/dashboards
+        - /opt/promata/configs/grafana/datasources
+        - /opt/promata/configs/grafana/provisioning
+        - /opt/promata/configs/grafana/provisioning/dashboards
+        - /opt/promata/configs/grafana/provisioning/datasources
         - /opt/promata/logs
         - /opt/promata/data
 
@@ -137,6 +143,19 @@
         owner: "{{ ansible_user }}"
         group: "{{ ansible_user }}"
         mode: '0644'
+
+    - name: Copy Grafana configurations
+      copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0644'
+      loop:
+        - src: "../../docker/configs/grafana/datasources/prometheus.yml"
+          dest: "/opt/promata/configs/grafana/datasources/prometheus.yml"
+        - src: "../../docker/configs/grafana/dashboards/dashboards.yml"
+          dest: "/opt/promata/configs/grafana/dashboards/dashboards.yml"
 
     - name: Generate dev environment file
       template:

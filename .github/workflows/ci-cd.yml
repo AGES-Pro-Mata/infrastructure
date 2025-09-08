@@ -1,0 +1,316 @@
+# # GitHub Actions: CI/CD Responsivo ao DockerHub
+# # Triggered by DockerHub webhooks when 'latest' tag is updated
+# name: 🚀 Deploy on DockerHub Latest Tag Update
+
+# on:
+#   # Webhook from DockerHub when image is pushed
+#   repository_dispatch:
+#     types: 
+#       - dockerhub-backend-latest
+#       - dockerhub-frontend-latest
+#       - dockerhub-database-latest
+  
+#   # Manual trigger for testing
+#   workflow_dispatch:
+#     inputs:
+#       environment:
+#         description: 'Target Environment'
+#         required: true
+#         type: choice
+#         options: ['dev', 'staging', 'prod']
+#         default: 'dev'
+#       component:
+#         description: 'Component to update'
+#         required: true
+#         type: choice
+#         options: ['backend', 'frontend', 'database', 'all']
+#         default: 'all'
+#       force_deploy:
+#         description: 'Force deployment even if no changes'
+#         type: boolean
+#         default: false
+
+# env:
+#   ANSIBLE_VERSION: '8.5.0'
+#   DOCKER_CLI_VERSION: '24.0.0'
+
+# jobs:
+#   detect-changes:
+#     name: 🔍 Detect Image Changes
+#     runs-on: ubuntu-latest
+#     outputs:
+#       environment: ${{ steps.config.outputs.environment }}
+#       backend_changed: ${{ steps.changes.outputs.backend_changed }}
+#       frontend_changed: ${{ steps.changes.outputs.frontend_changed }}
+#       database_changed: ${{ steps.changes.outputs.database_changed }}
+#       backend_image: ${{ steps.images.outputs.backend_image }}
+#       frontend_image: ${{ steps.images.outputs.frontend_image }}
+#       database_image: ${{ steps.images.outputs.database_image }}
+#       should_deploy: ${{ steps.decision.outputs.should_deploy }}
+      
+#     steps:
+#       - name: Checkout Infrastructure
+#         uses: actions/checkout@v4
+        
+#       - name: Determine Environment
+#         id: config
+#         run: |
+#           # Determine environment based on trigger
+#           if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+#             # Auto-deploy to dev when DockerHub images update
+#             echo "environment=dev" >> $GITHUB_OUTPUT
+#             echo "🤖 Auto-deployment triggered by DockerHub webhook"
+#           else
+#             # Manual deployment
+#             echo "environment=${{ inputs.environment }}" >> $GITHUB_OUTPUT
+#             echo "👤 Manual deployment to ${{ inputs.environment }}"
+#           fi
+          
+#       - name: Setup Docker CLI
+#         run: |
+#           # Install Docker CLI for image inspection
+#           curl -fsSL https://download.docker.com/linux/static/stable/x86_64/docker-${{ env.DOCKER_CLI_VERSION }}.tgz | \
+#           tar -xzC /tmp && sudo mv /tmp/docker/docker /usr/local/bin/
+          
+#       - name: Get Current Image Tags
+#         id: images
+#         run: |
+#           # Define image names based on environment
+#           ENV="${{ steps.config.outputs.environment }}"
+          
+#           if [ "$ENV" = "prod" ]; then
+#             BACKEND_IMAGE="norohim/pro-mata-backend:latest"
+#             FRONTEND_IMAGE="norohim/pro-mata-frontend:latest"
+#           else
+#             BACKEND_IMAGE="norohim/pro-mata-backend-dev:latest"
+#             FRONTEND_IMAGE="norohim/pro-mata-frontend-dev:latest"
+#           fi
+#           DATABASE_IMAGE="norohim/pro-mata-database-infrastructure:latest"
+          
+#           echo "backend_image=$BACKEND_IMAGE" >> $GITHUB_OUTPUT
+#           echo "frontend_image=$FRONTEND_IMAGE" >> $GITHUB_OUTPUT
+#           echo "database_image=$DATABASE_IMAGE" >> $GITHUB_OUTPUT
+          
+#           echo "🐳 Images to check:"
+#           echo "  Backend: $BACKEND_IMAGE"
+#           echo "  Frontend: $FRONTEND_IMAGE"
+#           echo "  Database: $DATABASE_IMAGE"
+          
+#       - name: Check for Image Changes
+#         id: changes
+#         run: |
+#           # Get current image digests
+#           BACKEND_DIGEST=$(docker manifest inspect ${{ steps.images.outputs.backend_image }} 2>/dev/null | jq -r '.config.digest' || echo "")
+#           FRONTEND_DIGEST=$(docker manifest inspect ${{ steps.images.outputs.frontend_image }} 2>/dev/null | jq -r '.config.digest' || echo "")
+#           DATABASE_DIGEST=$(docker manifest inspect ${{ steps.images.outputs.database_image }} 2>/dev/null | jq -r '.config.digest' || echo "")
+          
+#           # Check if we have stored digests from last deployment
+#           LAST_BACKEND_DIGEST="${{ vars.LAST_BACKEND_DIGEST || '' }}"
+#           LAST_FRONTEND_DIGEST="${{ vars.LAST_FRONTEND_DIGEST || '' }}"
+#           LAST_DATABASE_DIGEST="${{ vars.LAST_DATABASE_DIGEST || '' }}"
+          
+#           # Determine what changed
+#           BACKEND_CHANGED="false"
+#           FRONTEND_CHANGED="false"
+#           DATABASE_CHANGED="false"
+          
+#           if [ "$BACKEND_DIGEST" != "$LAST_BACKEND_DIGEST" ] && [ -n "$BACKEND_DIGEST" ]; then
+#             BACKEND_CHANGED="true"
+#             echo "🔄 Backend image changed: $LAST_BACKEND_DIGEST -> $BACKEND_DIGEST"
+#           fi
+          
+#           if [ "$FRONTEND_DIGEST" != "$LAST_FRONTEND_DIGEST" ] && [ -n "$FRONTEND_DIGEST" ]; then
+#             FRONTEND_CHANGED="true"
+#             echo "🔄 Frontend image changed: $LAST_FRONTEND_DIGEST -> $FRONTEND_DIGEST"
+#           fi
+          
+#           if [ "$DATABASE_DIGEST" != "$LAST_DATABASE_DIGEST" ] && [ -n "$DATABASE_DIGEST" ]; then
+#             DATABASE_CHANGED="true"
+#             echo "🔄 Database image changed: $LAST_DATABASE_DIGEST -> $DATABASE_DIGEST"
+#           fi
+          
+#           echo "backend_changed=$BACKEND_CHANGED" >> $GITHUB_OUTPUT
+#           echo "frontend_changed=$FRONTEND_CHANGED" >> $GITHUB_OUTPUT
+#           echo "database_changed=$DATABASE_CHANGED" >> $GITHUB_OUTPUT
+          
+#           # Store current digests for next comparison
+#           echo "BACKEND_DIGEST=$BACKEND_DIGEST" >> $GITHUB_ENV
+#           echo "FRONTEND_DIGEST=$FRONTEND_DIGEST" >> $GITHUB_ENV
+#           echo "DATABASE_DIGEST=$DATABASE_DIGEST" >> $GITHUB_ENV
+          
+#       - name: Deployment Decision
+#         id: decision
+#         run: |
+#           SHOULD_DEPLOY="false"
+          
+#           # Check if any images changed
+#           if [ "${{ steps.changes.outputs.backend_changed }}" = "true" ] || \
+#              [ "${{ steps.changes.outputs.frontend_changed }}" = "true" ] || \
+#              [ "${{ steps.changes.outputs.database_changed }}" = "true" ]; then
+#             SHOULD_DEPLOY="true"
+#             echo "✅ Image changes detected, deployment needed"
+#           fi
+          
+#           # Check for force deployment
+#           if [ "${{ inputs.force_deploy }}" = "true" ]; then
+#             SHOULD_DEPLOY="true"
+#             echo "🔧 Force deployment requested"
+#           fi
+          
+#           # Check for manual component selection
+#           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.component }}" != "all" ]; then
+#             SHOULD_DEPLOY="true"
+#             echo "🎯 Manual component deployment: ${{ inputs.component }}"
+#           fi
+          
+#           if [ "$SHOULD_DEPLOY" = "false" ]; then
+#             echo "⏭️ No changes detected, skipping deployment"
+#           fi
+          
+#           echo "should_deploy=$SHOULD_DEPLOY" >> $GITHUB_OUTPUT
+
+#   deploy-dev:
+#     name: 🚀 Deploy to Development
+#     runs-on: ubuntu-latest
+#     needs: detect-changes
+#     if: needs.detect-changes.outputs.should_deploy == 'true' && needs.detect-changes.outputs.environment == 'dev'
+    
+#     environment: 
+#       name: development
+#       url: https://dev.promata.com.br
+    
+#     steps:
+#       - name: Checkout Infrastructure
+#         uses: actions/checkout@v4
+        
+#       - name: Setup Ansible
+#         run: |
+#           sudo apt-get update
+#           sudo apt-get install -y python3-pip sshpass
+#           pip3 install ansible==${{ env.ANSIBLE_VERSION }} ansible-vault
+          
+#       - name: Setup SSH Agent
+#         uses: webfactory/ssh-agent@v0.8.0
+#         with:
+#           ssh-private-key: ${{ secrets.DEV_SSH_PRIVATE_KEY }}
+          
+#       - name: Setup Ansible Vault
+#         run: |
+#           echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > ~/.vault_pass
+#           chmod 600 ~/.vault_pass
+          
+#       - name: Create Dynamic Inventory
+#         run: |
+#           mkdir -p ansible/inventory/dev
+#           cat > ansible/inventory/dev/hosts.yml << EOF
+#           all:
+#             children:
+#               managers:
+#                 hosts:
+#                   vm-pro-mata-dev-manager:
+#                     ansible_host: ${{ secrets.DEV_SERVER_IP }}
+#                     ansible_user: ubuntu
+#                     ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+#           EOF
+          
+#       - name: Create Environment-Specific Variables
+#         run: |
+#           mkdir -p ansible/inventory/dev/group_vars
+#           cat > ansible/inventory/dev/group_vars/all.yml << EOF
+#           # Development Environment Variables
+#           environment: dev
+#           domain_name: dev.promata.com.br
+          
+#           # Docker Images (Updated)
+#           backend_image: ${{ needs.detect-changes.outputs.backend_image }}
+#           frontend_image: ${{ needs.detect-changes.outputs.frontend_image }}
+#           database_image: ${{ needs.detect-changes.outputs.database_image }}
+          
+#           # Service Configuration
+#           backend_replicas: 1
+#           frontend_replicas: 1
+          
+#           # Features
+#           monitoring_enabled: true
+#           debug_mode: true
+#           log_level: debug
+#           EOF
+          
+#       - name: Test Connection
+#         run: |
+#           ansible all -i ansible/inventory/dev/hosts.yml -m ping
+          
+#       - name: Deploy Stack
+#         run: |
+#           ansible-playbook -i ansible/inventory/dev/hosts.yml \
+#             --vault-password-file ~/.vault_pass \
+#             -e "target_env=dev" \
+#             -e "backend_changed=${{ needs.detect-changes.outputs.backend_changed }}" \
+#             -e "frontend_changed=${{ needs.detect-changes.outputs.frontend_changed }}" \
+#             -e "database_changed=${{ needs.detect-changes.outputs.database_changed }}" \
+#             ansible/playbooks/deploy-docker-stack.yml
+            
+#       - name: Verify Deployment
+#         run: |
+#           # Wait for services to start
+#           sleep 60
+          
+#           # Check service health
+#           ansible all -i ansible/inventory/dev/hosts.yml -m shell \
+#             -a "docker service ls --format 'table {{.Name}}\t{{.Replicas}}\t{{.Image}}'"
+            
+#           # Test endpoints
+#           curl -f https://dev.promata.com.br/health || echo "Frontend health check failed"
+#           curl -f https://api.dev.promata.com.br/health || echo "Backend health check failed"
+          
+#       - name: Update Stored Digests
+#         if: success()
+#         run: |
+#           # Update GitHub repository variables with new image digests
+#           echo "Deployment successful, updating stored digests..."
+#           # Note: This requires a GitHub token with repo permissions
+#           # Implementation depends on your preferred method (API, CLI, etc.)
+          
+#       - name: Notify Team
+#         if: always()
+#         run: |
+#           STATUS="${{ job.status }}"
+#           if [ "$STATUS" = "success" ]; then
+#             echo "✅ Deployment successful to dev.promata.com.br"
+#             # Add notification logic (Slack, email, etc.)
+#           else
+#             echo "❌ Deployment failed"
+#             # Add failure notification logic
+#           fi
+
+#   deploy-staging:
+#     name: 🎭 Deploy to Staging
+#     runs-on: ubuntu-latest
+#     needs: detect-changes
+#     if: needs.detect-changes.outputs.should_deploy == 'true' && needs.detect-changes.outputs.environment == 'staging'
+    
+#     environment: 
+#       name: staging
+#       url: https://staging.promata.com.br
+    
+#     steps:
+#       - name: Staging Deployment
+#         run: |
+#           echo "🎭 Staging deployment logic here"
+#           # Similar to dev but with staging-specific configuration
+
+#   deploy-production:
+#     name: 🏭 Deploy to Production
+#     runs-on: ubuntu-latest
+#     needs: detect-changes
+#     if: needs.detect-changes.outputs.should_deploy == 'true' && needs.detect-changes.outputs.environment == 'prod'
+    
+#     environment: 
+#       name: production
+#       url: https://promata.com.br
+    
+#     steps:
+#       - name: Production Deployment
+#         run: |
+#           echo "🏭 Production deployment logic here"
+#           # Production deployment with additional safety checks

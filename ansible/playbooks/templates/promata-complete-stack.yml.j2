@@ -4,6 +4,14 @@
 # Comprehensive development environment with monitoring, analytics, and HA database
 version: "3.8"
 
+networks:
+  promata_public:
+    external: true
+  promata_internal:
+    external: true
+  promata_database:
+    external: true
+
 services:
 
   traefik:
@@ -17,8 +25,9 @@ services:
       # Entrypoints
       - --entrypoints.web.address=:80
       - --entrypoints.websecure.address=:443
+      - --entrypoints.traefik.address=:8080
       
-      # Providers
+      # Providers - CORRIGIDO para Docker Swarm
       - --providers.swarm=true
       - --providers.swarm.exposedbydefault=false
       - --providers.swarm.endpoint=unix:///var/run/docker.sock
@@ -45,8 +54,10 @@ services:
       # Logs e Métricas
       - --log.level={{ traefik_log_level | default('INFO') }}
       - --accesslog=true
+      - --accesslog.filepath=/logs/access.log
       - --metrics.prometheus=true
-      - --metrics.prometheus.addrouterslabels=true
+      - --metrics.prometheus.addentrypointslabels=true
+      - --metrics.prometheus.addserviceslabels=true
       
       # Segurança
       - --global.sendanonymoususage=false
@@ -78,6 +89,10 @@ services:
       placement:
         constraints:
           - node.role == manager
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
       resources:
         limits:
           memory: 512M
@@ -93,13 +108,16 @@ services:
         - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
         - traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true
         
-        # Middleware de segurança
-        - traefik.http.middlewares.security-headers.headers.customRequestHeaders.X-Forwarded-Proto=https
-        - traefik.http.middlewares.security-headers.headers.SSLRedirect=true
-        - traefik.http.middlewares.security-headers.headers.STSSeconds=31536000
-        - traefik.http.middlewares.security-headers.headers.STSIncludeSubdomains=true
-        - traefik.http.middlewares.security-headers.headers.STSPreload=true
-        - traefik.http.middlewares.security-headers.headers.forceSTSHeader=true
+        # Middleware de segurança - MELHORADO
+        - traefik.http.middlewares.security-headers.headers.customrequestheaders.X-Forwarded-Proto=https
+        - traefik.http.middlewares.security-headers.headers.sslredirect=true
+        - traefik.http.middlewares.security-headers.headers.stsseconds=31536000
+        - traefik.http.middlewares.security-headers.headers.stsincludesubdomains=true
+        - traefik.http.middlewares.security-headers.headers.stspreload=true
+        - traefik.http.middlewares.security-headers.headers.forcestshheader=true
+        - traefik.http.middlewares.security-headers.headers.contenttypenosniff=true
+        - traefik.http.middlewares.security-headers.headers.frameoptions=DENY
+        - traefik.http.middlewares.security-headers.headers.referrerpolicy=strict-origin-when-cross-origin
         
         # Middleware de autenticação para dashboard
         - traefik.http.middlewares.traefik-auth.basicauth.users={{ traefik_auth_users }}
@@ -109,13 +127,13 @@ services:
         - traefik.http.routers.http-catchall.entrypoints=web
         - traefik.http.routers.http-catchall.middlewares=redirect-to-https
         
-        # Dashboard do Traefik
-        - traefik.http.routers.traefik.rule=Host(`traefik.{{ domain_name }}`)
-        - traefik.http.routers.traefik.entrypoints=websecure
-        - traefik.http.routers.traefik.tls.certresolver=letsencrypt
-        - traefik.http.routers.traefik.tls=true
-        - traefik.http.routers.traefik.middlewares=traefik-auth,security-headers
-        - traefik.http.routers.traefik.service=api@internal
+        # Dashboard do Traefik - CORRIGIDO
+        - traefik.http.routers.traefik-dashboard.rule=Host(`traefik.{{ domain_name }}`)
+        - traefik.http.routers.traefik-dashboard.entrypoints=websecure
+        - traefik.http.routers.traefik-dashboard.tls.certresolver=letsencrypt
+        - traefik.http.routers.traefik-dashboard.tls=true
+        - traefik.http.routers.traefik-dashboard.middlewares=traefik-auth,security-headers
+        - traefik.http.routers.traefik-dashboard.service=api@internal
 
   # === DATABASE CLUSTER ===
   postgres-primary:
@@ -135,26 +153,28 @@ services:
       - postgres_config:/etc/postgresql
     networks:
       - promata_database
+      - promata_internal
     deploy:
       placement:
         constraints:
-          - node.labels.database.primary == true
+          - node.role == manager
       restart_policy:
         condition: on-failure
         delay: 5s
         max_attempts: 3
       resources:
         limits:
-          memory: {{ postgres_memory_limit | default('800M') }}
-          cpus: {{ postgres_cpu_limit | default('0.8') }}
+          memory: 1G
+          cpus: '0.8'
         reservations:
-          memory: {{ postgres_memory_reservation | default('512M') }}
-          cpus: {{ postgres_cpu_reservation | default('0.4') }}
+          memory: 512M
+          cpus: '0.2'
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U {{ postgres_user }} -d {{ postgres_db }}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   postgres-replica:
     image: {{ database_image | default('norohim/pro-mata-database-infrastructure:latest') }}
@@ -206,10 +226,14 @@ services:
       - DATABASES_USER={{ postgres_user }}
       - DATABASES_PASSWORD={{ postgres_password }}
       - DATABASES_DBNAME={{ postgres_db }}
-      - POOL_MODE={{ pgbouncer_pool_mode | default('session') }}
+      - POOL_MODE={{ pgbouncer_pool_mode | default('transaction') }}
       - SERVER_RESET_QUERY=DISCARD ALL
-      - MAX_CLIENT_CONN={{ pgbouncer_max_client_conn | default('100') }}
-      - DEFAULT_POOL_SIZE={{ pgbouncer_pool_size | default('20') }}
+      - MAX_CLIENT_CONN={{ pgbouncer_max_client_conn | default('200') }}
+      - DEFAULT_POOL_SIZE={{ pgbouncer_pool_size | default('25') }}
+      - RESERVE_POOL_SIZE={{ reserve_pool_size | default(5) }}
+      - RESERVE_POOL_TIMEOUT={{ reserve_pool_timeout | default(5) }}
+      - LOG_CONNECTIONS={{ log_connections | default(1) }}
+      - LOG_DISCONNECTIONS={{ log_disconnections | default(1) }}
       - SERVER_LIFETIME=3600
       - SERVER_IDLE_TIMEOUT=600
       - LISTEN_ADDR=0.0.0.0
@@ -355,14 +379,13 @@ services:
       labels:
         - traefik.enable=true
         - traefik.docker.network=promata_public
-
-        - traefik.http.routers.backend.rule=Host(\`api.{{ domain_name }}\`) && PathPrefix(\`/api\`)
-        - traefik.http.middlewares.backend-stripprefix.stripprefix.prefixes=/api
+        
+        # Router principal
+        - traefik.http.routers.backend.rule=Host(`api.{{ domain_name }}`)
         - traefik.http.routers.backend.entrypoints=websecure
         - traefik.http.routers.backend.tls.certresolver=letsencrypt
         - traefik.http.routers.backend.tls=true
-        - traefik.http.routers.backend.middlewares=backend-stripprefix,security-headers
-        
+        - traefik.http.routers.backend.middlewares=security-headers
         
         # Service configuration
         - traefik.http.services.backend.loadbalancer.server.port=3000
@@ -452,12 +475,13 @@ services:
   grafana:
     image: grafana/grafana:latest
     environment:
-      - GF_SECURITY_ADMIN_USER={{ grafana_user | default('admin') }}
-      - GF_SECURITY_ADMIN_PASSWORD={{ grafana_password }}
+      - GF_SECURITY_ADMIN_USER={{ grafana_admin_user | default('admin') }}
+      - GF_SECURITY_ADMIN_PASSWORD={{ grafana_admin_password | default(grafana_password) }}
       - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_USERS_ALLOW_ORG_CREATE=false
       - GF_SERVER_DOMAIN=grafana.{{ domain_name }}
       - GF_SERVER_ROOT_URL=https://grafana.{{ domain_name }}
-      - GF_INSTALL_PLUGINS={{ grafana_plugins | default('grafana-piechart-panel') }}
+      - GF_INSTALL_PLUGINS={{ grafana_plugins | default('grafana-piechart-panel,grafana-clock-panel') }}
     volumes:
       - grafana_data:/var/lib/grafana
       - /opt/promata/configs/grafana/datasources:/etc/grafana/provisioning/datasources:ro
@@ -655,92 +679,6 @@ volumes:
     driver: local
   umami_db_data:
     driver: local
-
-{% if redis_enabled | default(true) %}
-  # Redis Cache
-  redis:
-    image: redis:7-alpine
-    command: redis-server --appendonly yes --maxmemory {{ redis_maxmemory | default('256mb') }} --maxmemory-policy allkeys-lru
-    volumes:
-      - redis_data:/data
-    networks:
-      - app_tier
-    deploy:
-      replicas: {{ redis_replicas | default(2) }}
-      placement:
-        preferences:
-          - spread: node.id
-        constraints:
-          - node.role == worker
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
-          memory: 256M
-          cpus: '0.1'
-{% endif %}
-
-{% if monitoring_enabled | default(true) %}
-  # Prometheus Monitoring
-  prometheus:
-    image: prom/prometheus:latest
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
-      - '--storage.tsdb.retention.time={{ prometheus_retention | default('200h') }}'
-      - '--web.enable-lifecycle'
-    volumes:
-      - prometheus_data:/prometheus
-      - prometheus_config:/etc/prometheus
-    networks:
-      - monitoring_tier
-      - app_tier
-    deploy:
-      replicas: 1
-      placement:
-        constraints: [node.role == manager]
-      resources:
-        limits:
-          memory: 1G
-          cpus: '0.5'
-        reservations:
-          memory: 512M
-          cpus: '0.1'
-
-  # Grafana Dashboard
-  grafana:
-    image: grafana/grafana:latest
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD={{ grafana_admin_password }}
-      - GF_INSTALL_PLUGINS={{ grafana_plugins | default('grafana-piechart-panel') }}
-      - GF_SECURITY_ADMIN_USER={{ grafana_admin_user | default('admin') }}
-    volumes:
-      - grafana_data:/var/lib/grafana
-    networks:
-      - monitoring_tier
-      - proxy_tier
-    deploy:
-      replicas: 1
-      placement:
-        constraints: [node.role == manager]
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.25'
-        reservations:
-          memory: 256M
-          cpus: '0.1'
-      labels:
-        - traefik.enable=true
-        - traefik.docker.network=proxy_tier
-        - traefik.http.routers.grafana.rule=Host(`grafana.{{ domain_name }}`)
-        - traefik.http.routers.grafana.entrypoints=websecure
-        - traefik.http.routers.grafana.tls.certresolver=letsencrypt
-        - traefik.http.services.grafana.loadbalancer.server.port=3000
-{% endif %}
 
 networks:
   database_tier:

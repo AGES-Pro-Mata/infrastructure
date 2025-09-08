@@ -12,7 +12,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 # Configuration from terraform.tfvars
-CLOUDFLARE_API_TOKEN="QExl7Cn0aFxBvvoUH0THelWz2HXMXdBUhaVHrTLO"
+CLOUDFLARE_API_TOKEN="oycrpCKXpVQmDq_6V2ArnidSxImWxvkzJhxhhBtl"
 CLOUDFLARE_ZONE_ID="c59ab9e254cc4d555f265d1d111f95ed"
 DOMAIN_NAME="promata.com.br"
 

@@ -109,9 +109,9 @@ services:
         - traefik.http.middlewares.security-headers.headers.stsseconds=31536000
         - traefik.http.middlewares.security-headers.headers.stsincludesubdomains=true
         - traefik.http.middlewares.security-headers.headers.stspreload=true
-        - traefik.http.middlewares.security-headers.headers.forcestshheader=true
+        - traefik.http.middlewares.security-headers.headers.forcestsheader=true
         - traefik.http.middlewares.security-headers.headers.contenttypenosniff=true
-        - traefik.http.middlewares.security-headers.headers.frameoptions=DENY
+        - traefik.http.middlewares.security-headers.headers.frameOptions=DENY
         - traefik.http.middlewares.security-headers.headers.referrerpolicy=strict-origin-when-cross-origin
         
         # Middleware de autenticação para dashboard

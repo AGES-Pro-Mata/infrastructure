@@ -134,15 +134,13 @@ services:
   postgres-primary:
     image: norohim/pro-mata-database-infrastructure:latest
     environment:
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_REPLICATION_USER=${POSTGRES_REPLICATION_USER}
-      - POSTGRES_REPLICATION_PASSWORD=${POSTGRES_REPLICATION_PASSWORD}
-      - PGUSER=${POSTGRES_USER}
-      - POSTGRES_INITDB_ARGS=--auth-host=md5
-      - POSTGRES_HOST_AUTH_METHOD=md5
-      - POSTGRES_ROLE=primary
+      - POSTGRES_DB=promata
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password123
+      - POSTGRES_INITDB_ARGS=--auth=trust --auth-host=trust --auth-local=trust
+      - POSTGRES_HOST_AUTH_METHOD=trust
+      - NODE_ROLE=primary
+      - SKIP_POSTGIS=true
     networks:
       - promata_database
       - promata_internal
@@ -171,16 +169,13 @@ services:
   postgres-replica:
     image: norohim/pro-mata-database-infrastructure:latest
     environment:
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_REPLICATION_USER=${POSTGRES_REPLICATION_USER}
-      - POSTGRES_REPLICATION_PASSWORD=${POSTGRES_REPLICATION_PASSWORD}
-      - PGUSER=${POSTGRES_USER}
-      - POSTGRES_HOST_AUTH_METHOD=md5
-      - POSTGRES_ROLE=replica
-      - POSTGRES_PRIMARY_HOST=postgres-primary
-      - POSTGRES_PRIMARY_PORT=5432
+      - POSTGRES_DB=promata
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password123
+      - POSTGRES_INITDB_ARGS=--auth=trust --auth-host=trust --auth-local=trust
+      - POSTGRES_HOST_AUTH_METHOD=trust
+      - NODE_ROLE=replica
+      - PRIMARY_HOST=postgres-primary
     networks:
       - promata_database
       - promata_internal
@@ -214,13 +209,13 @@ services:
     environment:
       - DATABASES_HOST=postgres-primary
       - DATABASES_PORT=5432
-      - DATABASES_USER=${POSTGRES_USER}
-      - DATABASES_PASSWORD=${POSTGRES_PASSWORD}
-      - DATABASES_DBNAME=${POSTGRES_DB}
-      - POOL_MODE=${PGBOUNCER_POOL_MODE:-session}
+      - DATABASES_USER=postgres
+      - DATABASES_PASSWORD=password123
+      - DATABASES_DBNAME=promata
+      - POOL_MODE=session
       - SERVER_RESET_QUERY=DISCARD ALL
-      - MAX_CLIENT_CONN=${PGBOUNCER_MAX_CLIENT_CONN:-100}
-      - DEFAULT_POOL_SIZE=${PGBOUNCER_POOL_SIZE:-20}
+      - MAX_CLIENT_CONN=100
+      - DEFAULT_POOL_SIZE=20
       - RESERVE_POOL_SIZE=5
       - RESERVE_POOL_TIMEOUT=5
       - LOG_CONNECTIONS=1
@@ -229,9 +224,9 @@ services:
       - SERVER_IDLE_TIMEOUT=600
       - LISTEN_ADDR=0.0.0.0
       - LISTEN_PORT=6432
-      - AUTH_TYPE=md5
+      - AUTH_TYPE=trust
       - AUTH_HBA_FILE=
-      - AUTH_QUERY=SELECT usename, passwd FROM pg_shadow WHERE usename=$$1
+      - AUTH_QUERY=
     healthcheck:
       test: ["CMD-SHELL", "nc -z localhost 6432 || exit 1"]
       interval: 45s
@@ -276,19 +271,18 @@ services:
     networks:
       - promata_public
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
       interval: 45s
       timeout: 15s
       retries: 3
       start_period: 30s
     deploy:
-      replicas: ${FRONTEND_REPLICAS:-2}
+      replicas: ${FRONTEND_REPLICAS:-1}
       placement:
         constraints:
           - node.role == manager
         preferences:
           - spread: node.id
-        max_replicas_per_node: 1
       restart_policy:
         condition: on-failure
         delay: 5s
@@ -328,18 +322,18 @@ services:
       
       # Configuração de banco - CORRIGIDA
       # PROBLEMA: JWT_SECRET não estava definido (logs mostram "JWT_SECRET was not setted")
-      - JWT_SECRET=${JWT_SECRET}
-      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-1h}
+      - JWT_SECRET=dev_jwt_secret_change_in_production_123456789
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-2h}
       
-      # Database URL com PgBouncer
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pgbouncer:6432/${POSTGRES_DB}
+      # Database URL com PgBouncer - CORRIGIDA para incluir username
+      - DATABASE_URL=postgresql://postgres:password123@pgbouncer:6432/promata
       
       # Configuração alternativa para conexão direta (para debug)
       - DATABASE_HOST=postgres-primary
       - DATABASE_PORT=5432
-      - DATABASE_NAME=${POSTGRES_DB}
-      - DATABASE_USER=${POSTGRES_USER}
-      - DATABASE_PASSWORD=${POSTGRES_PASSWORD}
+      - DATABASE_NAME=promata
+      - DATABASE_USER=postgres
+      - DATABASE_PASSWORD=password123
       
       # Pool de conexão
       - DATABASE_POOL_MIN=2
@@ -378,7 +372,6 @@ services:
           - node.role == manager
         preferences:
           - spread: node.id
-        max_replicas_per_node: 1
       restart_policy:
         condition: on-failure
         delay: 10s

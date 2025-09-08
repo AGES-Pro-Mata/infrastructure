@@ -140,14 +140,15 @@ services:
     image: {{ database_image | default('norohim/pro-mata-database-infrastructure:latest') }}
     environment:
       - POSTGRES_DB={{ postgres_db }}
-      - POSTGRES_USER={{ postgres_user }}
+      - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD={{ postgres_password }}
       - POSTGRES_REPLICATION_USER={{ postgres_replica_user }}
       - POSTGRES_REPLICATION_PASSWORD={{ postgres_replica_password }}
-      - PGUSER={{ postgres_user }}
-      - POSTGRES_INITDB_ARGS=--auth-host=md5
-      - POSTGRES_HOST_AUTH_METHOD=md5
+      - PGUSER=postgres
+      - POSTGRES_INITDB_ARGS=--auth=trust --auth-host=trust --auth-local=trust
+      - POSTGRES_HOST_AUTH_METHOD=trust
       - POSTGRES_ROLE=primary
+      - PGPASSWORD={{ postgres_password }}
     volumes:
 {% if ansible_environment == 'prod' %}
       # Production: Keep data volumes for persistence
@@ -176,24 +177,25 @@ services:
           cpus: '0.2'
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U {{ postgres_user }} -d {{ postgres_db }}"]
-      interval: 30s
-      timeout: 10s
+      interval: 45s
+      timeout: 15s
       retries: 3
-      start_period: 60s
+      start_period: 120s
 
   postgres-replica:
     image: {{ database_image | default('norohim/pro-mata-database-infrastructure:latest') }}
     environment:
       - POSTGRES_DB={{ postgres_db }}
-      - POSTGRES_USER={{ postgres_user }}
+      - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD={{ postgres_password }}
       - POSTGRES_REPLICATION_USER={{ postgres_replica_user }}
       - POSTGRES_REPLICATION_PASSWORD={{ postgres_replica_password }}
-      - PGUSER={{ postgres_user }}
-      - POSTGRES_HOST_AUTH_METHOD=md5
+      - PGUSER=postgres
+      - POSTGRES_HOST_AUTH_METHOD=trust
       - POSTGRES_ROLE=replica
       - POSTGRES_PRIMARY_HOST=postgres-primary
       - POSTGRES_PRIMARY_PORT=5432
+      - PGPASSWORD={{ postgres_password }}
     volumes:
 {% if ansible_environment == 'prod' %}
       # Production: Keep data volumes for persistence
@@ -204,12 +206,13 @@ services:
 {% endif %}
     networks:
       - promata_database
+      - promata_internal
     depends_on:
       - postgres-primary
     deploy:
       placement:
         constraints:
-          - node.labels.database.replica == true
+          - node.role == worker
       restart_policy:
         condition: on-failure
         delay: 10s
@@ -223,9 +226,10 @@ services:
           cpus: {{ postgres_replica_cpu_reservation | default('0.25') }}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U {{ postgres_user }} -d {{ postgres_db }}"]
-      interval: 15s
-      timeout: 5s
+      interval: 30s
+      timeout: 10s
       retries: 3
+      start_period: 180s
 
   # === CONNECTION POOLING ===
   pgbouncer:
@@ -236,10 +240,10 @@ services:
       - DATABASES_USER={{ postgres_user }}
       - DATABASES_PASSWORD={{ postgres_password }}
       - DATABASES_DBNAME={{ postgres_db }}
-      - POOL_MODE={{ pgbouncer_pool_mode | default('transaction') }}
+      - POOL_MODE={{ pgbouncer_pool_mode | default('session') }}
       - SERVER_RESET_QUERY=DISCARD ALL
-      - MAX_CLIENT_CONN={{ pgbouncer_max_client_conn | default('200') }}
-      - DEFAULT_POOL_SIZE={{ pgbouncer_pool_size | default('25') }}
+      - MAX_CLIENT_CONN={{ pgbouncer_max_client_conn | default('100') }}
+      - DEFAULT_POOL_SIZE={{ pgbouncer_pool_size | default('20') }}
       - RESERVE_POOL_SIZE={{ reserve_pool_size | default(5) }}
       - RESERVE_POOL_TIMEOUT={{ reserve_pool_timeout | default(5) }}
       - LOG_CONNECTIONS={{ log_connections | default(1) }}
@@ -248,6 +252,9 @@ services:
       - SERVER_IDLE_TIMEOUT=600
       - LISTEN_ADDR=0.0.0.0
       - LISTEN_PORT=6432
+      - AUTH_TYPE=md5
+      - AUTH_HBA_FILE=
+      - AUTH_QUERY=SELECT usename, passwd FROM pg_shadow WHERE usename=$$1
     networks:
       - promata_database
       - promata_internal
@@ -256,47 +263,8 @@ services:
     deploy:
       replicas: {{ pgbouncer_replicas | default(1) }}
       placement:
-        max_replicas_per_node: 1
-      restart_policy:
-        condition: on-failure
-        delay: 5s
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.25'
-        reservations:
-          memory: 128M
-          cpus: '0.1'
-    healthcheck:
-      test: ["CMD-SHELL", "nc -z 127.0.0.1 6432"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-  # === APPLICATION SERVICES ===
-  frontend:
-    image: {{ frontend_image }}
-    environment:
-      - NODE_ENV={{ 'production' if ansible_environment == 'prod' else 'development' }}
-      - VITE_API_URL=https://api.{{ domain_name }}
-      - VITE_APP_ENV={{ ansible_environment | default('development') }}
-      - VITE_UMAMI_URL=https://analytics.{{ domain_name }}
-      - VITE_UMAMI_WEBSITE_ID={{ umami_website_id | default('') }}
-      - VITE_UMAMI_SCRIPT_URL=https://analytics.{{ domain_name }}/script.js
-      - VITE_ENABLE_ANALYTICS={{ vite_enable_analytics | default(true) }}
-    networks:
-      - promata_public
-      - promata_internal
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    deploy:
-      replicas: {{ frontend_replicas | default(1) }}
-      placement:
+        constraints:
+          - node.role == manager
         max_replicas_per_node: 1
       restart_policy:
         condition: on-failure
@@ -304,11 +272,60 @@ services:
         max_attempts: 3
       resources:
         limits:
-          memory: {{ frontend_memory_limit | default('1G') }}
-          cpus: {{ frontend_cpu_limit | default('1.0') }}
+          memory: 256M
+          cpus: '0.3'
         reservations:
-          memory: {{ frontend_memory_reservation | default('512M') }}
-          cpus: {{ frontend_cpu_reservation | default('0.5') }}
+          memory: 128M
+          cpus: '0.1'
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 6432 || exit 1"]
+      interval: 45s
+      timeout: 15s
+      retries: 3
+      start_period: 90s
+
+  # === APPLICATION SERVICES ===
+  frontend:
+    image: {{ frontend_image | default('norohim/pro-mata-frontend-dev:latest') }}
+    environment:
+      - NODE_ENV={{ 'production' if ansible_environment == 'prod' else 'development' }}
+      - VITE_API_URL=https://api.{{ domain_name }}
+      - VITE_APP_ENV={{ ansible_environment | default('development') }}
+      - VITE_APP_VERSION={{ frontend_version | default('latest') }}
+      - VITE_UMAMI_URL=https://analytics.{{ domain_name }}
+      - VITE_UMAMI_WEBSITE_ID={{ umami_website_id | default('') }}
+      - VITE_UMAMI_SCRIPT_URL={{ vite_umami_script_url | default('') }}
+      - VITE_ENABLE_ANALYTICS={{ vite_enable_analytics | default(true) }}
+    networks:
+      - promata_public
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/"]
+      interval: 45s
+      timeout: 15s
+      retries: 3
+      start_period: 30s
+    deploy:
+      replicas: {{ frontend_replicas | default(2) }}
+      placement:
+        constraints:
+          - node.role == manager
+        preferences:
+          - spread: node.id
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      update_config:
+        parallelism: 1
+        delay: 5s
+        order: start-first
+      resources:
+        limits:
+          memory: {{ frontend_memory_limit | default('256M') }}
+          cpus: {{ frontend_cpu_limit | default('0.25') }}
+        reservations:
+          memory: {{ frontend_memory_reservation | default('128M') }}
+          cpus: {{ frontend_cpu_reservation | default('0.1') }}
       labels:
         - traefik.enable=true
         - traefik.docker.network=promata_public
@@ -316,10 +333,14 @@ services:
         - traefik.http.routers.frontend.entrypoints=websecure
         - traefik.http.routers.frontend.tls.certresolver=letsencrypt
         - traefik.http.routers.frontend.tls=true
-        - traefik.http.services.frontend.loadbalancer.server.port=3000
+        - traefik.http.routers.frontend.middlewares=security-headers
+        - traefik.http.services.frontend.loadbalancer.server.port=80
+        - traefik.http.services.frontend.loadbalancer.healthcheck.path=/
+        - traefik.http.services.frontend.loadbalancer.healthcheck.interval=60s
 
   backend:
-    image: {{ backend_image }}
+    image: {{ backend_image | default('norohim/pro-mata-backend-dev:latest') }}
+    stop_grace_period: 60s  
     environment:
       # Configuração básica
       - NODE_ENV={{ 'production' if ansible_environment == 'prod' else 'development' }}
@@ -327,6 +348,7 @@ services:
       - API_SUBDOMAIN=api 
       
       # Configuração de banco - CORRIGIDA
+      # PROBLEMA: JWT_SECRET não estava definido (logs mostram "JWT_SECRET was not setted")
       - JWT_SECRET={{ jwt_secret }}
       - JWT_EXPIRES_IN={{ jwt_expires_in | default('1h') }}
       
@@ -373,24 +395,32 @@ services:
     deploy:
       replicas: {{ backend_replicas | default(1) }}
       placement:
-        max_replicas_per_node: 1
+        constraints:
+          - node.role == manager
+        preferences:
+          - spread: node.id
       restart_policy:
         condition: on-failure
         delay: 10s
         max_attempts: 5
         window: 120s
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+        failure_action: rollback
       resources:
         limits:
           memory: {{ backend_memory_limit | default('800M') }}
           cpus: {{ backend_cpu_limit | default('0.8') }}
         reservations:
-          memory: {{ backend_memory_reservation | default('300M') }}
+          memory: {{ backend_memory_reservation | default('256M') }}
           cpus: {{ backend_cpu_reservation | default('0.2') }}
       labels:
         - traefik.enable=true
         - traefik.docker.network=promata_public
         
-        # Router principal
+        # Router principal - REGRAS CORRIGIDAS
         - traefik.http.routers.backend.rule=Host(`api.{{ domain_name }}`)
         - traefik.http.routers.backend.entrypoints=websecure
         - traefik.http.routers.backend.tls.certresolver=letsencrypt
@@ -400,11 +430,15 @@ services:
         # Service configuration
         - traefik.http.services.backend.loadbalancer.server.port=3000
         - traefik.http.services.backend.loadbalancer.healthcheck.path=/health
-        - traefik.http.services.backend.loadbalancer.healthcheck.interval=30s
-        - traefik.http.services.backend.loadbalancer.healthcheck.timeout=10s
+        - traefik.http.services.backend.loadbalancer.healthcheck.interval=60s
+        - traefik.http.services.backend.loadbalancer.healthcheck.timeout=15s
         
-        # CORS headers para API
-        - traefik.http.middlewares.api-cors.headers.accesscontrolexposeheaders=*
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 120s
 
   # === MONITORING STACK ===
   node-exporter:

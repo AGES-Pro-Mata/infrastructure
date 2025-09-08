@@ -30,12 +30,16 @@ install_extensions() {
         CREATE EXTENSION IF NOT EXISTS "hstore";
 EOSQL
 
-    # PostGIS (optional - may fail if not installed)
-    echo "📦 Tentando instalar PostGIS em $db_name..."
-    psql --username "$POSTGRES_USER" --dbname "$db_name" <<-EOSQL 2>/dev/null || echo "⚠️  PostGIS não disponível em $db_name - continuando sem geospatial"
-        CREATE EXTENSION IF NOT EXISTS "postgis";
-        CREATE EXTENSION IF NOT EXISTS "postgis_topology";
+    # PostGIS (optional - may fail if not installed, can be skipped with SKIP_POSTGIS)
+    if [ "$SKIP_POSTGIS" != "true" ]; then
+        echo "📦 Tentando instalar PostGIS em $db_name..."
+        psql --username "$POSTGRES_USER" --dbname "$db_name" <<-EOSQL 2>/dev/null || echo "⚠️  PostGIS não disponível em $db_name - continuando sem geospatial"
+            CREATE EXTENSION IF NOT EXISTS "postgis";
+            CREATE EXTENSION IF NOT EXISTS "postgis_topology";
 EOSQL
+    else
+        echo "⏭️  Pulando instalação do PostGIS em $db_name (SKIP_POSTGIS=true)"
+    fi
 
     # Database configuration (required)
     psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$db_name" <<-EOSQL

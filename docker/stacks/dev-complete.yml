@@ -146,8 +146,7 @@ services:
       - promata_internal
     deploy:
       placement:
-        constraints:
-          - node.role == manager
+        constraints: []
       restart_policy:
         condition: on-failure
         delay: 5s
@@ -183,8 +182,7 @@ services:
       - postgres-primary
     deploy:
       placement:
-        constraints:
-          - node.role == worker
+        constraints: []
       restart_policy:
         condition: on-failure
         delay: 10s
@@ -241,8 +239,7 @@ services:
     deploy:
       replicas: ${PGBOUNCER_REPLICAS:-1}
       placement:
-        constraints:
-          - node.role == manager
+        constraints: []
         max_replicas_per_node: 1
       restart_policy:
         condition: on-failure
@@ -259,7 +256,7 @@ services:
   # === APPLICATION SERVICES ===
   frontend:
     image: ${FRONTEND_IMAGE:-norohim/pro-mata-frontend-dev:latest}
-    command: ["sh", "-c", "npm run build && npm run serve -- --port 3000 --host 0.0.0.0"]
+    command: ["npm", "run", "serve", "--", "--port", "3000", "--host", "0.0.0.0"]
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - VITE_API_URL=https://api.$${DOMAIN_NAME:-promata.com.br}
@@ -283,7 +280,7 @@ services:
     #   retries: 3
     #   start_period: 30s
     deploy:
-      replicas: ${FRONTEND_REPLICAS:-1}
+      replicas: 1
       placement:
         preferences:
           - spread: node.id
@@ -373,8 +370,6 @@ services:
     deploy:
       replicas: ${BACKEND_REPLICAS:-1}
       placement:
-        constraints:
-          - node.role == manager
         preferences:
           - spread: node.id
       restart_policy:
@@ -634,8 +629,7 @@ services:
     deploy:
       replicas: 1
       placement:
-        constraints:
-          - node.role == manager
+        constraints: []
       restart_policy:
         condition: on-failure
         delay: 10s
@@ -677,8 +671,7 @@ services:
     deploy:
       replicas: 1
       placement:
-        constraints:
-          - node.role == manager
+        constraints: []
       restart_policy:
         condition: on-failure
       resources:

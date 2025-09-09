@@ -3,13 +3,13 @@
 variable "resource_group_name" {
   description = "The name of the resource group"
   type        = string
-  default     = "rg-pro-mata-dev"
+  default     = "rg-myproject-dev"
 }
 
 variable "azure_resource_group" {
   description = "Azure resource group name (alias for resource_group_name)"
   type        = string
-  default     = "rg-pro-mata-dev"
+  default     = "rg-myproject-dev"
 }
 
 variable "location" {
@@ -27,7 +27,7 @@ variable "environment" {
 variable "project_name" {
   description = "Project name"
   type        = string
-  default     = "pro-mata"
+  default     = "promata"
 }
 
 variable "vm_size" {
@@ -59,10 +59,10 @@ variable "common_tags" {
   description = "Common tags for all resources"
   type        = map(string)
   default = {
-    Project     = "pro-mata"
+    Project     = "promata"
     Environment = "dev"
     ManagedBy   = "terraform"
-    Owner       = "pro-mata-team"
+    Owner       = "promata-team"
   }
 }
 

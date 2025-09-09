@@ -18,17 +18,35 @@ fi
 
 cd "$TF_DIR"
 
-# Source environment variables
-source "$PROJECT_ROOT/envs/$ENV/.env"
+# Source environment variables if file exists
+if [ -f "$PROJECT_ROOT/envs/$ENV/.env" ]; then
+    source "$PROJECT_ROOT/envs/$ENV/.env"
+    echo "✅ Loaded environment variables from .env file"
+else
+    echo "⚠️ No .env file found, using defaults"
+fi
 
-# Get resource group and resource names from variables
-RESOURCE_GROUP="${AZURE_RESOURCE_GROUP:-rg-myproject-dev}"
-PROJECT_NAME="${PROJECT_NAME:-promata}"
-ENVIRONMENT="${ENVIRONMENT:-dev}"
+# Resource group and project naming
+RESOURCE_GROUP="rg-myproject-dev"
+PROJECT_NAME="promata"
+ENVIRONMENT="dev"
 
 # Resource names following Terraform naming convention
 MANAGER_IP_NAME="pip-${PROJECT_NAME}-${ENVIRONMENT}-manager"
 WORKER_IP_NAME="pip-${PROJECT_NAME}-${ENVIRONMENT}-worker"
+
+# Check if resources exist
+if az network public-ip show --resource-group "$RESOURCE_GROUP" --name "$MANAGER_IP_NAME" >/dev/null 2>&1; then
+    MANAGER_IP=$(az network public-ip show --resource-group "$RESOURCE_GROUP" --name "$MANAGER_IP_NAME" --query ipAddress -o tsv)
+    echo "📌 Found Manager IP: $MANAGER_IP"
+fi
+
+if az network public-ip show --resource-group "$RESOURCE_GROUP" --name "$WORKER_IP_NAME" >/dev/null 2>&1; then
+    WORKER_IP=$(az network public-ip show --resource-group "$RESOURCE_GROUP" --name "$WORKER_IP_NAME" --query ipAddress -o tsv)
+    echo "📌 Found Worker IP: $WORKER_IP"
+fi
+
+echo "✅ IP import check completed - resources should already be in Terraform state"
 
 echo "📋 Environment: $ENV"
 echo "📋 Resource Group: $RESOURCE_GROUP"

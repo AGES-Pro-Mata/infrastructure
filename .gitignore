@@ -149,4 +149,15 @@ scripts/temp/
 # Test outputs
 test-outputs/
 **/test-results/
-coverage/
+coverage/# Security - Never commit these
+*.tfstate
+*.tfstate.*
+.terraform/
+terraform.tfvars
+!terraform.tfvars.example
+.vault_pass
+.env
+**/secrets/vault.yml
+envs/*/config.yml
+!envs/*/config.yml.example
+iac/deployments/*/terraform.tfvars

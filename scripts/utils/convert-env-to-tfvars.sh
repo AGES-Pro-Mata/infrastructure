@@ -1,5 +1,5 @@
 #!/bin/bash
-# Convert .env file to terraform.tfvars format
+# Convert config.yml file to terraform.tfvars format
 
 input_file="$1"
 output_file="$2"

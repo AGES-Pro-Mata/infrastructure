@@ -50,8 +50,8 @@ show_help() {
     echo ""
     echo "🔍 Examples:"
     echo "  $0 encrypt envs/dev/secrets/passwords.yml"
-    echo "  $0 edit envs/dev/secrets/all.yml"
-    echo "  $0 view envs/prod/secrets/all.yml"
+    echo "  $0 edit envs/dev/secrets/vault.yml"
+    echo "  $0 view envs/prod/secrets/vault.yml"
 }
 
 # Function to ensure vault password exists
@@ -186,7 +186,7 @@ case "$command" in
         secrets_dir="$PROJECT_ROOT/envs/dev/secrets"
         mkdir -p "$secrets_dir"
         
-        secrets_file="$secrets_dir/all.yml"
+        secrets_file="$secrets_dir/vault.yml"
         if [ -f "$secrets_file" ]; then
             echo -e "${YELLOW}⚠️  Dev secrets file already exists: $secrets_file${NC}"
             echo "Use: $0 edit $secrets_file"
@@ -203,7 +203,7 @@ case "$command" in
         secrets_dir="$PROJECT_ROOT/envs/prod/secrets"
         mkdir -p "$secrets_dir"
         
-        secrets_file="$secrets_dir/all.yml"
+        secrets_file="$secrets_dir/vault.yml"
         if [ -f "$secrets_file" ]; then
             echo -e "${YELLOW}⚠️  Prod secrets file already exists: $secrets_file${NC}"
             echo "Use: $0 edit $secrets_file"

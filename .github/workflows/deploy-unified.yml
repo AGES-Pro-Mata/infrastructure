@@ -27,8 +27,8 @@ on:
     branches: [main, dev]
     paths: 
       - 'envs/**'
-      - 'terraform/**'
-      - 'ansible/**'
+      - 'iac/**'
+      - 'cac/**'
       - 'scripts/**'
 
   # External triggers (Docker Hub, other repos)
@@ -166,8 +166,8 @@ jobs:
 
       - name: Create Environment Configuration
         run: |
-          # Create terraform.tfvars with secrets
-          cat > envs/${{ needs.config.outputs.environment }}/terraform.tfvars << EOF
+          # Create config.yml with secrets  
+          cat > envs/${{ needs.config.outputs.environment }}/config.yml << EOF
           # Azure Configuration
           environment = "${{ needs.config.outputs.environment }}"
           project_name = "pro-mata"
@@ -216,7 +216,7 @@ jobs:
           ./scripts/vault/vault-easy.sh setup || echo "Vault already setup"
           
           # Initialize environment secrets if they don't exist
-          if [ ! -f "envs/${{ needs.config.outputs.environment }}/secrets/all.yml" ]; then
+          if [ ! -f "envs/${{ needs.config.outputs.environment }}/secrets/vault.yml" ]; then
             echo "🔐 Initializing secrets for ${{ needs.config.outputs.environment }}"
             ./scripts/vault/vault-easy.sh init-${{ needs.config.outputs.environment }}
           fi
@@ -224,7 +224,7 @@ jobs:
       - name: Import Existing IPs (IP Preservation)
         run: |
           echo "🔒 Importing existing Azure IPs to preserve them..."
-          ./scripts/terraform/import-existing-ips.sh ${{ needs.config.outputs.environment }} || echo "⚠️ IPs might already be imported"
+          ./scripts/iac/import-existing-ips.sh ${{ needs.config.outputs.environment }} || echo "⚠️ IPs might already be imported"
 
       - name: Execute Deployment (Enhanced with IP Preservation)
         run: |
@@ -251,7 +251,7 @@ jobs:
         if: contains(needs.config.outputs.action, 'deploy')
         run: |
           mkdir -p ~/.ssh
-          cd terraform/deployments/${{ needs.config.outputs.environment }}
+          cd iac/deployments/${{ needs.config.outputs.environment }}
           terraform output -raw ssh_private_key > ~/.ssh/promata_key
           chmod 600 ~/.ssh/promata_key
           echo "SSH key extracted"

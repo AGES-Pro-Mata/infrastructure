@@ -7,8 +7,8 @@
 # Environment and paths
 ENV ?= dev
 ENV_DIR := envs/$(ENV)
-TF_DIR := terraform/deployments/$(ENV)
-ANSIBLE_DIR := ansible
+TF_DIR := iac/deployments/$(ENV)
+ANSIBLE_DIR := cac
 
 # Check if environment exists
 check-env:
@@ -29,27 +29,25 @@ init: check-env ## Initialize environment
 	@./scripts/setup/init-environment.sh $(ENV)
 
 deploy: check-env ## Deploy complete infrastructure with database initialization
-	@echo "🚀 Deploying $(ENV) environment with dev-complete stack..."
+	@echo "🚀 Deploying $(ENV) environment with complete stack..."
 	@echo "📊 This will deploy the full stack including database cluster with initialization scripts"
-	@ansible-playbook -i $(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml \
-		-e @$(ENV_DIR)/ansible-vars.yml \
-		-e stack_file=dev-complete.yml \
-		-e env=$(ENV) \
-		$(ANSIBLE_DIR)/playbooks/deploy-stack.yml
+	@ansible-playbook -i $(ENV_DIR)/hosts.yml \
+		--vault-password-file .vault_pass \
+		--extra-vars "env=$(ENV)" \
+		$(ANSIBLE_DIR)/playbooks/deploy-complete-stack.yml
 
 deploy-terraform: check-env ## Deploy only Terraform
 	@echo "🏗️  Deploying Terraform for $(ENV)..."
 	@cd $(TF_DIR) && terraform init -backend-config=../../backends/$(ENV)-backend.hcl
-	@cd $(TF_DIR) && terraform plan -var-file=../../../$(ENV_DIR)/terraform.tfvars
-	@cd $(TF_DIR) && terraform apply -var-file=../../../$(ENV_DIR)/terraform.tfvars --auto-approve
+	@cd $(TF_DIR) && terraform plan -var-file=../../../$(ENV_DIR)/config.yml
+	@cd $(TF_DIR) && terraform apply -var-file=../../../$(ENV_DIR)/config.yml --auto-approve
 
 deploy-ansible: check-env ## Deploy only Ansible stack
-	@echo "🔧 Deploying Ansible for $(ENV) with dev-complete stack..."
-	@ansible-playbook -i $(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml \
-		-e @$(ENV_DIR)/ansible-vars.yml \
-		-e stack_file=dev-complete.yml \
-		-e env=$(ENV) \
-		$(ANSIBLE_DIR)/playbooks/deploy-stack.yml
+	@echo "🔧 Deploying Ansible for $(ENV) with complete stack..."
+	@ansible-playbook -i $(ENV_DIR)/hosts.yml \
+		--vault-password-file .vault_pass \
+		--extra-vars "env=$(ENV)" \
+		$(ANSIBLE_DIR)/playbooks/deploy-complete-stack.yml
 
 validate: check-env ## Validate infrastructure
 	@echo "🔍 Validating $(ENV) environment..."
@@ -134,7 +132,7 @@ validate-migration: ## Validate migration
 deploy-automated: check-env ## Automated deployment for CI/CD with IP preservation
 	@echo "🤖 Starting automated deployment for $(ENV) with IP preservation..."
 	@echo "🔒 Step 1: Import existing IPs to Terraform state..."
-	@./scripts/terraform/import-existing-ips.sh $(ENV) || echo "⚠️  IPs might already be imported"
+	@./scripts/iac/import-existing-ips.sh $(ENV) || echo "⚠️  IPs might already be imported"
 	@echo "🏗️  Step 2: Deploy infrastructure preserving IPs..."
 	@$(MAKE) deploy-full ENV=$(ENV)
 	@echo "✅ Automated deployment completed!"
@@ -269,10 +267,10 @@ extract-ssh-keys: check-env ## Extract SSH keys from Terraform and setup access
 
 stacks-deploy: check-env ## Deploy only application stacks
 	@echo "📦 Deploying dev-complete stack for $(ENV)..."
-	@ansible-playbook -i $(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml \
-		-e @$(ENV_DIR)/ansible-vars.yml \
-		-e stack_file=dev-complete.yml \
-		$(ANSIBLE_DIR)/playbooks/deploy-stack.yml
+	@ansible-playbook -i $(ENV_DIR)/hosts.yml \
+		--vault-password-file .vault_pass \
+		--extra-vars "env=$(ENV)" \
+		$(ANSIBLE_DIR)/playbooks/deploy-complete-stack.yml
 
 health: check-env ## Health check for environment
 	@echo "🏥 Running health checks for $(ENV)..."
@@ -292,23 +290,23 @@ show-deployment-info: check-env ## Show deployment information
 	fi
 
 update-dev: check-env ## Update development environment
-	@echo "🔄 Updating $(ENV) environment with dev-complete stack..."
-	@ansible-playbook -i $(ANSIBLE_DIR)/inventory/$(ENV)/hosts.yml \
-		-e @$(ENV_DIR)/ansible-vars.yml \
-		-e stack_file=dev-complete.yml \
-		$(ANSIBLE_DIR)/playbooks/deploy-stack.yml
+	@echo "🔄 Updating $(ENV) environment with complete stack..."
+	@ansible-playbook -i $(ENV_DIR)/hosts.yml \
+		--vault-password-file .vault_pass \
+		--extra-vars "env=$(ENV)" \
+		$(ANSIBLE_DIR)/playbooks/deploy-complete-stack.yml
 
 destroy-dev: ## Destroy development infrastructure
 	@echo "💥 Destroying dev infrastructure..."
-	@cd terraform/deployments/dev && terraform destroy -var-file=../../../envs/dev/terraform.tfvars --auto-approve
+	@cd iac/deployments/dev && terraform destroy -var-file=../../../envs/dev/config.yml --auto-approve
 
 destroy-prod: ## Destroy production infrastructure
 	@echo "💥 Destroying prod infrastructure..."
-	@cd terraform/deployments/prod && terraform destroy -var-file=../../../envs/prod/terraform.tfvars --auto-approve
+	@cd iac/deployments/prod && terraform destroy -var-file=../../../envs/prod/config.yml --auto-approve
 
 destroy-staging: ## Destroy staging infrastructure
 	@echo "💥 Destroying staging infrastructure..."
-	@cd terraform/deployments/staging && terraform destroy -var-file=../../../envs/staging/terraform.tfvars --auto-approve
+	@cd iac/deployments/staging && terraform destroy -var-file=../../../envs/staging/config.yml --auto-approve
 
 ssh-setup: check-env ## Setup SSH access for environment
 	@echo "🔑 Setting up SSH access for $(ENV)..."
@@ -378,21 +376,21 @@ vault-init-prod: ## Initialize prod environment secrets
 	@./scripts/vault/vault-easy.sh init-prod
 
 vault-edit-dev: ## Edit dev environment secrets
-	@./scripts/vault/vault-easy.sh edit envs/dev/secrets/all.yml
+	@./scripts/vault/vault-easy.sh edit envs/dev/secrets/vault.yml
 
 vault-edit-prod: ## Edit prod environment secrets
-	@./scripts/vault/vault-easy.sh edit envs/prod/secrets/all.yml
+	@./scripts/vault/vault-easy.sh edit envs/prod/secrets/vault.yml
 
 vault-view-dev: ## View dev environment secrets
-	@./scripts/vault/vault-easy.sh view envs/dev/secrets/all.yml
+	@./scripts/vault/vault-easy.sh view envs/dev/secrets/vault.yml
 
 vault-view-prod: ## View prod environment secrets
-	@./scripts/vault/vault-easy.sh view envs/prod/secrets/all.yml
+	@./scripts/vault/vault-easy.sh view envs/prod/secrets/vault.yml
 
 # === IP MANAGEMENT ===
 import-ips: check-env ## Import existing Azure IPs to Terraform state
 	@echo "🔒 Importing existing IPs for $(ENV)..."
-	@./scripts/terraform/import-existing-ips.sh $(ENV)
+	@./scripts/iac/import-existing-ips.sh $(ENV)
 
 # === QUICK COMMANDS ===  
 quick-dev: ## Quick dev deployment (preserves IPs)

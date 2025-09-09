@@ -1,5 +1,5 @@
 #!/bin/bash
-# Convert .env file to ansible-vars.yml format
+# Convert config.yml file to ansible-vars.yml format
 
 input_file="$1"
 output_file="$2"

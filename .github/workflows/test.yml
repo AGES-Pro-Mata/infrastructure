@@ -34,7 +34,7 @@ jobs:
             dir=$(dirname "$file")
             
             # Skip backends directory as it contains multiple backend configurations
-            if [[ "$dir" == *"/terraform/backends"* ]] || [[ "$dir" == "./terraform/backends" ]]; then
+            if [[ "$dir" == *"/iac/backends"* ]] || [[ "$dir" == "./iac/backends" ]]; then
               echo "Skipping $dir (contains multiple backend configurations)"
               continue
             fi
@@ -71,7 +71,7 @@ jobs:
           echo "Checking project structure..."
           
           # Check for essential directories
-          required_dirs=("terraform" "ansible" "scripts" "envs")
+          required_dirs=("iac" "cac" "scripts" "envs")
           for dir in "${required_dirs[@]}"; do
             if [ -d "$dir" ]; then
               echo "✅ Directory $dir exists"

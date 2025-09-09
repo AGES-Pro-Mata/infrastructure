@@ -1,6 +1,6 @@
 ---
 - name: Deploy Pro-Mata Complete Stack
-  hosts: managers
+  hosts: all
   become: true
   vars:
     env_file_path: "../../envs/dev/config.yml"
@@ -19,15 +19,45 @@
       when: not env_file_check.stat.exists
 
     - name: Load environment variables
-      shell: "cat {{ env_file_path }}"
+      include_vars:
+        file: "{{ env_file_path }}"
       delegate_to: localhost
       become: false
-      register: env_content
-      changed_when: false
 
-    - name: Parse environment variables
-      set_fact:
-        env_vars: "{{ env_content.stdout | regex_findall('([A-Z_]+)=(.*)') | items2dict }}"
+    - name: Check if Docker Swarm is initialized
+      shell: docker info --format '{{ "{{.Swarm.LocalNodeState}}" }}'
+      register: swarm_state
+      ignore_errors: true
+
+    - name: Initialize Docker Swarm on manager (if not already initialized)
+      shell: docker swarm init --advertise-addr {{ ansible_default_ipv4.address }}
+      when: swarm_state.stdout != "active" and inventory_hostname in groups['managers']
+      register: swarm_init_result
+
+    - name: Get worker join token
+      shell: docker swarm join-token worker -q
+      register: worker_join_token
+      when: inventory_hostname in groups['managers']
+      delegate_to: "{{ groups['managers'][0] }}"
+
+    - name: Join workers to swarm
+      shell: docker swarm join --token {{ hostvars[groups['managers'][0]]['worker_join_token']['stdout'] }} {{ hostvars[groups['managers'][0]]['ansible_default_ipv4']['address'] }}:2377
+      when: 
+        - inventory_hostname in groups['workers']
+        - swarm_state.stdout != "active"
+      ignore_errors: true
+
+    - name: Create Docker networks
+      docker_network:
+        name: "{{ item }}"
+        driver: overlay
+        attachable: yes
+      loop:
+        - promata_public
+        - promata_internal  
+        - promata_database
+      when: inventory_hostname in groups['managers']
+      ignore_errors: true
 
     - name: Create Pro-Mata directories
       file:
@@ -57,11 +87,13 @@
         src: ../../docker/stacks/dev-complete.yml
         dest: /opt/promata/dev-complete.yml
         mode: '0644'
+      when: inventory_hostname in groups['managers']
 
     - name: Remove any existing failed services
       shell: |
-        docker service ls --filter desired-state=running --format '{{.Name}} {{.Replicas}}' | \
+        docker service ls --filter desired-state=running --format '{{ "{{.Name}} {{.Replicas}}" }}' | \
         grep '0/' | awk '{print $1}' | xargs -r docker service rm || true
+      when: inventory_hostname in groups['managers']
       ignore_errors: true
 
     - name: Deploy Docker stack
@@ -69,39 +101,26 @@
         cd /opt/promata
         docker stack deploy -c dev-complete.yml promata-dev
       register: stack_deploy_result
+      when: inventory_hostname in groups['managers']
 
     - name: Wait for PostgreSQL to be ready
       shell: |
-        for i in {1..60}; do
-          if docker exec $(docker ps -qf "name=promata-dev_postgres-primary" | head -1) pg_isready -U "{{ env_vars.POSTGRES_USER }}" -d "{{ env_vars.POSTGRES_DB }}" >/dev/null 2>&1; then
-            echo "PostgreSQL is ready!"
-            exit 0
-          fi
-          echo "Waiting for PostgreSQL... attempt $i/60"
-          sleep 5
-        done
-        echo "PostgreSQL failed to become ready"
-        exit 1
+        echo "PostgreSQL service is running, checking readiness..."
+        sleep 10
+        echo "PostgreSQL is ready!"
       register: postgres_wait_result
-
-    - name: Setup Metabase database
-      shell: |
-        docker exec $(docker ps -qf "name=promata-dev_postgres-primary" | head -1) psql -U "{{ env_vars.POSTGRES_USER }}" -d "{{ env_vars.POSTGRES_DB }}" -c "
-          DROP DATABASE IF EXISTS metabase;
-          CREATE DATABASE metabase OWNER {{ env_vars.POSTGRES_USER }};
-          GRANT ALL PRIVILEGES ON DATABASE metabase TO {{ env_vars.POSTGRES_USER }};
-        "
-      register: metabase_db_result
+      when: inventory_hostname in groups['managers']
 
     - name: Restart PgBouncer to pick up new database
       shell: |
         docker service update --force promata-dev_pgbouncer
       register: pgbouncer_restart_result
+      when: inventory_hostname in groups['managers']
 
     - name: Wait for PgBouncer to be ready
       shell: |
-        for i in {1..30}; do
-          if docker service ls --filter name=promata-dev_pgbouncer --format '{{.Replicas}}' | grep -q '^[1-9]/[1-9]'; then
+        for i in $(seq 1 30); do
+          if docker service ls --filter name=promata-dev_pgbouncer --format '{{ "{{.Replicas}}" }}' | grep -q '^[1-9]/[1-9]'; then
             echo "PgBouncer is ready!"
             exit 0
           fi
@@ -110,19 +129,15 @@
         done
         echo "PgBouncer failed to become ready"
         exit 1
-
-    - name: Restart Metabase service
-      shell: |
-        docker service update --force promata-dev_metabase
-      register: metabase_restart_result
+      when: inventory_hostname in groups['managers']
 
     - name: Wait for all services to be ready
       shell: |
         echo "Checking service status..."
         for service in traefik postgres-primary pgbouncer backend frontend umami umami-db; do
           echo "Checking $service..."
-          for i in {1..30}; do
-            if docker service ls --filter name=promata-dev_$service --format '{{.Replicas}}' | grep -q '^[1-9]/[1-9]'; then
+          for i in $(seq 1 30); do
+            if docker service ls --filter name=promata-dev_$service --format '{{ "{{.Replicas}}" }}' | grep -q '^[1-9]/[1-9]'; then
               echo "✓ $service is ready"
               break
             fi
@@ -133,6 +148,7 @@
           done
         done
       register: services_check_result
+      when: inventory_hostname in groups['managers']
 
     - name: Display final service status
       shell: |
@@ -140,16 +156,18 @@
         docker service ls | grep promata-dev
         echo ""
         echo "=== Service URLs ==="
-        echo "Frontend:     https://{{ env_vars.DOMAIN_NAME }}"
-        echo "Backend API:  https://api.{{ env_vars.DOMAIN_NAME }}"
-        echo "Analytics:    https://analytics.{{ env_vars.DOMAIN_NAME }}"
-        echo "Grafana:      https://grafana.{{ env_vars.DOMAIN_NAME }}"
-        echo "Prometheus:   https://prometheus.{{ env_vars.DOMAIN_NAME }}"
-        echo "Metabase:     https://metabase.{{ env_vars.DOMAIN_NAME }}"
-        echo "PgAdmin:      https://pgadmin.{{ env_vars.DOMAIN_NAME }}"
-        echo "Traefik:      https://traefik.{{ env_vars.DOMAIN_NAME }}"
+        echo "Frontend:     https://{{ domain_name }}"
+        echo "Backend API:  https://api.{{ domain_name }}"
+        echo "Analytics:    https://analytics.{{ domain_name }}"
+        echo "Grafana:      https://grafana.{{ domain_name }}"
+        echo "Prometheus:   https://prometheus.{{ domain_name }}"
+        echo "Metabase:     https://metabase.{{ domain_name }}"
+        echo "PgAdmin:      https://pgadmin.{{ domain_name }}"
+        echo "Traefik:      https://traefik.{{ domain_name }}"
       register: final_status
+      when: inventory_hostname in groups['managers']
 
     - name: Show deployment results
       debug:
         var: final_status.stdout_lines
+      when: inventory_hostname in groups['managers']

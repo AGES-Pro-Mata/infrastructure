@@ -1,0 +1,91 @@
+# Unified Environment Variables Template
+# This file contains all possible variables that can be used across environments
+# Each environment file (dev/.env, prod/.env) should source from this template
+
+# === ENVIRONMENT IDENTIFICATION ===
+# ENVIRONMENT: dev|prod
+# ENV_COLOR: blue|green|red  # For UI differentiation
+# ENV_PREFIX: dev|prod
+# PROJECT_NAME: promata
+
+# === DOMAIN CONFIGURATION ===
+# DOMAIN_NAME: promata.com.br
+# SUBDOMAIN_PREFIX: "" (empty for production, "dev" for dev.promata.com.br)
+# API_SUBDOMAIN: api
+# ADMIN_SUBDOMAIN: admin
+
+# === INFRASTRUCTURE (AZURE) ===
+# AZURE_RESOURCE_GROUP: rg-myproject-{env}
+# AZURE_SUBSCRIPTION_ID: your-subscription-id
+# AZURE_LOCATION: eastus2
+# VM_SIZE: Standard_B2s (dev) | Standard_D2s_v3 (prod)
+
+# === APPLICATION IMAGES ===
+# BACKEND_IMAGE: norohim/pro-mata-backend-{env}:latest
+# FRONTEND_IMAGE: norohim/pro-mata-frontend-{env}:latest  
+# DATABASE_IMAGE: norohim/pro-mata-database-infrastructure:latest
+# BACKEND_REPLICAS: 1 (dev) | 3 (prod)
+# FRONTEND_REPLICAS: 1 (dev) | 3 (prod)
+# APP_VERSION: latest
+
+# === DATABASE CONFIGURATION ===
+# POSTGRES_DB: promata_{env}
+# DATABASE_SIZE: Basic (dev) | Standard (prod)
+# POSTGRES_USER: promata
+# POSTGRES_PASSWORD: {env}_secure_password
+# POSTGRES_REPLICA_USER: replicator
+# POSTGRES_REPLICA_PASSWORD: replica_{env}_password
+
+# === PGBOUNCER CONFIGURATION ===
+# PGBOUNCER_POOL_MODE: session
+# PGBOUNCER_POOL_SIZE: 20 (dev) | 50 (prod)
+# PGBOUNCER_MAX_CLIENT_CONN: 100 (dev) | 300 (prod)
+
+# === SECURITY & AUTHENTICATION ===
+# JWT_SECRET: {env}_jwt_secret_change_in_production
+# JWT_EXPIRES_IN: 24h
+
+# === TRAEFIK CONFIGURATION ===
+# TRAEFIK_LOG_LEVEL: INFO (dev) | WARN (prod)
+# TRAEFIK_API_DASHBOARD: true (dev) | false (prod)
+# TRAEFIK_AUTH_USERS: admin:hashed_password
+# ACME_EMAIL: admin@promata.com.br
+
+# === MONITORING & ANALYTICS ===
+# MONITORING_ENABLED: true
+# PROMETHEUS_RETENTION: 7d (dev) | 30d (prod)
+# GRAFANA_ADMIN_PASSWORD: secure_password
+# UMAMI_API_KEY: api_key
+# UMAMI_DB_PASSWORD: umami_password
+
+# === NETWORKING (RESERVED STATIC IPS) ===
+# SERVER_PUBLIC_IP: 135.119.195.249 (RESERVED IN AZURE)
+# MANAGER_PUBLIC_IP: 135.119.195.249 (RESERVED IN AZURE)  
+# MANAGER_PRIVATE_IP: 10.1.1.5
+# WORKER_PUBLIC_IP: 20.10.195.95 (RESERVED IN AZURE)
+# WORKER_PRIVATE_IP: 10.1.1.4
+
+# === CLOUDFLARE (DNS - ALL PROXIED/ORANGE) ===
+# CLOUDFLARE_API_TOKEN: your_token
+# CLOUDFLARE_ZONE_ID: your_zone_id
+# CREATE_DNS_RECORDS: true
+
+# === SSL/TLS CONFIGURATION ===
+# SSL_ENABLED: true
+# SSL_MODE: flexible (dev) | full (prod)
+
+# === BACKUP CONFIGURATION ===
+# BACKUP_ENABLED: true
+# BACKUP_RETENTION_DAYS: 7 (dev) | 30 (prod)
+
+# === CI/CD CONFIGURATION ===
+# CI_CD_ENABLED: true
+# GITHUB_TOKEN: token_for_ci_cd
+# DOCKER_REGISTRY: ghcr.io or docker.io
+# AUTO_DEPLOY: true (dev) | false (prod - manual approval)
+
+# === SHARED TERRAFORM STATE ===
+# TERRAFORM_BACKEND_CONTAINER: tfstate
+# TERRAFORM_BACKEND_KEY: {env}.terraform.tfstate
+# TERRAFORM_BACKEND_STORAGE_ACCOUNT: promatatfstate
+# TERRAFORM_BACKEND_RESOURCE_GROUP: rg-promata-tfstate

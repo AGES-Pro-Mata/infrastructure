@@ -96,26 +96,52 @@ resource "azurerm_subnet" "private" {
   address_prefixes     = ["10.1.2.0/24"]
 }
 
-# Public IP for Swarm Manager
+# Public IP for Swarm Manager - STATIC RESERVATION
 resource "azurerm_public_ip" "manager" {
   name                = "pip-${var.project_name}-${var.environment}-manager"
   location            = azurerm_resource_group.dev.location
   resource_group_name = azurerm_resource_group.dev.name
   allocation_method   = "Static"
   sku                 = "Standard"
+  
+  # Reserve current IP address to prevent changes on redeploy
+  ip_version          = "IPv4"
+  zones               = ["1"]  # Availability zone for reliability
 
-  tags = var.common_tags
+  tags = merge(var.common_tags, {
+    "IP-Type"     = "Static-Reserved"
+    "Purpose"     = "Swarm-Manager"
+    "DNS-Records" = "All-Services"
+  })
+
+  # Prevent accidental deletion of static IP
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
-# Public IP for Swarm Worker
+# Public IP for Swarm Worker - STATIC RESERVATION
 resource "azurerm_public_ip" "worker" {
   name                = "pip-${var.project_name}-${var.environment}-worker"
   location            = azurerm_resource_group.dev.location
   resource_group_name = azurerm_resource_group.dev.name
   allocation_method   = "Static"
   sku                 = "Standard"
+  
+  # Reserve current IP address to prevent changes on redeploy
+  ip_version          = "IPv4"
+  zones               = ["2"]  # Different AZ from manager for HA
 
-  tags = var.common_tags
+  tags = merge(var.common_tags, {
+    "IP-Type"     = "Static-Reserved"
+    "Purpose"     = "Swarm-Worker"
+    "DNS-Records" = "All-Services"
+  })
+
+  # Prevent accidental deletion of static IP
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 # Network Security Group

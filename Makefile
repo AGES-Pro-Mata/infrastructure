@@ -131,9 +131,36 @@ validate-migration: ## Validate migration
 	@./scripts/utils/validate-migration.sh
 
 # CI/CD automation targets
-deploy-automated: check-env ## Automated deployment for CI/CD
-	@echo "🤖 Starting automated deployment for $(ENV)..."
-	@./scripts/deploy/deploy.sh $(ENV)
+deploy-automated: check-env ## Automated deployment for CI/CD with IP preservation
+	@echo "🤖 Starting automated deployment for $(ENV) with IP preservation..."
+	@echo "🔒 Step 1: Import existing IPs to Terraform state..."
+	@./scripts/terraform/import-existing-ips.sh $(ENV) || echo "⚠️  IPs might already be imported"
+	@echo "🏗️  Step 2: Deploy infrastructure preserving IPs..."
+	@$(MAKE) deploy-full ENV=$(ENV)
+	@echo "✅ Automated deployment completed!"
+
+# Multi-repo CI/CD integration
+ci-cd-init: check-env ## Initialize CI/CD for multi-repo integration
+	@echo "🔧 Initializing CI/CD integration for $(ENV)..."
+	@./scripts/ci-cd/setup-shared-state.sh $(ENV)
+	@./scripts/ci-cd/generate-workflow.sh $(ENV)
+
+ci-cd-deploy: check-env ## Deploy via CI/CD pipeline
+	@echo "🚀 CI/CD Pipeline deployment for $(ENV)..."
+	@echo "📋 Using shared Terraform state and unified configs"
+	@$(MAKE) deploy-automated ENV=$(ENV)
+
+# Cleanup and maintenance
+cleanup-deprecated: ## Remove deprecated files and clean repository
+	@echo "🧹 Cleaning deprecated files..."
+	@./scripts/cleanup/remove-deprecated-files.sh
+	@./scripts/cleanup/cleanup-unused-envs.sh
+
+maintenance: check-env ## Full maintenance cycle for environment
+	@echo "🔧 Running maintenance for $(ENV)..."
+	@$(MAKE) cleanup-deprecated
+	@$(MAKE) validate ENV=$(ENV)
+	@$(MAKE) backup ENV=$(ENV)
 
 deploy-full: check-env ## Complete deployment: Terraform → Extract SSH → Update vars → Ansible
 	@echo "🚀 Starting complete deployment for $(ENV)..."
@@ -338,4 +365,43 @@ ssh-test: check-env ## Test SSH connections to VMs
 	else \
 		echo "❌ SSH config not found. Run deployment first."; \
 	fi
+
+# === SECRETS & VAULT MANAGEMENT ===
+vault-setup: ## Setup Ansible Vault (first time only)
+	@echo "🔐 Setting up Ansible Vault..."
+	@./scripts/vault/vault-easy.sh setup
+
+vault-init-dev: ## Initialize dev environment secrets
+	@./scripts/vault/vault-easy.sh init-dev
+
+vault-init-prod: ## Initialize prod environment secrets  
+	@./scripts/vault/vault-easy.sh init-prod
+
+vault-edit-dev: ## Edit dev environment secrets
+	@./scripts/vault/vault-easy.sh edit envs/dev/secrets/all.yml
+
+vault-edit-prod: ## Edit prod environment secrets
+	@./scripts/vault/vault-easy.sh edit envs/prod/secrets/all.yml
+
+vault-view-dev: ## View dev environment secrets
+	@./scripts/vault/vault-easy.sh view envs/dev/secrets/all.yml
+
+vault-view-prod: ## View prod environment secrets
+	@./scripts/vault/vault-easy.sh view envs/prod/secrets/all.yml
+
+# === IP MANAGEMENT ===
+import-ips: check-env ## Import existing Azure IPs to Terraform state
+	@echo "🔒 Importing existing IPs for $(ENV)..."
+	@./scripts/terraform/import-existing-ips.sh $(ENV)
+
+# === QUICK COMMANDS ===  
+quick-dev: ## Quick dev deployment (preserves IPs)
+	@$(MAKE) import-ips ENV=dev
+	@$(MAKE) deploy-automated ENV=dev
+
+quick-status: check-env ## Quick status check
+	@echo "📊 Quick status for $(ENV):"
+	@echo "Environment: $(ENV)"
+	@if [ -d "$(TF_DIR)" ]; then cd $(TF_DIR) && terraform output 2>/dev/null | head -10 || echo "No Terraform outputs"; fi
+	@echo "Docker services:" && docker service ls 2>/dev/null | grep promata || echo "No services running"
 

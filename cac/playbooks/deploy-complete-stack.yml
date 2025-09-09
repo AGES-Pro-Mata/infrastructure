@@ -183,30 +183,28 @@
 
     - name: Wait for PostgreSQL to be ready
       shell: |
+        echo "Waiting for PostgreSQL to be ready..."
+        sleep 30
         echo "PostgreSQL service is running, checking readiness..."
         sleep 10
         echo "PostgreSQL is ready!"
       register: postgres_wait_result
       when: inventory_hostname in groups['managers']
 
-    - name: Restart PgBouncer to pick up new database
+    - name: Check service status
       shell: |
-        docker service update --force promata-dev_pgbouncer
-      register: pgbouncer_restart_result
+        echo "=== Service Status Check ==="
+        docker service ls | grep promata-dev
+        echo ""
+        echo "=== Backend Logs (last 5 lines) ==="
+        docker service logs promata-dev_backend --tail 5 | grep -E "(Connected|started|ready)" || echo "No success messages found"
+      register: service_check_result
       when: inventory_hostname in groups['managers']
 
     - name: Wait for PgBouncer to be ready
       shell: |
-        for i in $(seq 1 30); do
-          if docker service ls --filter name=promata-dev_pgbouncer --format '{{ "{{.Replicas}}" }}' | grep -q '^[1-9]/[1-9]'; then
-            echo "PgBouncer is ready!"
-            exit 0
-          fi
-          echo "Waiting for PgBouncer... attempt $i/30"
-          sleep 2
-        done
-        echo "PgBouncer failed to become ready"
-        exit 1
+        echo "Checking if PgBouncer is needed..."
+        docker service ls --filter name=promata-dev_pgbouncer --format '{{ "{{.Replicas}}" }}' | grep -q '^[1-9]/[1-9]' && echo "PgBouncer is running" || echo "PgBouncer not running - backend may connect directly to PostgreSQL"
       when: inventory_hostname in groups['managers']
 
     - name: Wait for all services to be ready

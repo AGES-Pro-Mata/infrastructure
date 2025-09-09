@@ -225,12 +225,13 @@ services:
       - AUTH_TYPE=trust
       - AUTH_HBA_FILE=
       - AUTH_QUERY=
+      - PGBOUNCER_IGNORE_STARTUP_PARAMETERS=extra_float_digits
     healthcheck:
-      test: ["CMD-SHELL", "nc -z localhost 6432 || exit 1"]
-      interval: 45s
-      timeout: 15s
-      retries: 3
-      start_period: 90s
+      test: ["CMD-SHELL", "nc -z localhost 6432 && psql 'host=localhost port=6432 user=postgres dbname=promata sslmode=disable' -c 'SELECT 1;' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 45s
     networks:
       - promata_database
       - promata_internal
@@ -328,7 +329,7 @@ services:
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-2h}
       
       # Database URL com PgBouncer - CORRIGIDA para incluir username
-      - DATABASE_URL=postgresql://postgres:password123@pgbouncer:6432/promata
+      - DATABASE_URL=postgresql://postgres:password123@pgbouncer:6432/promata?sslmode=disable&connect_timeout=10&command_timeout=60
       
       # Configuração alternativa para conexão direta (para debug)
       - DATABASE_HOST=postgres-primary
@@ -337,10 +338,12 @@ services:
       - DATABASE_USER=postgres
       - DATABASE_PASSWORD=password123
       
-      # Pool de conexão
-      - DATABASE_POOL_MIN=2
-      - DATABASE_POOL_MAX=10
+      # Pool de conexão com timeouts menores para desenvolvimento
+      - DATABASE_POOL_MIN=1
+      - DATABASE_POOL_MAX=5
       - DATABASE_POOL_IDLE_TIMEOUT=30000
+      - DATABASE_CONNECTION_TIMEOUT=10000
+      - DATABASE_COMMAND_TIMEOUT=60000
       
       # CORS
       - CORS_ORIGIN=https://${DOMAIN_NAME},https://traefik.${DOMAIN_NAME}
@@ -410,8 +413,8 @@ services:
       test: ["CMD-SHELL", "nc -z localhost 3000 || exit 1"]
       interval: 30s
       timeout: 5s
-      retries: 2
-      start_period: 60s
+      retries: 5
+      start_period: 120s
 
   # === MONITORING STACK ===
   node-exporter:

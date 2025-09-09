@@ -1,13 +1,15 @@
 # PgBouncer User List - Pro-Mata Dev
 # Format: "username" "password_hash"
-# This file will be populated by the deployment script with actual password hashes
+# Since we're using auth_type = trust, password hashes are not required but kept for reference
 
-# Main application user - will be populated with actual hash
+# Main PostgreSQL superuser
+"postgres" "trust_auth_no_password_needed"
+
+# Main application user - will be populated with actual hash if switching to md5
 "promata" "md5placeholder_will_be_replaced"
 
-# Replication user - will be populated with actual hash
+# Replication user - will be populated with actual hash if switching to md5
 "replicator" "md5placeholder_will_be_replaced"
 
-# Note: Password hashes will be generated during deployment using:
-# echo -n 'passwordusername' | md5sum for md5 method
-# or SCRAM-SHA-256 for more secure authentication
+# Note: With auth_type = trust, passwords are ignored
+# For production, switch to auth_type = md5 or scram-sha-256

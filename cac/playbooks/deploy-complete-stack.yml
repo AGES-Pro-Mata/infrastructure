@@ -26,24 +26,75 @@
 
     - name: Update apt cache
       apt:
-      update_cache: yes
+        update_cache: yes
       when: ansible_os_family == "Debian"
 
-    - name: Install Docker and Python dependencies
-      apt:
-      name:
-        - docker.io
-        - docker-compose
-        - python3-docker
-        - python3-pip
-      state: present
+    - name: Check if Docker is already installed
+      shell: which docker
+      register: docker_check
+      ignore_errors: true
+
+    - name: Check existing containerd packages
+      shell: dpkg -l | grep containerd || true
+      register: containerd_check
       when: ansible_os_family == "Debian"
+
+    - name: Remove conflicting containerd packages if present
+      apt:
+        name:
+          - containerd
+        state: absent
+        purge: yes
+      when: 
+        - ansible_os_family == "Debian"
+        - containerd_check.stdout | length > 0
+        - "'containerd.io' not in containerd_check.stdout"
+      ignore_errors: true
+
+    - name: Install Docker and Python dependencies (skip if Docker exists)
+      apt:
+        name:
+          - docker.io
+          - docker-compose
+          - python3-docker
+          - python3-pip
+        state: present
+        update_cache: yes
+      when: 
+        - ansible_os_family == "Debian"
+        - docker_check.rc != 0
+      register: docker_install_result
+      ignore_errors: true
+
+    - name: Install packages individually if bulk install failed
+      apt:
+        name: "{{ item }}"
+        state: present
+        force_apt_get: yes
+      loop:
+        - python3-pip
+        - python3-docker
+        - docker-compose
+      when: 
+        - ansible_os_family == "Debian"
+        - docker_install_result is failed
+      ignore_errors: true
 
     - name: Install additional Docker Python library via pip
       pip:
-      name: docker
-      state: present
-      when: ansible_os_family == "Debian"    
+        name: docker
+        state: present
+      when: ansible_os_family == "Debian"
+      ignore_errors: true
+
+    - name: Verify Docker installation
+      shell: docker --version
+      register: docker_version_check
+      ignore_errors: true
+
+    - name: Show Docker status
+      debug:
+        msg: "Docker status - Installed: {{ docker_version_check.rc == 0 }}, Version: {{ docker_version_check.stdout | default('Not installed') }}"    
       
     - name: Ensure Docker service is running
       systemd:

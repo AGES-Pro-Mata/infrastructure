@@ -186,9 +186,9 @@ jobs:
           cat > envs/${{ needs.config.outputs.environment }}/config.yml << EOF
           # Azure Configuration
           environment = "${{ needs.config.outputs.environment }}"
-          project_name = "pro-mata"
+          project_name = "promata"
           domain_name = "promata.com.br"
-          azure_resource_group = "promata-${{ needs.config.outputs.environment }}-rg"
+          azure_resource_group = "rg-myproject-${{ needs.config.outputs.environment }}"
           azure_subscription_id = "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
           azure_location = "eastus2"
           vm_size = "Standard_B2s"

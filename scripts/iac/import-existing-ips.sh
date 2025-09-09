@@ -26,6 +26,22 @@ else
     echo "⚠️ No .env file found, using defaults"
 fi
 
+# Set Azure subscription ID from environment or config
+if [ -z "$AZURE_SUBSCRIPTION_ID" ]; then
+    # Try to get from Azure CLI if available
+    AZURE_SUBSCRIPTION_ID=$(az account show --query id -o tsv 2>/dev/null || echo "")
+    if [ -z "$AZURE_SUBSCRIPTION_ID" ]; then
+        # Try from environment variables set by CI/CD
+        AZURE_SUBSCRIPTION_ID="${ARM_SUBSCRIPTION_ID:-}"
+    fi
+fi
+
+# Validate Azure subscription ID
+if [ -z "$AZURE_SUBSCRIPTION_ID" ]; then
+    echo "❌ AZURE_SUBSCRIPTION_ID not found. Please ensure you're logged in to Azure CLI or set the ARM_SUBSCRIPTION_ID environment variable"
+    exit 1
+fi
+
 # Resource group and project naming
 RESOURCE_GROUP="rg-myproject-dev"
 PROJECT_NAME="promata"

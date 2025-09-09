@@ -225,16 +225,28 @@ jobs:
       - name: Setup Ansible Vault (Enhanced)
         run: |
           # Setup vault password file
-          echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > .vault_pass
-          chmod 600 .vault_pass
+          echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > .vault_password
+          chmod 600 .vault_password
+          # Create symlink for Makefile compatibility
+          ln -sf .vault_password .vault_pass
           
           # Initialize vault if needed (first time)
           ./scripts/vault/vault-easy.sh setup || echo "Vault already setup"
           
           # Initialize environment secrets if they don't exist
+          mkdir -p "envs/${{ needs.config.outputs.environment }}/secrets"
           if [ ! -f "envs/${{ needs.config.outputs.environment }}/secrets/vault.yml" ]; then
-            echo "🔐 Initializing secrets for ${{ needs.config.outputs.environment }}"
-            ./scripts/vault/vault-easy.sh init-${{ needs.config.outputs.environment }}
+            echo "🔐 Creating minimal vault file for ${{ needs.config.outputs.environment }}"
+            cat > "envs/${{ needs.config.outputs.environment }}/secrets/vault.yml" << 'VAULT_EOF'
+# Minimal vault for CI/CD
+postgres_password: "ci_cd_password"
+jwt_secret: "ci_cd_jwt_secret"
+VAULT_EOF
+            # Encrypt the file
+            ansible-vault encrypt "envs/${{ needs.config.outputs.environment }}/secrets/vault.yml" --vault-password-file .vault_password
+            echo "✅ Vault file created and encrypted"
+          else
+            echo "✅ Vault file already exists"
           fi
 
       - name: Import Existing IPs (IP Preservation)

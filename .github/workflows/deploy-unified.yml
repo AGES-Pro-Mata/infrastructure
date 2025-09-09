@@ -237,11 +237,9 @@ jobs:
           mkdir -p "envs/${{ needs.config.outputs.environment }}/secrets"
           if [ ! -f "envs/${{ needs.config.outputs.environment }}/secrets/vault.yml" ]; then
             echo "🔐 Creating minimal vault file for ${{ needs.config.outputs.environment }}"
-            cat > "envs/${{ needs.config.outputs.environment }}/secrets/vault.yml" << 'VAULT_EOF'
-# Minimal vault for CI/CD
-postgres_password: "ci_cd_password"
-jwt_secret: "ci_cd_jwt_secret"
-VAULT_EOF
+            echo "# Minimal vault for CI/CD" > "envs/${{ needs.config.outputs.environment }}/secrets/vault.yml"
+            echo 'postgres_password: "ci_cd_password"' >> "envs/${{ needs.config.outputs.environment }}/secrets/vault.yml"
+            echo 'jwt_secret: "ci_cd_jwt_secret"' >> "envs/${{ needs.config.outputs.environment }}/secrets/vault.yml"
             # Encrypt the file
             ansible-vault encrypt "envs/${{ needs.config.outputs.environment }}/secrets/vault.yml" --vault-password-file .vault_password
             echo "✅ Vault file created and encrypted"

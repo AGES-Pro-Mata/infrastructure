@@ -99,11 +99,21 @@ services:
         - traefik.enable=true
         - traefik.docker.network=promata_public
         
+        - traefik.http.services.traefik-dashboard.loadbalancer.server.port=8080
+
         # Middleware para redirects HTTPS
         - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
         - traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true
+
+        # Dashboard do Traefik 
+        - traefik.http.routers.traefik-dashboard.rule=Host(`traefik.${domain_name:-promata.com.br}`)
+        - traefik.http.routers.traefik-dashboard.entrypoints=websecure
+        - traefik.http.routers.traefik-dashboard.tls.certresolver=letsencrypt
+        - traefik.http.routers.traefik-dashboard.tls=true
+        - traefik.http.routers.traefik-dashboard.middlewares=traefik-auth,security-headers
+        - traefik.http.routers.traefik-dashboard.service=api@internal
         
-        # Middleware de segurança - MELHORADO
+        # Middleware de segurança
         - traefik.http.middlewares.security-headers.headers.customrequestheaders.X-Forwarded-Proto=https
         - traefik.http.middlewares.security-headers.headers.sslredirect=true
         - traefik.http.middlewares.security-headers.headers.stsseconds=31536000
@@ -121,14 +131,7 @@ services:
         - traefik.http.routers.http-catchall.rule=hostregexp(`{host:.+}`)
         - traefik.http.routers.http-catchall.entrypoints=web
         - traefik.http.routers.http-catchall.middlewares=redirect-to-https
-        
-        # Dashboard do Traefik - CORRIGIDO
-        - traefik.http.routers.traefik-dashboard.rule=Host(`traefik.${domain_name:-promata.com.br}`)
-        - traefik.http.routers.traefik-dashboard.entrypoints=websecure
-        - traefik.http.routers.traefik-dashboard.tls.certresolver=letsencrypt
-        - traefik.http.routers.traefik-dashboard.tls=true
-        - traefik.http.routers.traefik-dashboard.middlewares=traefik-auth,security-headers
-        - traefik.http.routers.traefik-dashboard.service=api@internal
+      
 
   # === DATABASE CLUSTER ===
   postgres-primary:
@@ -210,11 +213,11 @@ services:
       - DATABASES_USER=postgres
       - DATABASES_PASSWORD=password123
       - DATABASES_DBNAME=promata
-      - POOL_MODE=session
+      - POOL_MODE=transaction
       - SERVER_RESET_QUERY=DISCARD ALL
-      - MAX_CLIENT_CONN=100
-      - DEFAULT_POOL_SIZE=20
-      - RESERVE_POOL_SIZE=5
+      - MAX_CLIENT_CONN=200
+      - DEFAULT_POOL_SIZE=25
+      - RESERVE_POOL_SIZE=10
       - RESERVE_POOL_TIMEOUT=5
       - LOG_CONNECTIONS=1
       - LOG_DISCONNECTIONS=1
@@ -308,12 +311,12 @@ services:
         - traefik.http.routers.frontend.entrypoints=websecure
         - traefik.http.routers.frontend.tls.certresolver=letsencrypt
         - traefik.http.routers.frontend.tls=true
-        # - traefik.http.routers.frontend.middlewares=security-headers
-        
+        - traefik.http.routers.frontend.middlewares=security-headers
+        - traefik.http.routers.backend.middlewares=security-headers
+
         # Router HTTP para debug
         - traefik.http.routers.frontend-http.rule=Host(`${domain_name:-promata.com.br}`)
         - traefik.http.routers.frontend-http.entrypoints=web
-        # - traefik.http.routers.frontend-http.middlewares=redirect-to-https
         - traefik.http.services.frontend.loadbalancer.server.port=3000
         - traefik.http.services.frontend.loadbalancer.healthcheck.path=/
         - traefik.http.services.frontend.loadbalancer.healthcheck.interval=60s
@@ -351,11 +354,11 @@ services:
       - DATABASE_COMMAND_TIMEOUT=60000
       
       # CORS
-      - CORS_ORIGIN=https://${DOMAIN_NAME},https://traefik.${DOMAIN_NAME}
+      - CORS_ORIGIN=https://${domain_name},https://traefik.${domain_name}
       - CORS_CREDENTIALS=true
       
       # Analytics (opcional)
-      - UMAMI_URL=https://analytics.${DOMAIN_NAME}
+      - UMAMI_URL=https://analytics.${domain_name}
       - UMAMI_WEBSITE_ID=${UMAMI_WEBSITE_ID:-}
       - UMAMI_API_KEY=${UMAMI_API_KEY:-}
       - ENABLE_ANALYTICS=${ENABLE_ANALYTICS:-false}
@@ -406,22 +409,17 @@ services:
         - traefik.http.routers.backend.entrypoints=websecure
         - traefik.http.routers.backend.tls.certresolver=letsencrypt
         - traefik.http.routers.backend.tls=true
-        # - traefik.http.routers.backend.middlewares=security-headers
+        - traefik.http.routers.backend.middlewares=security-headers
         
         # Router HTTP para debug
         - traefik.http.routers.backend-http.rule=Host(`api.${domain_name:-promata.com.br}`)
         - traefik.http.routers.backend-http.entrypoints=web
-        # - traefik.http.routers.backend-http.middlewares=redirect-to-https
         
         # Service configuration
         - traefik.http.services.backend.loadbalancer.server.port=3000
-        # Remover health check problemático temporariamente
-        # - traefik.http.services.backend.loadbalancer.healthcheck.path=/health
-        # - traefik.http.services.backend.loadbalancer.healthcheck.interval=60s
-        # - traefik.http.services.backend.loadbalancer.healthcheck.timeout=15s
-        
+
     healthcheck:
-      test: ["CMD-SHELL", "nc -z localhost 3000 || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/health || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -512,8 +510,8 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-dev_grafana_password}
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_USERS_ALLOW_ORG_CREATE=false
-      - GF_SERVER_DOMAIN=grafana.${DOMAIN_NAME:-promata.com.br}
-      - GF_SERVER_ROOT_URL=https://grafana.${DOMAIN_NAME:-promata.com.br}
+      - GF_SERVER_DOMAIN=grafana.${domain_name:-promata.com.br}
+      - GF_SERVER_ROOT_URL=https://grafana.${domain_name:-promata.com.br}
       - GF_INSTALL_PLUGINS=${GRAFANA_PLUGINS:-grafana-piechart-panel}
     volumes:
       - grafana_data:/var/lib/grafana

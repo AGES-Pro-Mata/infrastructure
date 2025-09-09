@@ -9,8 +9,8 @@ set -euo pipefail
 ENV=${1:-dev}
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
-TERRAFORM_DIR="$PROJECT_ROOT/terraform/deployments/$ENV"
-OUTPUT_DIR="$PROJECT_ROOT/ansible/inventory/$ENV"
+TERRAFORM_DIR="$PROJECT_ROOT/iac/deployments/$ENV"
+OUTPUT_DIR="$PROJECT_ROOT/cac/inventory/$ENV"
 
 # Colors for output
 RED='\033[0;31m'

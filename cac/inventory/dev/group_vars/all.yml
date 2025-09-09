@@ -1,0 +1,40 @@
+# Group Variables for Pro-Mata dev Environment
+# Auto-generated from Terraform outputs
+# Generated: Tue 09 Sep 2025 05:54:18 PM -03
+---
+# Environment Configuration
+environment: dev
+project_name: promata
+
+# Domain Configuration
+domain_name: "{{ domain_name }}"
+
+# Infrastructure Details
+resource_group_name: "rg-myproject-dev"
+storage_account_name: "promatadevstg"
+
+# Docker Swarm Configuration
+swarm_manager_ip: "{{ manager_public_ip }}"
+swarm_manager_private_ip: "{{ manager_private_ip }}"
+
+# Application Configuration
+app_version: latest
+docker_compose_version: "v2.20.2"
+
+# Stack Environment Variables
+stack_environment:
+  ENVIRONMENT: "dev"
+  DOMAIN_NAME: "{{ domain_name }}"
+  MANAGER_IP: "{{ manager_public_ip }}"
+  POSTGRES_DB: "promata_dev"
+  POSTGRES_USER: promata
+  TRAEFIK_LOG_LEVEL: INFO
+  ACME_EMAIL: "admin@{{ domain_name }}"
+
+# Monitoring Configuration
+monitoring_enabled: true
+backup_enabled: true
+
+# Security Configuration
+ssl_enabled: true
+firewall_enabled: true

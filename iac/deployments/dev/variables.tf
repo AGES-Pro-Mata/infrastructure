@@ -27,7 +27,7 @@ variable "environment" {
 variable "project_name" {
   description = "Project name"
   type        = string
-  default     = "pro-mata"
+  default     = "promata"
 }
 
 variable "vm_size" {
@@ -59,7 +59,7 @@ variable "common_tags" {
   description = "Common tags for all resources"
   type        = map(string)
   default = {
-    Project     = "pro-mata"
+    Project     = "promata"
     Environment = "dev"
     ManagedBy   = "terraform"
     Owner       = "pro-mata-team"
@@ -357,6 +357,38 @@ variable "server_public_ip" {
 
 variable "create_dns_records" {
   description = "Whether to create DNS records"
+  type        = bool
+  default     = true
+}
+
+# Additional variables from CI/CD configuration
+variable "database_base_image" {
+  description = "Database base image"
+  type        = string
+  default     = "norohim/pro-mata-database-dev:latest"
+}
+
+variable "database_infrastructure_image" {
+  description = "Database infrastructure image"  
+  type        = string
+  default     = "norohim/pro-mata-database-infrastructure:latest"
+}
+
+variable "umami_website_id" {
+  description = "Umami website ID"
+  type        = string
+  default     = "dev-website-id"
+}
+
+variable "umami_hash_salt" {
+  description = "Umami hash salt"
+  type        = string
+  sensitive   = true
+  default     = "default-salt"
+}
+
+variable "enable_analytics" {
+  description = "Enable analytics tracking"
   type        = bool
   default     = true
 }

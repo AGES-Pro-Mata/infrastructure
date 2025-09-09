@@ -24,6 +24,20 @@
       delegate_to: localhost
       become: false
 
+    - name: Install Docker Python dependencies
+      pip:
+        name:
+          - docker
+          - docker-compose
+        state: present
+      ignore_errors: true
+
+    - name: Ensure Docker service is running
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+
     - name: Check if Docker Swarm is initialized
       shell: docker info --format '{{ "{{.Swarm.LocalNodeState}}" }}'
       register: swarm_state

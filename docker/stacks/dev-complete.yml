@@ -123,7 +123,7 @@ services:
         - traefik.http.routers.http-catchall.middlewares=redirect-to-https
         
         # Dashboard do Traefik - CORRIGIDO
-        - traefik.http.routers.traefik-dashboard.rule=Host(`traefik.$${DOMAIN_NAME:-promata.com.br}`)
+        - traefik.http.routers.traefik-dashboard.rule=Host(`traefik.${domain_name:-promata.com.br}`)
         - traefik.http.routers.traefik-dashboard.entrypoints=websecure
         - traefik.http.routers.traefik-dashboard.tls.certresolver=letsencrypt
         - traefik.http.routers.traefik-dashboard.tls=true
@@ -259,10 +259,10 @@ services:
     command: ["npm", "run", "serve", "--", "--port", "3000", "--host", "0.0.0.0"]
     environment:
       - NODE_ENV=${NODE_ENV:-development}
-      - VITE_API_URL=https://api.$${DOMAIN_NAME:-promata.com.br}
+      - VITE_API_URL=https://api.${domain_name:-promata.com.br}
       - VITE_APP_ENV=${NODE_ENV:-development}
       - VITE_APP_VERSION=${FRONTEND_VERSION:-latest}
-      - VITE_UMAMI_URL=https://analytics.$${DOMAIN_NAME:-promata.com.br}
+      - VITE_UMAMI_URL=https://analytics.${domain_name:-promata.com.br}
       - VITE_UMAMI_WEBSITE_ID=${UMAMI_WEBSITE_ID:-}
       - VITE_UMAMI_SCRIPT_URL=${VITE_UMAMI_SCRIPT_URL}
       - VITE_ENABLE_ANALYTICS=true
@@ -303,7 +303,7 @@ services:
       labels:
         - traefik.enable=true
         - traefik.docker.network=promata_public
-        - traefik.http.routers.frontend.rule=Host(`$${DOMAIN_NAME:-promata.com.br}`)
+        - traefik.http.routers.frontend.rule=Host(`${domain_name:-promata.com.br}`)
         - traefik.http.routers.frontend.entrypoints=websecure
         - traefik.http.routers.frontend.tls.certresolver=letsencrypt
         - traefik.http.routers.frontend.tls=true
@@ -394,7 +394,7 @@ services:
         - traefik.docker.network=promata_public
         
         # Router principal - REGRAS CORRIGIDAS
-        - traefik.http.routers.backend.rule=Host(`api.$${DOMAIN_NAME:-promata.com.br}`)
+        - traefik.http.routers.backend.rule=Host(`api.${domain_name:-promata.com.br}`)
         - traefik.http.routers.backend.entrypoints=websecure
         - traefik.http.routers.backend.tls.certresolver=letsencrypt
         - traefik.http.routers.backend.tls=true
@@ -478,7 +478,7 @@ services:
       labels:
         - traefik.enable=true
         - traefik.docker.network=promata_public
-        - traefik.http.routers.prometheus.rule=Host(`prometheus.$${DOMAIN_NAME:-promata.com.br}`)
+        - traefik.http.routers.prometheus.rule=Host(`prometheus.${domain_name:-promata.com.br}`)
         - traefik.http.routers.prometheus.entrypoints=websecure
         - traefik.http.routers.prometheus.tls.certresolver=letsencrypt
         - traefik.http.routers.prometheus.tls=true
@@ -524,7 +524,7 @@ services:
       labels:
         - traefik.enable=true
         - traefik.docker.network=promata_public
-        - traefik.http.routers.grafana.rule=Host(`grafana.$${DOMAIN_NAME:-promata.com.br}`)
+        - traefik.http.routers.grafana.rule=Host(`grafana.${domain_name:-promata.com.br}`)
         - traefik.http.routers.grafana.entrypoints=websecure
         - traefik.http.routers.grafana.tls.certresolver=letsencrypt
         - traefik.http.routers.grafana.tls=true
@@ -595,7 +595,7 @@ services:
       labels:
         - traefik.enable=true
         - traefik.docker.network=promata_public
-        - traefik.http.routers.umami.rule=Host(`analytics.$${DOMAIN_NAME:-promata.com.br}`)
+        - traefik.http.routers.umami.rule=Host(`analytics.${domain_name:-promata.com.br}`)
         - traefik.http.routers.umami.entrypoints=websecure
         - traefik.http.routers.umami.tls.certresolver=letsencrypt
         - traefik.http.routers.umami.tls=true
@@ -679,7 +679,7 @@ services:
       labels:
         - traefik.enable=true
         - traefik.docker.network=promata_public
-        - traefik.http.routers.metabase.rule=Host(`metabase.$${DOMAIN_NAME:-promata.com.br}`)
+        - traefik.http.routers.metabase.rule=Host(`metabase.${domain_name:-promata.com.br}`)
         - traefik.http.routers.metabase.entrypoints=websecure
         - traefik.http.routers.metabase.tls.certresolver=letsencrypt
         - traefik.http.routers.metabase.tls=true
@@ -719,7 +719,7 @@ services:
       labels:
         - traefik.enable=true
         - traefik.docker.network=promata_public
-        - traefik.http.routers.pgadmin.rule=Host(`pgadmin.$${DOMAIN_NAME:-promata.com.br}`)
+        - traefik.http.routers.pgadmin.rule=Host(`pgadmin.${domain_name:-promata.com.br}`)
         - traefik.http.routers.pgadmin.entrypoints=websecure
         - traefik.http.routers.pgadmin.tls.certresolver=letsencrypt
         - traefik.http.routers.pgadmin.tls=true

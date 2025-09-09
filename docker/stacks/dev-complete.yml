@@ -109,9 +109,9 @@ services:
         - traefik.http.middlewares.security-headers.headers.stsseconds=31536000
         - traefik.http.middlewares.security-headers.headers.stsincludesubdomains=true
         - traefik.http.middlewares.security-headers.headers.stspreload=true
-        - traefik.http.middlewares.security-headers.headers.forcestsheader=true
+        - traefik.http.middlewares.security-headers.headers.forceSTSHeader=true
         - traefik.http.middlewares.security-headers.headers.contenttypenosniff=true
-        - traefik.http.middlewares.security-headers.headers.frameOptions=DENY
+        - traefik.http.middlewares.security-headers.headers.frameDeny=true
         - traefik.http.middlewares.security-headers.headers.referrerpolicy=strict-origin-when-cross-origin
         
         # Middleware de autenticação para dashboard
@@ -607,15 +607,50 @@ services:
       retries: 3
       start_period: 45s
 
+  # === METABASE DATABASE ===
+  metabase-db:
+    image: postgres:15
+    environment:
+      - POSTGRES_DB=metabase
+      - POSTGRES_USER=metabase
+      - POSTGRES_PASSWORD=metabase123
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8
+    volumes:
+      - metabase_db_data:/var/lib/postgresql/data
+    networks:
+      - promata_database
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U metabase -d metabase"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      replicas: 1
+      placement:
+        constraints: []
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.1'
+
+  # === METABASE BI TOOL ===
   metabase:
     image: metabase/metabase:latest
     environment:
       - MB_DB_TYPE=postgres
-      - MB_DB_DBNAME=promata
-      - MB_DB_PORT=6432
-      - MB_DB_USER=postgres
-      - MB_DB_PASS=password123
-      - MB_DB_HOST=pgbouncer
+      - MB_DB_DBNAME=metabase
+      - MB_DB_PORT=5432
+      - MB_DB_USER=metabase
+      - MB_DB_PASS=metabase123
+      - MB_DB_HOST=metabase-db
       - MB_ENCRYPTION_SECRET_KEY=metabase-secret-key-dev-change-in-production-12345
       - JAVA_OPTS=-Xmx512m -Duser.timezone=America/Sao_Paulo
     volumes:
@@ -625,14 +660,14 @@ services:
       - promata_public
       - promata_internal
     depends_on:
-      - pgbouncer
+      - metabase-db
     deploy:
       replicas: 1
       placement:
         constraints: []
       restart_policy:
         condition: on-failure
-        delay: 10s
+        delay: 30s
         max_attempts: 3
       resources:
         limits:
@@ -700,6 +735,8 @@ volumes:
   grafana_data:
     driver: local
   metabase_data:
+    driver: local
+  metabase_db_data:
     driver: local
   pgadmin_data:
     driver: local

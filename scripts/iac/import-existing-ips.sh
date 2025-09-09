@@ -19,7 +19,7 @@ fi
 cd "$TF_DIR"
 
 # Source environment variables
-source "../../../envs/$ENV/.env"
+source "$PROJECT_ROOT/envs/$ENV/.env"
 
 # Get resource group and resource names from variables
 RESOURCE_GROUP="${AZURE_RESOURCE_GROUP:-rg-myproject-dev}"

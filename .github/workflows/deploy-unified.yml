@@ -161,6 +161,22 @@ jobs:
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
+          
+      - name: Set Azure Environment Variables for Terraform
+        run: |
+          # Parse AZURE_CREDENTIALS and set environment variables for Terraform
+          CLIENT_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.clientId')
+          CLIENT_SECRET=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.clientSecret')
+          SUBSCRIPTION_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.subscriptionId')
+          TENANT_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.tenantId')
+          
+          echo "ARM_CLIENT_ID=$CLIENT_ID" >> $GITHUB_ENV
+          echo "ARM_CLIENT_SECRET=$CLIENT_SECRET" >> $GITHUB_ENV
+          echo "ARM_SUBSCRIPTION_ID=$SUBSCRIPTION_ID" >> $GITHUB_ENV
+          echo "ARM_TENANT_ID=$TENANT_ID" >> $GITHUB_ENV
+          echo "ARM_USE_CLI=false" >> $GITHUB_ENV
+          
+          echo "✅ Azure Service Principal environment variables configured for Terraform"
 
       # Moved to Enhanced setup section below
 
@@ -298,6 +314,20 @@ jobs:
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
+          
+      - name: Set Azure Environment Variables for Terraform
+        run: |
+          # Parse AZURE_CREDENTIALS and set environment variables for Terraform
+          CLIENT_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.clientId')
+          CLIENT_SECRET=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.clientSecret')
+          SUBSCRIPTION_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.subscriptionId')
+          TENANT_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.tenantId')
+          
+          echo "ARM_CLIENT_ID=$CLIENT_ID" >> $GITHUB_ENV
+          echo "ARM_CLIENT_SECRET=$CLIENT_SECRET" >> $GITHUB_ENV
+          echo "ARM_SUBSCRIPTION_ID=$SUBSCRIPTION_ID" >> $GITHUB_ENV
+          echo "ARM_TENANT_ID=$TENANT_ID" >> $GITHUB_ENV
+          echo "ARM_USE_CLI=false" >> $GITHUB_ENV
 
       - name: Destroy Infrastructure
         run: |

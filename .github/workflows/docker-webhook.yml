@@ -86,33 +86,19 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      - name: Trigger Development Deployment
+      - name: Trigger Unified Deployment (Enhanced)
         run: |
-          echo "🚀 Triggering automatic deployment for dev environment..."
+          echo "🚀 Triggering unified deployment with IP preservation..."
           
-          # Determine which images to use
-          if [[ "${{ needs.process-webhook.outputs.image_type }}" == "backend" ]]; then
-            BACKEND_TAG="latest"
-            # Get the latest frontend tag
-            FRONTEND_TAG=$(curl -s "https://registry.hub.docker.com/v2/repositories/norohim/pro-mata-frontend-dev/tags/" | jq -r '.results[0].name')
-          elif [[ "${{ needs.process-webhook.outputs.image_type }}" == "database" ]]; then
-            # For database updates, redeploy with current latest tags
-            BACKEND_TAG=$(curl -s "https://registry.hub.docker.com/v2/repositories/norohim/pro-mata-backend-dev/tags/" | jq -r '.results[0].name')
-            FRONTEND_TAG=$(curl -s "https://registry.hub.docker.com/v2/repositories/norohim/pro-mata-frontend-dev/tags/" | jq -r '.results[0].name')
-          elif [[ "${{ needs.process-webhook.outputs.image_type }}" == "migration" ]]; then
-            # For migration updates, redeploy with current latest tags
-            BACKEND_TAG=$(curl -s "https://registry.hub.docker.com/v2/repositories/norohim/pro-mata-backend-dev/tags/" | jq -r '.results[0].name')
-            FRONTEND_TAG=$(curl -s "https://registry.hub.docker.com/v2/repositories/norohim/pro-mata-frontend-dev/tags/" | jq -r '.results[0].name')
-          else
-            FRONTEND_TAG="latest"
-            # Get the latest backend tag
-            BACKEND_TAG=$(curl -s "https://registry.hub.docker.com/v2/repositories/norohim/pro-mata-backend-dev/tags/" | jq -r '.results[0].name')
-          fi
+          # Simple approach - always use latest tags and let deploy-unified handle it
+          BACKEND_IMAGE="norohim/pro-mata-backend-dev:latest"
+          FRONTEND_IMAGE="norohim/pro-mata-frontend-dev:latest"
           
-          echo "Backend tag: $BACKEND_TAG"
-          echo "Frontend tag: $FRONTEND_TAG"
+          echo "Backend image: $BACKEND_IMAGE"
+          echo "Frontend image: $FRONTEND_IMAGE"
+          echo "Updated component: ${{ needs.process-webhook.outputs.image_type }}"
           
-          # Dispatch to main CI/CD workflow
+          # Dispatch to unified deployment workflow
           curl -X POST \
             -H "Accept: application/vnd.github.v3+json" \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
@@ -122,10 +108,10 @@ jobs:
               "event_type": "docker-hub-auto-deploy",
               "client_payload": {
                 "environment": "dev",
-                "backend_tag": "'$BACKEND_TAG'",
-                "frontend_tag": "'$FRONTEND_TAG'",
+                "backend_image": "'$BACKEND_IMAGE'",
+                "frontend_image": "'$FRONTEND_IMAGE'",
                 "trigger_source": "docker_hub_webhook",
-                "updated_image": "${{ needs.process-webhook.outputs.image_type }}",
+                "updated_component": "${{ needs.process-webhook.outputs.image_type }}",
                 "repository_name": "${{ needs.process-webhook.outputs.repository_name }}",
                 "timestamp": "'$(date -u '+%Y-%m-%d %H:%M:%S UTC')'"
               }

@@ -21,6 +21,7 @@ tfplan
 # === ANSIBLE ===
 *.retry
 .vault_pass
+.vault_password
 vault_password_file
 ansible-vault-password
 

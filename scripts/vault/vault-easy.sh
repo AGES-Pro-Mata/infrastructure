@@ -77,7 +77,7 @@ postgres_password: "change_me_secure_password_$env"
 postgres_replica_password: "change_me_replica_password_$env"
 
 # === APPLICATION SECRETS ===  
-jwt_secret: "change_me_jwt_secret_$env_$(date +%s)"
+jwt_secret: "change_me_jwt_secret_${env}_$(date +%s)"
 api_key: "change_me_api_key_$env"
 
 # === AUTHENTICATION SECRETS ===

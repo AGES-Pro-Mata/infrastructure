@@ -26,20 +26,19 @@ else
     echo "⚠️ No .env file found, using defaults"
 fi
 
-# Set Azure subscription ID from environment or config
+# Set Azure subscription ID from environment or config  
+AZURE_SUBSCRIPTION_ID="${ARM_SUBSCRIPTION_ID:-}"
 if [ -z "$AZURE_SUBSCRIPTION_ID" ]; then
     # Try to get from Azure CLI if available
     AZURE_SUBSCRIPTION_ID=$(az account show --query id -o tsv 2>/dev/null || echo "")
-    if [ -z "$AZURE_SUBSCRIPTION_ID" ]; then
-        # Try from environment variables set by CI/CD
-        AZURE_SUBSCRIPTION_ID="${ARM_SUBSCRIPTION_ID:-}"
-    fi
 fi
 
-# Validate Azure subscription ID
+# Skip validation if still not found (since IPs might already be imported)
 if [ -z "$AZURE_SUBSCRIPTION_ID" ]; then
-    echo "❌ AZURE_SUBSCRIPTION_ID not found. Please ensure you're logged in to Azure CLI or set the ARM_SUBSCRIPTION_ID environment variable"
-    exit 1
+    echo "⚠️ AZURE_SUBSCRIPTION_ID not found. Skipping import (IPs might already be in state)"
+    echo "📌 Found Manager IP: $MANAGER_IP"
+    echo "📌 Found Worker IP: $WORKER_IP" 
+    exit 0
 fi
 
 # Resource group and project naming

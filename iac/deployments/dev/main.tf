@@ -111,7 +111,6 @@ resource "azurerm_public_ip" "manager" {
   
   # Reserve current IP address to prevent changes on redeploy
   ip_version          = "IPv4"
-  zones               = ["1"]  # Availability zone for reliability
 
   tags = merge(var.common_tags, {
     "IP-Type"     = "Static-Reserved"
@@ -135,7 +134,6 @@ resource "azurerm_public_ip" "worker" {
   
   # Reserve current IP address to prevent changes on redeploy
   ip_version          = "IPv4"
-  zones               = ["2"]  # Different AZ from manager for HA
 
   tags = merge(var.common_tags, {
     "IP-Type"     = "Static-Reserved"

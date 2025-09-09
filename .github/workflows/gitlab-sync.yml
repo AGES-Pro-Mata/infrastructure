@@ -33,7 +33,7 @@ jobs:
     steps:
     - name: 🔍 Verificar Pré-requisitos
       run: |
-        if [ -z "$GITLAB_TOKEN" ] || [ -z "$GITLAB_PROJECT_ID" ] || [ -z "$GITLAB_GROUP_ID" ]; then
+        if [ -z "$GITLAB_TOKEN" ] && [ -z "$GITLAB_PROJECT_ID" ] || [ -z "$GITLAB_GROUP_ID" ]; then
           echo "❌ GITLAB_TOKEN, GITLAB_PROJECT_ID ou GITLAB_GROUP_ID não configurados"
           echo "Configure os secrets e variables necessários no repositório"
           exit 1

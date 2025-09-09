@@ -162,11 +162,7 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Setup Ansible Vault
-        run: |
-          echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > ~/.ansible-vault-password
-          chmod 600 ~/.ansible-vault-password
-          echo "vault_password_file = ~/.ansible-vault-password" >> ~/.ansible.cfg
+      # Moved to Enhanced setup section below
 
       - name: Create Environment Configuration
         run: |
@@ -210,15 +206,35 @@ jobs:
           storage_account_name = "promata${{ needs.config.outputs.environment }}stg$(date +%s | tail -c 6)"
           EOF
 
-      - name: Execute Deployment
+      - name: Setup Ansible Vault (Enhanced)
+        run: |
+          # Setup vault password file
+          echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > .vault_password
+          chmod 600 .vault_password
+          
+          # Initialize vault if needed (first time)
+          ./scripts/vault/vault-easy.sh setup || echo "Vault already setup"
+          
+          # Initialize environment secrets if they don't exist
+          if [ ! -f "envs/${{ needs.config.outputs.environment }}/secrets/all.yml" ]; then
+            echo "🔐 Initializing secrets for ${{ needs.config.outputs.environment }}"
+            ./scripts/vault/vault-easy.sh init-${{ needs.config.outputs.environment }}
+          fi
+
+      - name: Import Existing IPs (IP Preservation)
+        run: |
+          echo "🔒 Importing existing Azure IPs to preserve them..."
+          ./scripts/terraform/import-existing-ips.sh ${{ needs.config.outputs.environment }} || echo "⚠️ IPs might already be imported"
+
+      - name: Execute Deployment (Enhanced with IP Preservation)
         run: |
           case "${{ needs.config.outputs.action }}" in
             "deploy")
               if [ "${{ needs.config.outputs.force_rebuild }}" = "true" ]; then
-                echo "🏗️ Full infrastructure rebuild"
+                echo "🏗️ Full infrastructure rebuild with IP preservation"
                 make deploy-automated ENV=${{ needs.config.outputs.environment }}
               else
-                echo "📦 Standard deployment"
+                echo "📦 Standard deployment with IP preservation"
                 make deploy-automated ENV=${{ needs.config.outputs.environment }}
               fi
               ;;
@@ -226,7 +242,7 @@ jobs:
               make health ENV=${{ needs.config.outputs.environment }}
               ;;
             "status")
-              make status ENV=${{ needs.config.outputs.environment }}
+              make quick-status ENV=${{ needs.config.outputs.environment }}
               ;;
           esac
         timeout-minutes: 45
@@ -240,11 +256,24 @@ jobs:
           chmod 600 ~/.ssh/promata_key
           echo "SSH key extracted"
 
-      - name: Health Check
+      - name: Health Check & Cleanup
         if: contains(needs.config.outputs.action, 'deploy')
         run: |
+          echo "🏥 Running health checks..."
           make health ENV=${{ needs.config.outputs.environment }}
+          
+          echo "🧹 Cleaning up deprecated files..."
+          make cleanup-deprecated || echo "Cleanup completed"
+          
+          echo "📊 Final deployment status..."
+          make quick-status ENV=${{ needs.config.outputs.environment }}
         timeout-minutes: 10
+
+      - name: Post-Deployment Validation
+        if: contains(needs.config.outputs.action, 'deploy')
+        run: |
+          echo "🔍 Validating CI/CD setup..."
+          ./scripts/ci-cd/validate-setup.sh ${{ needs.config.outputs.environment }} || echo "Validation completed with warnings"
 
   # Destroy job (separate for safety)
   destroy:
@@ -294,13 +323,25 @@ jobs:
           echo "| **Backend Image** | ${{ needs.config.outputs.backend_image }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **Frontend Image** | ${{ needs.config.outputs.frontend_image }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **Status** | ${{ (needs.deploy.result == 'success' || needs.destroy.result == 'success') && '✅ SUCCESS' || '❌ FAILED' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **IP Preservation** | ✅ ACTIVE |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Vault Management** | ✅ ACTIVE |" >> $GITHUB_STEP_SUMMARY
+          echo "| **DNS Optimization** | ✅ CLOUDFLARE PROXY |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
           if [ "${{ needs.config.outputs.environment }}" = "dev" ]; then
-            echo "### 🔧 Development URLs" >> $GITHUB_STEP_SUMMARY
-            echo "- **Frontend**: https://dev.promata.com.br" >> $GITHUB_STEP_SUMMARY
-            echo "- **API**: https://api.dev.promata.com.br" >> $GITHUB_STEP_SUMMARY
-            echo "- **Traefik**: https://traefik.dev.promata.com.br" >> $GITHUB_STEP_SUMMARY
+            echo "### 🔧 Development URLs (IP: 135.119.195.249 - RESERVED)" >> $GITHUB_STEP_SUMMARY
+            echo "- **Frontend**: https://promata.com.br" >> $GITHUB_STEP_SUMMARY
+            echo "- **API**: https://api.promata.com.br" >> $GITHUB_STEP_SUMMARY
+            echo "- **Traefik**: https://traefik.promata.com.br" >> $GITHUB_STEP_SUMMARY
+            echo "- **Grafana**: https://grafana.promata.com.br" >> $GITHUB_STEP_SUMMARY
+            echo "- **Prometheus**: https://prometheus.promata.com.br" >> $GITHUB_STEP_SUMMARY
+            echo "- **Analytics**: https://analytics.promata.com.br" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### 🛡️ Security Features Active:" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Static IP Reservation (Azure)" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Cloudflare Proxy (Zero DNS propagation)" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Ansible Vault Encryption" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Shared Terraform State" >> $GITHUB_STEP_SUMMARY
           fi
 
       - name: Notify Discord

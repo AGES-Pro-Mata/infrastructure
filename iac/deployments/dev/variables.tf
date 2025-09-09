@@ -27,7 +27,7 @@ variable "environment" {
 variable "project_name" {
   description = "Project name"
   type        = string
-  default     = "promata"
+  default     = "pro-mata"
 }
 
 variable "vm_size" {
@@ -59,10 +59,10 @@ variable "common_tags" {
   description = "Common tags for all resources"
   type        = map(string)
   default = {
-    Project     = "promata"
+    Project     = "pro-mata"
     Environment = "dev"
     ManagedBy   = "terraform"
-    Owner       = "promata-team"
+    Owner       = "pro-mata-team"
   }
 }
 

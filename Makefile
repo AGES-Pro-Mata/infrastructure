@@ -39,8 +39,8 @@ deploy: check-env ## Deploy complete infrastructure with database initialization
 deploy-terraform: check-env ## Deploy only Terraform
 	@echo "🏗️  Deploying Terraform for $(ENV)..."
 	@cd $(TF_DIR) && terraform init -backend-config=../../backends/$(ENV)-backend.hcl
-	@cd $(TF_DIR) && terraform plan -var-file=../../../$(ENV_DIR)/config.yml
-	@cd $(TF_DIR) && terraform apply -var-file=../../../$(ENV_DIR)/config.yml --auto-approve
+	@cd $(TF_DIR) && terraform plan -var-file=terraform.tfvars
+	@cd $(TF_DIR) && terraform apply -var-file=terraform.tfvars --auto-approve
 
 deploy-ansible: check-env ## Deploy only Ansible stack
 	@echo "🔧 Deploying Ansible for $(ENV) with complete stack..."

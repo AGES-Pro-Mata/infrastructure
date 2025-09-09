@@ -48,22 +48,6 @@ provider "azurerm" {
   use_cli = false  # Explicitly disable Azure CLI authentication
 }
 
-# AWS Provider configuration (for prod environment)
-provider "aws" {
-  region = var.aws_region
-  
-  # Use environment variables for authentication:
-  # AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
-  
-  default_tags {
-    tags = {
-      Project     = "pro-mata"
-      Environment = var.environment
-      ManagedBy   = "terraform"
-      CreatedBy   = "ages-iv"
-    }
-  }
-}
 
 # Cloudflare Provider configuration
 provider "cloudflare" {

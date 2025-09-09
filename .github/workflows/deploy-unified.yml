@@ -219,7 +219,7 @@ jobs:
           umami_db_password = "${{ secrets.UMAMI_DB_PASSWORD || 'dev-password' }}"
           
           # Storage
-          storage_account_name = "promata${{ needs.config.outputs.environment }}stg$(date +%s | tail -c 6)"
+          storage_account_name = "promatadevstg"
           EOF
 
       - name: Setup Ansible Vault (Enhanced)

@@ -2,7 +2,7 @@
 variable "project_name" {
   description = "Name of the project"
   type        = string
-  default     = "pro-mata"
+  default     = "promata"
 }
 
 variable "environment" {
@@ -31,19 +31,6 @@ variable "azure_vm_size" {
   description = "Azure VM size"
   type        = string
   default     = "Standard_B2s"
-}
-
-# AWS-specific variables
-variable "aws_region" {
-  description = "AWS region"
-  type        = string
-  default     = "us-east-1"
-}
-
-variable "aws_instance_type" {
-  description = "AWS EC2 instance type"
-  type        = string
-  default     = "t3.medium"
 }
 
 # Cloudflare variables
@@ -132,8 +119,8 @@ variable "common_tags" {
   description = "Common tags applied to all resources"
   type        = map(string)
   default = {
-    Project   = "pro-mata"
-    Team      = "ages-iv"
+    Project   = "promata"
+    Team      = "ages"
     ManagedBy = "terraform"
   }
 }

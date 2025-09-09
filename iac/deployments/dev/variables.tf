@@ -101,13 +101,13 @@ variable "frontend_image" {
 variable "backend_replicas" {
   description = "Number of backend service replicas"
   type        = number
-  default     = 2
+  default     = 1
 }
 
 variable "frontend_replicas" {
   description = "Number of frontend service replicas"
   type        = number
-  default     = 2
+  default     = 1
 }
 
 # Cloudflare variables
@@ -151,7 +151,7 @@ variable "monitoring_enabled" {
 variable "migration_image" {
   description = "Migration Docker image"
   type        = string
-  default     = "norohim/pro-mata-migration-dev:latest"
+  default     = "norohim/pro-mata-database-dev:latest"
 }
 
 # Additional variables from .env configuration
@@ -208,7 +208,7 @@ variable "postgres_password" {
   description = "PostgreSQL password"
   type        = string
   sensitive   = true
-  default     = "promata_dev_password_change_me"
+  default     = "postgres"
 }
 
 variable "postgres_replica_user" {
@@ -221,7 +221,7 @@ variable "postgres_replica_password" {
   description = "PostgreSQL replication password"
   type        = string
   sensitive   = true
-  default     = "replica_dev_password_change_me"
+  default     = "postgres"
 }
 
 variable "database_size" {
@@ -234,7 +234,7 @@ variable "jwt_secret" {
   description = "JWT secret key"
   type        = string
   sensitive   = true
-  default     = "your-super-secret-jwt-key-change-this-in-production"
+  default     = "your-super-secret-jwt-key"
 }
 
 variable "jwt_expires_in" {
@@ -271,7 +271,7 @@ variable "pgadmin_password" {
   description = "PgAdmin password"
   type        = string
   sensitive   = true
-  default     = "pgadmin_dev_password_change_me"
+  default     = "pgadmin"
 }
 
 variable "traefik_log_level" {

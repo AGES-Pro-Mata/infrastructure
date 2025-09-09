@@ -225,8 +225,8 @@ jobs:
       - name: Setup Ansible Vault (Enhanced)
         run: |
           # Setup vault password file
-          echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > .vault_password
-          chmod 600 .vault_password
+          echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > .vault_pass
+          chmod 600 .vault_pass
           
           # Initialize vault if needed (first time)
           ./scripts/vault/vault-easy.sh setup || echo "Vault already setup"

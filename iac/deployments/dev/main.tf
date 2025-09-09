@@ -48,6 +48,11 @@ provider "azurerm" {
       recover_soft_deleted_key_vaults = true
     }
   }
+
+  # Use Service Principal authentication with environment variables:
+  # ARM_CLIENT_ID, ARM_CLIENT_SECRET, ARM_SUBSCRIPTION_ID, ARM_TENANT_ID
+  # These are automatically used by the provider when available
+  use_cli = false  # Explicitly disable Azure CLI authentication
 }
 
 provider "cloudflare" {

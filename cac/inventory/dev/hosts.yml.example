@@ -1,0 +1,46 @@
+# Generated Ansible Inventory Template for Pro-Mata Environment
+# This file is auto-generated from Terraform outputs - do not edit manually  
+# Copy this template and replace placeholders with actual values
+---
+all:
+  vars:
+    ansible_user: ubuntu
+    ansible_ssh_private_key_file: "{{ ssh_private_key_path }}"
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+    env: "{{ environment }}"
+    domain_name: "{{ domain_name }}"
+    manager_public_ip: "{{ manager_public_ip }}"
+    manager_private_ip: "{{ manager_private_ip }}"
+    worker_public_ip: "{{ worker_public_ip }}"
+    worker_private_ip: "{{ worker_private_ip }}"
+
+  children:
+    promata_{{ environment }}:
+      children:
+        managers:
+          hosts:
+            swarm-manager:
+              ansible_host: "{{ manager_public_ip }}"
+              private_ip: "{{ manager_private_ip }}"
+              node_role: manager
+
+        workers:
+          hosts:
+            swarm-worker-1:
+              ansible_host: "{{ worker_public_ip }}"
+              private_ip: "{{ worker_private_ip }}"
+              node_role: worker
+
+    # Convenience groups for easier targeting
+    swarm_managers:
+      hosts:
+        swarm-manager:
+
+    swarm_workers:
+      hosts:
+        swarm-worker-1:
+
+    swarm_nodes:
+      children:
+        swarm_managers:
+        swarm_workers:

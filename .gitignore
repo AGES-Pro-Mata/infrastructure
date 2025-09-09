@@ -28,7 +28,9 @@ ansible-vault-password
 # Generated inventory files (contain sensitive infrastructure details)
 cac/inventory/*/hosts.yml
 **/inventory/*/hosts.yml
+envs/*/hosts.yml
 hosts.yml
+!hosts.yml.example
 
 # === SECURITY - DO NOT COMMIT ===
 # Secret files

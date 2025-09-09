@@ -7,7 +7,7 @@ environment: dev
 project_name: promata
 
 # Domain Configuration
-domain_name: "{{ domain_name }}"
+domain_name: "promata.com.br"
 
 # Infrastructure Details
 resource_group_name: "rg-myproject-dev"
@@ -23,13 +23,65 @@ docker_compose_version: "v2.20.2"
 
 # Stack Environment Variables
 stack_environment:
+  # Environment Settings
   ENVIRONMENT: "dev"
-  DOMAIN_NAME: "{{ domain_name }}"
-  MANAGER_IP: "{{ manager_public_ip }}"
-  POSTGRES_DB: "promata_dev"
-  POSTGRES_USER: promata
-  TRAEFIK_LOG_LEVEL: INFO
-  ACME_EMAIL: "admin@{{ domain_name }}"
+  environment: "dev"
+  project_name: "promata"
+  env_color: "blue"
+  
+  # Domain Configuration
+  DOMAIN_NAME: "promata.com.br"
+  domain_name: "promata.com.br"
+  ACME_EMAIL: "admin@promata.com.br"
+  
+  # Infrastructure
+  MANAGER_IP: "135.119.195.249"
+  
+  # Database Configuration
+  POSTGRES_DB: "promata"
+  POSTGRES_USER: "postgres"
+  POSTGRES_PASSWORD: "Z+gbFjmLVUWsQ4/Qxk6eDg=="
+  
+  # Application Security
+  JWT_SECRET: "ga1hVRzHzko4L1e7zWRra/oUM1W78h607gu8g20FqZ0="
+  JWT_EXPIRES_IN: "24h"
+  
+  # Traefik Configuration
+  TRAEFIK_LOG_LEVEL: "INFO"
+  TRAEFIK_AUTH_USERS: "admin:$$2y$$10$$8T6VyDz5t.lq8kUj1N2uaOt1D2v8j3g0lbXq9wGfZm.YHb5oYcnEK"
+  
+  # Cloudflare Configuration
+  CLOUDFLARE_API_TOKEN: "oycrpCKXpVQmDq_6V2ArnidSxImWxvkzJhxhhBtl"
+  CLOUDFLARE_ZONE_ID: "c59ab9e254cc4d555f265d1d111f95ed"
+  
+  # Application Images
+  BACKEND_IMAGE: "norohim/pro-mata-backend-dev:latest"
+  FRONTEND_IMAGE: "norohim/pro-mata-frontend-dev:latest"
+  DATABASE_IMAGE: "norohim/pro-mata-database-dev:latest"
+  
+  # Monitoring & Tools
+  GRAFANA_ADMIN_PASSWORD: "GrF4n4_D3v_S3cur3_P4ssw0rd_2024!"
+  PGADMIN_EMAIL: "admin@promata.com.br"
+  PGADMIN_PASSWORD: "PgAdm1n_D3v_S3cur3_2024!"
+  PROMETHEUS_RETENTION: "7d"
+  
+  # PgBouncer Configuration
+  PGBOUNCER_POOL_MODE: "session"
+  PGBOUNCER_POOL_SIZE: "20"
+  PGBOUNCER_MAX_CLIENT_CONN: "100"
+  PGBOUNCER_AUTH_TYPE: "md5"
+  
+  # Analytics - Umami
+  UMAMI_DB_PASSWORD: "Um4m1_DB_S3cur3_P4ssw0rd_2024!"
+  UMAMI_WEBSITE_ID: "01913c8d-4a2f-7b8e-9c5f-2a1b3c4d5e6f"
+  UMAMI_HASH_SALT: "um4m1_h4sh_s4lt_d3v_2024_s3cur3_k3y"
+  UMAMI_SECRET: "um4m1_s3cr3t_k3y_d3v_2024_ch4ng3_m3"
+  
+  # Metabase Configuration
+  METABASE_DB_PASSWORD: "M3t4b4s3_DB_S3cur3_2024!"
+  
+  # Backup Configuration
+  BACKUP_ENCRYPTION_KEY: "b4ckup_3ncr1pt10n_k3y_d3v_2024_s3cur3"
 
 # Monitoring Configuration
 monitoring_enabled: true

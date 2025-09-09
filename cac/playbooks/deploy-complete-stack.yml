@@ -2,27 +2,8 @@
 - name: Deploy Pro-Mata Complete Stack
   hosts: all
   become: true
-  vars:
-    env_file_path: "../../envs/dev/config.yml"
   
   tasks:
-    - name: Check if environment file exists
-      stat:
-        path: "{{ env_file_path }}"
-      delegate_to: localhost
-      become: false
-      register: env_file_check
-
-    - name: Fail if environment file doesn't exist
-      fail:
-        msg: "Environment file not found: {{ env_file_path }}"
-      when: not env_file_check.stat.exists
-
-    - name: Load environment variables
-      include_vars:
-        file: "{{ env_file_path }}"
-      delegate_to: localhost
-      become: false
 
     - name: Update apt cache
       apt:
@@ -148,11 +129,20 @@
         - /opt/promata/db-scripts
         - /opt/promata/logs
 
-    - name: Copy environment file
+    - name: Verify environment file exists
+      stat:
+        path: /opt/promata/.env
+      register: env_file_check
+      
+    - name: Generate .env file if missing
       copy:
-        src: "{{ env_file_path }}"
+        content: |
+          export domain_name="promata.com.br"
+          export POSTGRES_USER="postgres"
+          export POSTGRES_DB="promata"
         dest: /opt/promata/.env
         mode: '0600'
+      when: not env_file_check.stat.exists
 
     - name: Copy configurations
       copy:

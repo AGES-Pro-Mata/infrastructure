@@ -3,7 +3,7 @@
   hosts: managers
   become: true
   vars:
-    env_file_path: "../../../envs/dev/config.yml"
+    env_file_path: "../../envs/dev/config.yml"
   
   tasks:
     - name: Check if environment file exists
@@ -48,13 +48,13 @@
 
     - name: Copy configurations
       copy:
-        src: ../../../docker/configs/
+        src: ../../docker/configs/
         dest: /opt/promata/configs/
         mode: preserve
 
     - name: Copy stack file
       copy:
-        src: ../../../docker/stacks/dev-complete.yml
+        src: ../../docker/stacks/dev-complete.yml
         dest: /opt/promata/dev-complete.yml
         mode: '0644'
 

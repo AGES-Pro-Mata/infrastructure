@@ -24,14 +24,27 @@
       delegate_to: localhost
       become: false
 
-    - name: Install Docker Python dependencies
-      pip:
-        name:
-          - docker
-          - docker-compose
-        state: present
-      ignore_errors: true
+    - name: Update apt cache
+      apt:
+      update_cache: yes
+      when: ansible_os_family == "Debian"
 
+    - name: Install Docker and Python dependencies
+      apt:
+      name:
+        - docker.io
+        - docker-compose
+        - python3-docker
+        - python3-pip
+      state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Install additional Docker Python library via pip
+      pip:
+      name: docker
+      state: present
+      when: ansible_os_family == "Debian"    
+      
     - name: Ensure Docker service is running
       systemd:
         name: docker

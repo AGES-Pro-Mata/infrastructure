@@ -25,6 +25,11 @@ tfplan
 vault_password_file
 ansible-vault-password
 
+# Generated inventory files (contain sensitive infrastructure details)
+cac/inventory/*/hosts.yml
+**/inventory/*/hosts.yml
+hosts.yml
+
 # === SECURITY - DO NOT COMMIT ===
 # Secret files
 **/.env.secrets

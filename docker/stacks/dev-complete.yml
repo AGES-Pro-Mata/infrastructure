@@ -309,7 +309,6 @@ services:
         - traefik.http.routers.frontend.tls.certresolver=letsencrypt
         - traefik.http.routers.frontend.tls=true
         - traefik.http.routers.frontend.middlewares=security-headers
-        - traefik.http.routers.backend.middlewares=security-headers
 
         # Router HTTP para debug
         - traefik.http.routers.frontend-http.rule=Host(`${domain_name:-promata.com.br}`)

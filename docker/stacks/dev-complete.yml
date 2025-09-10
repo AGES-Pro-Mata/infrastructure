@@ -321,6 +321,17 @@ services:
   backend:
     image: norohim/pro-mata-backend-dev:latest
     stop_grace_period: 60s
+    command: >
+      sh -c "
+        cd /app &&
+        echo '🔧 Corrigindo problema do Prisma Client...' &&
+        npx prisma generate &&
+        mkdir -p node_modules/.prisma &&
+        rm -rf node_modules/.prisma/client &&
+        ln -sf /app/generated/prisma node_modules/.prisma/client &&
+        echo '✅ Prisma Client corrigido!' &&
+        npm start
+      "
     environment:
       - RUN_SEED=true
       # Configuração básica

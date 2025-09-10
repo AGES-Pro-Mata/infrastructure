@@ -7,7 +7,7 @@ environment: prod
 project_name: promata
 
 # Domain Configuration
-domain_name: "promata.com.br"
+domain_name: "{{ domain_name }}"
 
 # Infrastructure Details
 resource_group_name: "rg-myproject-dev"
@@ -30,26 +30,20 @@ stack_environment:
   env_color: "blue"
   
   # Domain Configuration
-  DOMAIN_NAME: "promata.com.br"
-  domain_name: "promata.com.br"
+  DOMAIN_NAME: "{{ domain_name }}"
+  domain_name: "{{ domain_name }}"
   ACME_EMAIL: "admin@promata.com.br"
   
   # Infrastructure
-  MANAGER_IP: "135.119.195.249"
+  MANAGER_IP: "{{ manager_public_ip }}"
   
   # Database Configuration
   POSTGRES_DB: "promata"
   POSTGRES_USER: "postgres"
   POSTGRES_PASSWORD: "Z+gbFjmLVUWsQ4/Qxk6eDg=="
   
-  # Prisma Configuration
-  DATABASE_URL: "postgresql://postgres:Z+gbFjmLVUWsQ4/Qxk6eDg==@postgres:5432/promata?schema=public"
-  PRISMA_DATABASE_URL: "postgresql://postgres:Z+gbFjmLVUWsQ4/Qxk6eDg==@postgres:5432/promata?schema=public"
-  PRISMA_USER: "postgres"
-  PRISMA_PASSWORD: "prisma123"
-  
   # Application Security
-  JWT_SECRET: "ga1hVRzHzko4L1e7zWRra/oUM1W78h607gu8g20FqZ0="
+  JWT_SECRET: "admin"
   JWT_EXPIRES_IN: "24h"
   
   # Traefik Configuration
@@ -60,13 +54,21 @@ stack_environment:
   CLOUDFLARE_API_TOKEN: "oycrpCKXpVQmDq_6V2ArnidSxImWxvkzJhxhhBtl"
   CLOUDFLARE_ZONE_ID: "c59ab9e254cc4d555f265d1d111f95ed"
   
+  # Prisma Configuration
+  DATABASE_URL: "postgresql://postgres:Z+gbFjmLVUWsQ4/Qxk6eDg==@postgres:5432/promata?schema=public"
+  PRISMA_DATABASE_URL: "postgresql://postgres:Z+gbFjmLVUWsQ4/Qxk6eDg==@postgres:5432/promata?schema=public"
+  PRISMA_USER: "postgres"
+  PRISMA_PASSWORD: "prisma123"
+  
   # Application Images
   BACKEND_IMAGE: "norohim/pro-mata-backend-dev:latest"
   FRONTEND_IMAGE: "norohim/pro-mata-frontend-dev:latest"
   DATABASE_IMAGE: "norohim/pro-mata-database-infrastructure"
   
   # Monitoring & Tools
-  GRAFANA_ADMIN_PASSWORD: "GrF4n4_D3v_S3cur3_P4ssw0rd_2024!"
+  GRAFANA_ADMIN_PASSWORD: "admin"
+  PGADMIN_EMAIL: "admin@promata.com.br"
+  PGADMIN_PASSWORD: "admin"
   PROMETHEUS_RETENTION: "7d"
   
   # PgBouncer Configuration
@@ -76,17 +78,17 @@ stack_environment:
   PGBOUNCER_AUTH_TYPE: "md5"
   
   # Analytics - Umami
-  UMAMI_DB_PASSWORD: "Um4m1_DB_S3cur3_P4ssw0rd_2024!"
+  UMAMI_DB_PASSWORD: "admin"
   UMAMI_WEBSITE_ID: "998aa7a1-a362-46ed-877c-ae8355d324c7"
-  UMAMI_HASH_SALT: "um4m1_h4sh_s4lt_d3v_2024_s3cur3_k3y"
-  UMAMI_SECRET: "um4m1_s3cr3t_k3y_d3v_2024_ch4ng3_m3"
+  UMAMI_HASH_SALT: "admin"
+  UMAMI_SECRET: "admin"
   
   # Metabase Configuration
-  METABASE_DB_PASSWORD: "M3t4b4s3_DB_S3cur3_2024!"
-  MB_ENCRYPTION_SECRET_KEY: "Mb_3ncr1pt10n_S3cr3t_K3y_D3v_2024_S3cur3!"
+  METABASE_DB_PASSWORD: "admin"
+  MB_ENCRYPTION_SECRET_KEY: "admin"
   
   # Backup Configuration
-  BACKUP_ENCRYPTION_KEY: "b4ckup_3ncr1pt10n_k3y_d3v_2024_s3cur3"
+  BACKUP_ENCRYPTION_KEY: "admin"
 
 # Monitoring Configuration
 monitoring_enabled: true

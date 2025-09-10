@@ -42,13 +42,19 @@ stack_environment:
   POSTGRES_USER: "postgres"
   POSTGRES_PASSWORD: "Z+gbFjmLVUWsQ4/Qxk6eDg=="
   
+  # Prisma Configuration
+  DATABASE_URL: "postgresql://postgres:Z+gbFjmLVUWsQ4/Qxk6eDg==@postgres:5432/promata?schema=public"
+  PRISMA_DATABASE_URL: "postgresql://postgres:Z+gbFjmLVUWsQ4/Qxk6eDg==@postgres:5432/promata?schema=public"
+  PRISMA_USER: "postgres"
+  PRISMA_PASSWORD: "prisma123"
+  
   # Application Security
   JWT_SECRET: "ga1hVRzHzko4L1e7zWRra/oUM1W78h607gu8g20FqZ0="
   JWT_EXPIRES_IN: "24h"
   
   # Traefik Configuration
   TRAEFIK_LOG_LEVEL: "INFO"
-  TRAEFIK_AUTH_USERS: "admin:$apr1$dO4d4rRM$6CMWhQky47H7VL73qd4VU/"
+  TRAEFIK_AUTH_USERS: "admin:admin123"
   
   # Cloudflare Configuration
   CLOUDFLARE_API_TOKEN: "oycrpCKXpVQmDq_6V2ArnidSxImWxvkzJhxhhBtl"
@@ -61,8 +67,6 @@ stack_environment:
   
   # Monitoring & Tools
   GRAFANA_ADMIN_PASSWORD: "GrF4n4_D3v_S3cur3_P4ssw0rd_2024!"
-  PGADMIN_EMAIL: "admin@promata.com.br"
-  PGADMIN_PASSWORD: "PgAdm1n_D3v_S3cur3_2024!"
   PROMETHEUS_RETENTION: "7d"
   
   # PgBouncer Configuration

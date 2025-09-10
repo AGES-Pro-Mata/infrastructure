@@ -123,7 +123,7 @@ services:
         - traefik.http.middlewares.security-headers.headers.referrerpolicy=strict-origin-when-cross-origin
         
         # Middleware de autenticação para dashboard
-        - traefik.http.middlewares.traefik-auth.basicauth.users=${TRAEFIK_AUTH_USERS:-admin:$$2y$$10$$placeholder}
+        - traefik.http.middlewares.traefik-auth.basicauth.users=${TRAEFIK_AUTH_USERS:-admin:admin123}
         
         # Router global para redirect HTTP -> HTTPS
         - traefik.http.routers.http-catchall.rule=hostregexp(`{host:.+}`)

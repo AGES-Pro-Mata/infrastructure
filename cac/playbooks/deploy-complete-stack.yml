@@ -155,6 +155,12 @@
           export POSTGRES_USER="{{ stack_environment.POSTGRES_USER }}"
           export POSTGRES_PASSWORD="{{ stack_environment.POSTGRES_PASSWORD }}"
           
+          # Prisma Configuration
+          export DATABASE_URL="{{ stack_environment.DATABASE_URL }}"
+          export PRISMA_DATABASE_URL="{{ stack_environment.PRISMA_DATABASE_URL }}"
+          export PRISMA_USER="{{ stack_environment.PRISMA_USER }}"
+          export PRISMA_PASSWORD="{{ stack_environment.PRISMA_PASSWORD }}"
+          
           # Application Security
           export JWT_SECRET="{{ stack_environment.JWT_SECRET }}"
           export JWT_EXPIRES_IN="{{ stack_environment.JWT_EXPIRES_IN }}"
@@ -174,8 +180,6 @@
           
           # Monitoring & Tools
           export GRAFANA_ADMIN_PASSWORD="{{ stack_environment.GRAFANA_ADMIN_PASSWORD }}"
-          export PGADMIN_EMAIL="{{ stack_environment.PGADMIN_EMAIL }}"
-          export PGADMIN_PASSWORD="{{ stack_environment.PGADMIN_PASSWORD }}"
           export PROMETHEUS_RETENTION="{{ stack_environment.PROMETHEUS_RETENTION }}"
           
           # PgBouncer Configuration
@@ -192,6 +196,7 @@
           
           # Metabase Configuration
           export METABASE_DB_PASSWORD="{{ stack_environment.METABASE_DB_PASSWORD }}"
+          export MB_ENCRYPTION_SECRET_KEY="{{ stack_environment.MB_ENCRYPTION_SECRET_KEY }}"
           
           # Backup Configuration
           export BACKUP_ENCRYPTION_KEY="{{ stack_environment.BACKUP_ENCRYPTION_KEY }}"

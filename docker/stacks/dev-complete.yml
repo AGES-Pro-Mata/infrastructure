@@ -694,6 +694,7 @@ services:
     image: timothyjmiller/prisma-studio:latest
     environment:
       - DATABASE_URL=postgresql://admin:admin@pgbouncer:6432/promata?sslmode=disable&connect_timeout=10&command_timeout=60
+      - POSTGRES_URL=postgresql://admin:admin@pgbouncer:6432/promata?sslmode=disable&connect_timeout=10&command_timeout=60
       - PRISMA_STUDIO_PORT=5555
       - PRISMA_STUDIO_HOST=0.0.0.0
     networks:

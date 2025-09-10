@@ -320,7 +320,7 @@ services:
 
   backend:
     image: norohim/pro-mata-backend-dev:latest
-    stop_grace_period: 60s  
+    stop_grace_period: 60s
     environment:
       # Configuração básica
       - NODE_ENV=development

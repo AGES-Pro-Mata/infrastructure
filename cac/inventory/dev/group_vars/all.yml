@@ -3,7 +3,7 @@
 # Generated: Tue 09 Sep 2025 05:54:18 PM -03
 ---
 # Environment Configuration
-environment: dev
+environment: prod
 project_name: promata
 
 # Domain Configuration
@@ -24,8 +24,8 @@ docker_compose_version: "v2.20.2"
 # Stack Environment Variables
 stack_environment:
   # Environment Settings
-  ENVIRONMENT: "dev"
-  environment: "dev"
+  ENVIRONMENT: "prod"
+  environment: "prod"
   project_name: "promata"
   env_color: "blue"
   
@@ -48,7 +48,7 @@ stack_environment:
   
   # Traefik Configuration
   TRAEFIK_LOG_LEVEL: "INFO"
-  TRAEFIK_AUTH_USERS: "admin:$$2y$$10$$8T6VyDz5t.lq8kUj1N2uaOt1D2v8j3g0lbXq9wGfZm.YHb5oYcnEK"
+  TRAEFIK_AUTH_USERS: "admin:$apr1$dO4d4rRM$6CMWhQky47H7VL73qd4VU/"
   
   # Cloudflare Configuration
   CLOUDFLARE_API_TOKEN: "oycrpCKXpVQmDq_6V2ArnidSxImWxvkzJhxhhBtl"

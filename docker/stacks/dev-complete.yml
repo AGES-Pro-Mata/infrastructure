@@ -334,9 +334,9 @@ services:
       - JWT_SECRET=dev_jwt_secret_change_in_production_123456789
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-2h}
       
-      # Database URL com PgBouncer - CORRIGIDA para incluir username
-      - DATABASE_URL=postgresql://admin:admin@pgbouncer:6432/promata?sslmode=disable&connect_timeout=10&command_timeout=60
-      - PRISMA_DATABASE_URL=postgresql://admin:admin@pgbouncer:6432/promata?sslmode=disable&connect_timeout=10&command_timeout=60
+      # Database URL com PgBouncer - TEMPORARIAMENTE MUDANDO PARA CONEXÃO DIRETA
+      - DATABASE_URL=postgresql://admin:admin@postgres-primary:5432/promata?sslmode=disable&connect_timeout=10&command_timeout=60
+      - PRISMA_DATABASE_URL=postgresql://admin:admin@postgres-primary:5432/promata?sslmode=disable&connect_timeout=10&command_timeout=60
       
       # Configuração alternativa para conexão direta (para debug)
       - DATABASE_HOST=postgres-primary
@@ -375,7 +375,7 @@ services:
       - promata_database
       
     depends_on:
-      - pgbouncer
+      - postgres-primary
 
     deploy:
       replicas: ${BACKEND_REPLICAS:-1}

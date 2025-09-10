@@ -322,6 +322,7 @@ services:
     image: norohim/pro-mata-backend-dev:latest
     stop_grace_period: 60s
     environment:
+      - RUN_SEED=true
       # Configuração básica
       - NODE_ENV=development
       - PORT=3000

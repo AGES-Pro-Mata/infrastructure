@@ -71,6 +71,7 @@
           
           # Metabase Configuration
           export METABASE_DB_PASSWORD="{{ stack_environment.METABASE_DB_PASSWORD }}"
+          export MB_ENCRYPTION_SECRET_KEY="{{ stack_environment.MB_ENCRYPTION_SECRET_KEY }}"
           
           # Backup Configuration
           export BACKUP_ENCRYPTION_KEY="{{ stack_environment.BACKUP_ENCRYPTION_KEY }}"

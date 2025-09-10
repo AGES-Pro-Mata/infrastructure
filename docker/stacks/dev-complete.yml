@@ -122,8 +122,8 @@ services:
         - traefik.http.middlewares.security-headers.headers.frameDeny=true
         - traefik.http.middlewares.security-headers.headers.referrerpolicy=strict-origin-when-cross-origin
         
-        # Middleware de autenticação para dashboard
-        - traefik.http.middlewares.traefik-auth.basicauth.users=${TRAEFIK_AUTH_USERS:-admin:admin123}
+        # Middleware de autenticação para dashboard  
+        - traefik.http.middlewares.traefik-auth.basicauth.users=${TRAEFIK_AUTH_USERS:-admin:$2y$10$jT3fL5f5aBl5gO9lHqj.GuO5.YYh7eT0F.d7BQVq4fhFJFE5ZLOky}
         
         # Router global para redirect HTTP -> HTTPS
         - traefik.http.routers.http-catchall.rule=hostregexp(`{host:.+}`)
@@ -136,8 +136,8 @@ services:
     image: norohim/pro-mata-database-infrastructure:latest
     environment:
       - POSTGRES_DB=promata
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=password123
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin
       - POSTGRES_INITDB_ARGS=--auth=trust --auth-host=trust --auth-local=trust
       - POSTGRES_HOST_AUTH_METHOD=trust
       - NODE_ROLE=primary
@@ -160,7 +160,7 @@ services:
           memory: 512M
           cpus: '0.2'
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U admin -d promata"]
       interval: 45s
       timeout: 15s
       retries: 3
@@ -170,8 +170,8 @@ services:
     image: norohim/pro-mata-database-infrastructure:latest
     environment:
       - POSTGRES_DB=promata
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=password123
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin
       - POSTGRES_INITDB_ARGS=--auth=trust --auth-host=trust --auth-local=trust
       - POSTGRES_HOST_AUTH_METHOD=trust
       - NODE_ROLE=replica
@@ -196,7 +196,7 @@ services:
           memory: 384M
           cpus: '0.25'
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U admin -d promata"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -208,8 +208,8 @@ services:
     environment:
       - DATABASES_HOST=postgres-primary
       - DATABASES_PORT=5432
-      - DATABASES_USER=postgres
-      - DATABASES_PASSWORD=password123
+      - DATABASES_USER=admin
+      - DATABASES_PASSWORD=admin
       - DATABASES_DBNAME=promata
       - POOL_MODE=transaction
       - SERVER_RESET_QUERY=DISCARD ALL
@@ -334,14 +334,15 @@ services:
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-2h}
       
       # Database URL com PgBouncer - CORRIGIDA para incluir username
-      - DATABASE_URL=postgresql://postgres:password123@pgbouncer:6432/promata?sslmode=disable&connect_timeout=10&command_timeout=60
+      - DATABASE_URL=postgresql://admin:admin@pgbouncer:6432/promata?sslmode=disable&connect_timeout=10&command_timeout=60
+      - PRISMA_DATABASE_URL=postgresql://admin:admin@pgbouncer:6432/promata?sslmode=disable&connect_timeout=10&command_timeout=60
       
       # Configuração alternativa para conexão direta (para debug)
       - DATABASE_HOST=postgres-primary
       - DATABASE_PORT=5432
       - DATABASE_NAME=promata
-      - DATABASE_USER=postgres
-      - DATABASE_PASSWORD=password123
+      - DATABASE_USER=admin
+      - DATABASE_PASSWORD=admin
       
       # Pool de conexão com timeouts menores para desenvolvimento
       - DATABASE_POOL_MIN=1
@@ -504,7 +505,7 @@ services:
     image: grafana/grafana:latest
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-dev_grafana_password}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_USERS_ALLOW_ORG_CREATE=false
       - GF_SERVER_DOMAIN=grafana.${domain_name:-promata.com.br}
@@ -551,12 +552,10 @@ services:
     image: postgres:15-alpine
     environment:
       - POSTGRES_DB=umami
-      - POSTGRES_USER=umami
-      - POSTGRES_PASSWORD=umami123
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin
       - POSTGRES_HOST_AUTH_METHOD=trust
       - POSTGRES_INITDB_ARGS=--auth=trust --auth-host=trust --auth-local=trust
-    volumes:
-      - umami_db_data:/var/lib/postgresql/data
     networks:
       - promata_database
     deploy:
@@ -569,7 +568,7 @@ services:
         reservations:
           memory: 256M
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U umami -d umami"]
+      test: ["CMD-SHELL", "pg_isready -U admin -d umami"]
       interval: 45s
       timeout: 15s
       retries: 3
@@ -578,7 +577,7 @@ services:
   umami:
     image: ghcr.io/umami-software/umami:postgresql-latest
     environment:
-      - DATABASE_URL=postgresql://umami:umami123@umami-db:5432/umami
+      - DATABASE_URL=postgresql://admin:admin@umami-db:5432/umami
       - DATABASE_TYPE=postgresql
       - APP_SECRET=umami-secret-key-dev-change-in-production-12345
       - HOSTNAME=0.0.0.0
@@ -621,15 +620,13 @@ services:
     image: postgres:15
     environment:
       - POSTGRES_DB=metabase
-      - POSTGRES_USER=metabase
-      - POSTGRES_PASSWORD=metabase123
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin
       - POSTGRES_INITDB_ARGS=--encoding=UTF-8
-    volumes:
-      - metabase_db_data:/var/lib/postgresql/data
     networks:
       - promata_database
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U metabase -d metabase"]
+      test: ["CMD-SHELL", "pg_isready -U admin -d metabase"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -657,13 +654,11 @@ services:
       - MB_DB_TYPE=postgres
       - MB_DB_DBNAME=metabase
       - MB_DB_PORT=5432
-      - MB_DB_USER=metabase
-      - MB_DB_PASS=metabase123
+      - MB_DB_USER=admin
+      - MB_DB_PASS=admin
       - MB_DB_HOST=metabase-db
-      - MB_ENCRYPTION_SECRET_KEY=${MB_ENCRYPTION_SECRET_KEY}
+      - MB_ENCRYPTION_SECRET_KEY=${MB_ENCRYPTION_SECRET_KEY:-Mb_3ncr1pt10n_S3cr3t_K3y_D3v_2024_S3cur3_admin123}
       - JAVA_OPTS=-Xmx512m -Duser.timezone=America/Sao_Paulo
-    volumes:
-      - metabase_data:/metabase-data
     networks:
       - promata_database
       - promata_public
@@ -698,7 +693,7 @@ services:
   prisma-studio:
     image: timothyjmiller/prisma-studio:latest
     environment:
-      - DATABASE_URL=postgresql://postgres:password123@pgbouncer:6432/promata?sslmode=disable&connect_timeout=10&command_timeout=60
+      - DATABASE_URL=postgresql://admin:admin@pgbouncer:6432/promata?sslmode=disable&connect_timeout=10&command_timeout=60
       - PRISMA_STUDIO_PORT=5555
       - PRISMA_STUDIO_HOST=0.0.0.0
     networks:
@@ -746,10 +741,4 @@ volumes:
   prometheus_data:
     driver: local
   grafana_data:
-    driver: local
-  metabase_data:
-    driver: local
-  metabase_db_data:
-    driver: local
-  umami_db_data:
     driver: local

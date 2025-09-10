@@ -36,6 +36,8 @@ on:
     types:
       - deploy-dev-frontend
       - deploy-dev-backend
+      - deploy-prod-frontend
+      - deploy-prod-backend
       - docker-hub-auto-deploy
       - deploy-manual
 
@@ -73,20 +75,43 @@ jobs:
             TRIGGERED_BY="push_${{ github.ref_name }}"
           else
             # repository_dispatch
-            ENV="dev"  # Force dev environment for now
+            case "${{ github.event.action }}" in
+              "deploy-prod-frontend"|"deploy-prod-backend")
+                ENV="prod"
+                ;;
+              *)
+                ENV="dev"
+                ;;
+            esac
             ACTION="deploy"
             FORCE_REBUILD="false"
             TRIGGERED_BY="${{ github.event.action }}"
           fi
           
-          # Set Docker images
-          if [[ "${{ github.event.action }}" == "docker-hub-auto-deploy" ]]; then
-            BACKEND_IMAGE="${{ github.event.client_payload.backend_image || 'norohim/pro-mata-backend-dev:latest' }}"
-            FRONTEND_IMAGE="${{ github.event.client_payload.frontend_image || 'norohim/pro-mata-frontend-dev:latest' }}"
-          else
-            BACKEND_IMAGE="norohim/pro-mata-backend-dev:latest"
-            FRONTEND_IMAGE="norohim/pro-mata-frontend-dev:latest"
-          fi
+          # Set Docker images based on environment and trigger
+          case "${{ github.event.action }}" in
+            "docker-hub-auto-deploy")
+              BACKEND_IMAGE="${{ github.event.client_payload.backend_image || 'norohim/pro-mata-backend-dev:latest' }}"
+              FRONTEND_IMAGE="${{ github.event.client_payload.frontend_image || 'norohim/pro-mata-frontend-dev:latest' }}"
+              ;;
+            "deploy-prod-frontend")
+              BACKEND_IMAGE="norohim/pro-mata-backend-prod:latest"
+              FRONTEND_IMAGE="${{ github.event.client_payload.frontend_image || 'norohim/pro-mata-frontend-prod:latest' }}"
+              ;;
+            "deploy-prod-backend")
+              BACKEND_IMAGE="${{ github.event.client_payload.backend_image || 'norohim/pro-mata-backend-prod:latest' }}"
+              FRONTEND_IMAGE="norohim/pro-mata-frontend-prod:latest"
+              ;;
+            *)
+              if [ "$ENV" = "prod" ]; then
+                BACKEND_IMAGE="norohim/pro-mata-backend-prod:latest"
+                FRONTEND_IMAGE="norohim/pro-mata-frontend-prod:latest"
+              else
+                BACKEND_IMAGE="norohim/pro-mata-backend-dev:latest"
+                FRONTEND_IMAGE="norohim/pro-mata-frontend-dev:latest"
+              fi
+              ;;
+          esac
           
           echo "environment=$ENV" >> $GITHUB_OUTPUT
           echo "action=$ACTION" >> $GITHUB_OUTPUT
@@ -124,9 +149,9 @@ jobs:
             exit 1
           }
 
-  # Main deployment job
+  # Main deployment job - Terraform State Fetch + Ansible Deploy
   deploy:
-    name: 🚀 Deploy Infrastructure
+    name: 🚀 Deploy via Terraform State + Ansible
     runs-on: ubuntu-latest
     needs: [config, verify]
     if: contains(needs.config.outputs.action, 'deploy')
@@ -252,18 +277,54 @@ jobs:
           echo "🔒 Importing existing Azure IPs to preserve them..."
           ./scripts/iac/import-existing-ips.sh ${{ needs.config.outputs.environment }} || echo "⚠️ IPs might already be imported"
 
-      - name: Execute Deployment (Enhanced with IP Preservation)
+      - name: Fetch Infrastructure State via Terraform
+        if: contains(needs.config.outputs.action, 'deploy')
+        run: |
+          echo "🔍 Fetching infrastructure state and information via Terraform..."
+          cd iac/deployments/${{ needs.config.outputs.environment }}
+          
+          # Initialize Terraform to read state
+          terraform init -backend-config=../../../envs/${{ needs.config.outputs.environment }}/backend.hcl
+          
+          # Fetch current state - no apply, just read outputs
+          echo "📊 Reading Terraform state..."
+          terraform refresh -var-file=terraform.tfvars
+          
+          echo "✅ Infrastructure state fetched successfully"
+
+      - name: Extract SSH Keys and Infrastructure Info
+        if: contains(needs.config.outputs.action, 'deploy')
+        run: |
+          echo "🔑 Extracting SSH keys and infrastructure information..."
+          make extract-ssh-keys ENV=${{ needs.config.outputs.environment }}
+          make update-inventory ENV=${{ needs.config.outputs.environment }}
+          echo "✅ SSH keys and inventory updated"
+
+      - name: Update Production Images in Environment Config
+        if: contains(needs.config.outputs.action, 'deploy')
+        run: |
+          echo "🐳 Updating production images in environment configuration..."
+          
+          # Update the config.yml with new image versions
+          sed -i "s|backend_image = \".*\"|backend_image = \"${{ needs.config.outputs.backend_image }}\"|" envs/${{ needs.config.outputs.environment }}/config.yml
+          sed -i "s|frontend_image = \".*\"|frontend_image = \"${{ needs.config.outputs.frontend_image }}\"|" envs/${{ needs.config.outputs.environment }}/config.yml
+          
+          echo "✅ Environment config updated with latest images"
+          echo "Backend: ${{ needs.config.outputs.backend_image }}"
+          echo "Frontend: ${{ needs.config.outputs.frontend_image }}"
+
+      - name: Deploy Application Stack via Ansible
+        if: contains(needs.config.outputs.action, 'deploy')
+        run: |
+          echo "🚀 Deploying application stack via Ansible..."
+          make deploy-ansible ENV=${{ needs.config.outputs.environment }}
+          echo "✅ Application deployment completed via Ansible"
+        timeout-minutes: 30
+
+      - name: Execute Other Actions
+        if: "!contains(needs.config.outputs.action, 'deploy')"
         run: |
           case "${{ needs.config.outputs.action }}" in
-            "deploy")
-              if [ "${{ needs.config.outputs.force_rebuild }}" = "true" ]; then
-                echo "🏗️ Full infrastructure rebuild with IP preservation"
-                make deploy-automated ENV=${{ needs.config.outputs.environment }}
-              else
-                echo "📦 Standard deployment with IP preservation"
-                make deploy-automated ENV=${{ needs.config.outputs.environment }}
-              fi
-              ;;
             "health")
               make health ENV=${{ needs.config.outputs.environment }}
               ;;
@@ -271,16 +332,8 @@ jobs:
               make quick-status ENV=${{ needs.config.outputs.environment }}
               ;;
           esac
-        timeout-minutes: 45
+        timeout-minutes: 10
 
-      - name: Extract SSH Key
-        if: contains(needs.config.outputs.action, 'deploy')
-        run: |
-          mkdir -p ~/.ssh
-          cd iac/deployments/${{ needs.config.outputs.environment }}
-          terraform output -raw ssh_private_key > ~/.ssh/promata_key
-          chmod 600 ~/.ssh/promata_key
-          echo "SSH key extracted"
 
       - name: Health Check & Cleanup
         if: contains(needs.config.outputs.action, 'deploy')

@@ -167,7 +167,7 @@
     - name: Deploy Docker stack
       shell: |
         cd /opt/promata
-        docker stack deploy -c dev-complete.yml promata-dev
+        docker stack deploy -c dev-complete.yml --with-registry-auth --prune promata-dev
       register: stack_deploy_result
       when: inventory_hostname in groups['managers']
 

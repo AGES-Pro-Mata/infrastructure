@@ -98,16 +98,14 @@ services:
       labels:
         - traefik.enable=true
         - traefik.docker.network=promata_public
-        
-        - traefik.http.services.traefik-dashboard.loadbalancer.server.port=8080
 
         # Middleware para redirects HTTPS
         - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
         - traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true
 
         # Dashboard do Traefik 
-        - traefik.http.routers.traefik-dashboard.rule=Host(`traefik.${domain_name:-promata.com.br}`)
-        - traefik.http.routers.traefik-dashboard.entrypoints=websecure
+        - traefik.http.routers.traefik-dashboard.rule=Host(`traefik.promata.com.br`)
+        - traefik.http.services.traefik-dashboard.loadbalancer.server.port=8080
         - traefik.http.routers.traefik-dashboard.tls.certresolver=letsencrypt
         - traefik.http.routers.traefik-dashboard.tls=true
         - traefik.http.routers.traefik-dashboard.middlewares=traefik-auth,security-headers
@@ -723,11 +721,11 @@ services:
         condition: on-failure
       resources:
         limits:
-          memory: 512M
-          cpus: '0.5'
+          memory: 768M
+          cpus: '0.7'
         reservations:
-          memory: 256M
-          cpus: '0.1'
+          memory: 384M
+          cpus: '0.3'    
       labels:
         - traefik.enable=true
         - traefik.docker.network=promata_public

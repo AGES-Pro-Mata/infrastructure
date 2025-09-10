@@ -73,7 +73,7 @@ stack_environment:
   
   # Analytics - Umami
   UMAMI_DB_PASSWORD: "Um4m1_DB_S3cur3_P4ssw0rd_2024!"
-  UMAMI_WEBSITE_ID: "01913c8d-4a2f-7b8e-9c5f-2a1b3c4d5e6f"
+  UMAMI_WEBSITE_ID: "998aa7a1-a362-46ed-877c-ae8355d324c7"
   UMAMI_HASH_SALT: "um4m1_h4sh_s4lt_d3v_2024_s3cur3_k3y"
   UMAMI_SECRET: "um4m1_s3cr3t_k3y_d3v_2024_ch4ng3_m3"
   

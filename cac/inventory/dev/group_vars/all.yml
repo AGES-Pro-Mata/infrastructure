@@ -57,7 +57,7 @@ stack_environment:
   # Application Images
   BACKEND_IMAGE: "norohim/pro-mata-backend-dev:latest"
   FRONTEND_IMAGE: "norohim/pro-mata-frontend-dev:latest"
-  DATABASE_IMAGE: "norohim/pro-mata-database-dev:latest"
+  DATABASE_IMAGE: "norohim/pro-mata-database-infrastructure"
   
   # Monitoring & Tools
   GRAFANA_ADMIN_PASSWORD: "GrF4n4_D3v_S3cur3_P4ssw0rd_2024!"
@@ -79,6 +79,7 @@ stack_environment:
   
   # Metabase Configuration
   METABASE_DB_PASSWORD: "M3t4b4s3_DB_S3cur3_2024!"
+  MB_ENCRYPTION_SECRET_KEY: "Mb_3ncr1pt10n_S3cr3t_K3y_D3v_2024_S3cur3!"
   
   # Backup Configuration
   BACKUP_ENCRYPTION_KEY: "b4ckup_3ncr1pt10n_k3y_d3v_2024_s3cur3"

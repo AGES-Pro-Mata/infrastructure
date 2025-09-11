@@ -37,7 +37,6 @@ yaml_to_env() {
     grep -E '^[a-zA-Z_][a-zA-Z0-9_]*:' | \
     sed 's/: */=/' | \
     sed 's/"//g' | \
-    sed 's/^/export /' | \
     # Convert to uppercase for environment variables
     awk -F= '{print "export " toupper($1) "=" $2}'
 }
@@ -130,12 +129,30 @@ case "${2:-export}" in
         decrypt_vault | yaml_to_env | sed 's/^export //' | \
         awk -F= '{printf "%-30s %s\n", $1":", $2}'
         ;;
+    "yaml")
+        # Create Ansible-compatible YAML format
+        yaml_file="$PROJECT_ROOT/.env.$ENV.yml"
+        echo "# === Pro-Mata $ENV Ansible Variables ===" > "$yaml_file"
+        echo "# Generated on: $(date)" >> "$yaml_file"
+        echo "# Auto-generated from vault secrets" >> "$yaml_file"
+        echo "" >> "$yaml_file"
+        
+        # Convert vault secrets to YAML format for Ansible
+        decrypt_vault | grep -E '^[a-zA-Z_][a-zA-Z0-9_]*:' | \
+        sed 's/: */=/' | \
+        sed 's/"//g' | \
+        awk -F= '{print toupper($1) ": \"" $2 "\""}'  >> "$yaml_file"
+        
+        echo "✅ Created Ansible YAML file: $yaml_file"
+        echo "📝 To use with Ansible: --extra-vars @$yaml_file"
+        ;;
     *)
-        echo "Usage: $0 <environment> [export|file|docker|ci]"
+        echo "Usage: $0 <environment> [export|file|docker|ci|yaml]"
         echo "  export (default): Output export statements"
         echo "  file:            Create .env file"
         echo "  docker:          Create Docker-compatible env file"
         echo "  ci:              Create CI/CD compatible format"
+        echo "  yaml:            Create Ansible-compatible YAML format"
         exit 1
         ;;
 esac

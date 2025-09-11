@@ -36,10 +36,16 @@ deploy-terraform: check-env ## Deploy only Terraform
 	@cd $(TF_DIR) && terraform apply -var-file=terraform.tfvars --auto-approve
 
 deploy-ansible: check-env ## Deploy only Ansible stack
+	@echo "🔧 Extracting vault variables for $(ENV)..."
+	@./scripts/vault/export-env.sh $(ENV) file
+	@./scripts/vault/export-env.sh $(ENV) yaml
+	@echo "💾 Backing up environment files to Azure Storage..."
+	@./scripts/backup/backup-env-files.sh $(ENV)
 	@echo "🔧 Deploying Ansible for $(ENV) with complete stack..."
 	@ansible-playbook -i $(ENV_DIR)/hosts.yml \
 		--vault-password-file .vault_pass \
 		--extra-vars "env=$(ENV)" \
+		--extra-vars "@.env.$(ENV).yml" \
 		$(ANSIBLE_DIR)/playbooks/deploy-complete-stack.yml
 
 validate: check-env ## Validate infrastructure
@@ -59,6 +65,12 @@ validate-terraform: check-env ## Validate Terraform
 backup: check-env ## Backup environment
 	@echo "💾 Backing up $(ENV) environment..."
 	@./scripts/backup/backup-all.sh $(ENV)
+
+backup-env: check-env ## Backup environment files to Azure Storage
+	@echo "💾 Backing up $(ENV) environment files to Azure Storage..."
+	@./scripts/vault/export-env.sh $(ENV) file
+	@./scripts/vault/export-env.sh $(ENV) yaml
+	@./scripts/backup/backup-env-files.sh $(ENV)
 
 backup-terraform: check-env ## Backup Terraform state
 	@echo "💾 Backing up Terraform state for $(ENV)..."
@@ -249,10 +261,16 @@ extract-ssh-keys: check-env ## Extract SSH keys from Terraform and setup access
 	fi
 
 stacks-deploy: check-env ## Deploy only application stacks
+	@echo "🔧 Extracting vault variables for $(ENV)..."
+	@./scripts/vault/export-env.sh $(ENV) file
+	@./scripts/vault/export-env.sh $(ENV) yaml
+	@echo "💾 Backing up environment files to Azure Storage..."
+	@./scripts/backup/backup-env-files.sh $(ENV)
 	@echo "📦 Deploying dev-complete stack for $(ENV)..."
 	@ansible-playbook -i $(ENV_DIR)/hosts.yml \
 		--vault-password-file .vault_pass \
 		--extra-vars "env=$(ENV)" \
+		--extra-vars "@.env.$(ENV).yml" \
 		$(ANSIBLE_DIR)/playbooks/deploy-complete-stack.yml
 
 health: check-env ## Health check for environment
@@ -273,10 +291,16 @@ show-deployment-info: check-env ## Show deployment information
 	fi
 
 update-dev: check-env ## Update development environment
+	@echo "🔧 Extracting vault variables for $(ENV)..."
+	@./scripts/vault/export-env.sh $(ENV) file
+	@./scripts/vault/export-env.sh $(ENV) yaml
+	@echo "💾 Backing up environment files to Azure Storage..."
+	@./scripts/backup/backup-env-files.sh $(ENV)
 	@echo "🔄 Updating $(ENV) environment with complete stack..."
 	@ansible-playbook -i $(ENV_DIR)/hosts.yml \
 		--vault-password-file .vault_pass \
 		--extra-vars "env=$(ENV)" \
+		--extra-vars "@.env.$(ENV).yml" \
 		$(ANSIBLE_DIR)/playbooks/deploy-complete-stack.yml
 
 destroy-dev: ## Destroy development infrastructure

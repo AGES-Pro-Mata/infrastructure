@@ -226,8 +226,9 @@
         dest: /opt/promata/configs/
         mode: preserve
 
-    - name: Copy stack file
-      copy:
+
+    - name: Copy stack file with interpolated variables
+      template:
         src: ../../docker/stacks/dev-complete.yml
         dest: /opt/promata/dev-complete.yml
         mode: '0644'
@@ -306,7 +307,7 @@
         echo "Grafana:      https://grafana.{{ domain_name }}"
         echo "Prometheus:   https://prometheus.{{ domain_name }}"
         echo "Metabase:     https://metabase.{{ domain_name }}"
-        echo "Database:     https://db.{{ domain_name }}"
+        echo "Prisma-studio:      https://prisma.{{ domain_name }}"
         echo "Traefik:      https://traefik.{{ domain_name }}"
       register: final_status
       when: inventory_hostname in groups['managers']

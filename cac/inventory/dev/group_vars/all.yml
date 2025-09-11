@@ -7,7 +7,7 @@ environment: prod
 project_name: promata
 
 # Domain Configuration
-domain_name: "promata.com.br"
+domain_name: "{{ domain_name }}"
 
 # Infrastructure Details
 resource_group_name: "rg-myproject-dev"
@@ -30,12 +30,12 @@ stack_environment:
   env_color: "blue"
   
   # Domain Configuration
-  DOMAIN_NAME: "promata.com.br"
-  domain_name: "promata.com.br"
+  DOMAIN_NAME: "{{ domain_name }}"
+  domain_name: "{{ domain_name }}"
   ACME_EMAIL: "admin@promata.com.br"
   
   # Infrastructure
-  MANAGER_IP: "135.119.195.249"
+  MANAGER_IP: "{{ manager_public_ip }}"
   
   # Database Configuration
   POSTGRES_DB: "promata"

@@ -123,13 +123,14 @@ services:
         - traefik.http.middlewares.security-headers.headers.referrerpolicy=strict-origin-when-cross-origin
         
         # Middleware de autenticação para dashboard  
-        - traefik.http.middlewares.traefik-auth.basicauth.users=${TRAEFIK_AUTH_USERS:-admin:$2y$10$jT3fL5f5aBl5gO9lHqj.GuO5.YYh7eT0F.d7BQVq4fhFJFE5ZLOky}
+        - traefik.http.middlewares.traefik-auth.basicauth.usersfile=/run/secrets/traefik_auth
         
         # Router global para redirect HTTP -> HTTPS
         - traefik.http.routers.http-catchall.rule=hostregexp(`{host:.+}`)
         - traefik.http.routers.http-catchall.entrypoints=web
         - traefik.http.routers.http-catchall.middlewares=redirect-to-https
-      
+    secrets:
+      - traefik_auth  
 
   # === DATABASE CLUSTER ===
   postgres-primary:
@@ -680,7 +681,7 @@ services:
       - MB_DB_USER=admin
       - MB_DB_PASS=admin
       - MB_DB_HOST=metabase-db
-      - MB_ENCRYPTION_SECRET_KEY=${MB_ENCRYPTION_SECRET_KEY}
+#      - MB_ENCRYPTION_SECRET_KEY=${MB_ENCRYPTION_SECRET_KEY}
       - JAVA_OPTS=-Xmx512m -Duser.timezone=America/Sao_Paulo
     networks:
       - promata_database
@@ -766,3 +767,7 @@ volumes:
     driver: local
   grafana_data:
     driver: local
+
+secrets:
+  traefik_auth:
+    external: true

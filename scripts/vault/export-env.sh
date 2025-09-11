@@ -141,7 +141,7 @@ case "${2:-export}" in
         decrypt_vault | grep -E '^[a-zA-Z_][a-zA-Z0-9_]*:' | \
         sed 's/: */=/' | \
         sed 's/"//g' | \
-        awk -F= '{print toupper($1) ": \"" $2 "\""}'  >> "$yaml_file"
+        awk -F= '{print tolower($1) ": \"" $2 "\""}'  >> "$yaml_file"
         
         echo "✅ Created Ansible YAML file: $yaml_file"
         echo "📝 To use with Ansible: --extra-vars @$yaml_file"

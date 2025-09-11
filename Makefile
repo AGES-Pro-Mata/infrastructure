@@ -28,13 +28,6 @@ init: check-env ## Initialize environment
 	@echo "🔧 Initializing $(ENV) environment..."
 	@./scripts/setup/init-environment.sh $(ENV)
 
-deploy: check-env ## Deploy complete infrastructure with database initialization
-	@echo "🚀 Deploying $(ENV) environment with complete stack..."
-	@echo "📊 This will deploy the full stack including database cluster with initialization scripts"
-	@ansible-playbook -i $(ENV_DIR)/hosts.yml \
-		--vault-password-file .vault_pass \
-		--extra-vars "env=$(ENV)" \
-		$(ANSIBLE_DIR)/playbooks/deploy-complete-stack.yml
 
 deploy-terraform: check-env ## Deploy only Terraform
 	@echo "🏗️  Deploying Terraform for $(ENV)..."
@@ -108,16 +101,6 @@ dev-deploy-full: ## Complete dev deployment: Terraform → Update vars → Ansib
 
 dev-validate: ## Validate development environment
 	@$(MAKE) validate ENV=dev
-
-# Production commands
-prod-init: ## Initialize production environment
-	@$(MAKE) init ENV=prod
-
-prod-deploy: ## Deploy production environment
-	@$(MAKE) deploy ENV=prod
-
-prod-validate: ## Validate production environment
-	@$(MAKE) validate ENV=prod
 
 # Migration commands
 migrate-structure: ## Migrate to new structure
@@ -300,13 +283,6 @@ destroy-dev: ## Destroy development infrastructure
 	@echo "💥 Destroying dev infrastructure..."
 	@cd iac/deployments/dev && terraform destroy -var-file=../../../envs/dev/config.yml --auto-approve
 
-destroy-prod: ## Destroy production infrastructure
-	@echo "💥 Destroying prod infrastructure..."
-	@cd iac/deployments/prod && terraform destroy -var-file=../../../envs/prod/config.yml --auto-approve
-
-destroy-staging: ## Destroy staging infrastructure
-	@echo "💥 Destroying staging infrastructure..."
-	@cd iac/deployments/staging && terraform destroy -var-file=../../../envs/staging/config.yml --auto-approve
 
 ssh-setup: check-env ## Setup SSH access for environment
 	@echo "🔑 Setting up SSH access for $(ENV)..."
@@ -372,20 +348,11 @@ vault-setup: ## Setup Ansible Vault (first time only)
 vault-init-dev: ## Initialize dev environment secrets
 	@./scripts/vault/vault-easy.sh init-dev
 
-vault-init-prod: ## Initialize prod environment secrets  
-	@./scripts/vault/vault-easy.sh init-prod
-
 vault-edit-dev: ## Edit dev environment secrets
 	@./scripts/vault/vault-easy.sh edit envs/dev/secrets/vault.yml
 
-vault-edit-prod: ## Edit prod environment secrets
-	@./scripts/vault/vault-easy.sh edit envs/prod/secrets/vault.yml
-
 vault-view-dev: ## View dev environment secrets
 	@./scripts/vault/vault-easy.sh view envs/dev/secrets/vault.yml
-
-vault-view-prod: ## View prod environment secrets
-	@./scripts/vault/vault-easy.sh view envs/prod/secrets/vault.yml
 
 # === IP MANAGEMENT ===
 import-ips: check-env ## Import existing Azure IPs to Terraform state

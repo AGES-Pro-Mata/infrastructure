@@ -40,53 +40,53 @@ stack_environment:
   # Database Configuration
   POSTGRES_DB: "promata"
   POSTGRES_USER: "postgres"
-  POSTGRES_PASSWORD: "Z+gbFjmLVUWsQ4/Qxk6eDg=="
-  
+  POSTGRES_PASSWORD: "{{ vault_postgres_password }}"
+
   # Prisma Configuration
-  DATABASE_URL: "postgresql://postgres:Z+gbFjmLVUWsQ4/Qxk6eDg==@postgres:5432/promata?schema=public"
-  PRISMA_DATABASE_URL: "postgresql://postgres:Z+gbFjmLVUWsQ4/Qxk6eDg==@postgres:5432/promata?schema=public"
+  DATABASE_URL: "postgresql://postgres:{{ vault_postgres_password }}@postgres:5432/promata?schema=public"
+  PRISMA_DATABASE_URL: "postgresql://postgres:{{ vault_postgres_password }}@postgres:5432/promata?schema=public"
   PRISMA_USER: "postgres"
-  PRISMA_PASSWORD: "prisma123"
-  
+  PRISMA_PASSWORD: "{{ vault_prisma_password }}"
+
   # Application Security
-  JWT_SECRET: "ga1hVRzHzko4L1e7zWRra/oUM1W78h607gu8g20FqZ0="
+  JWT_SECRET: "{{ vault_jwt_secret }}"
   JWT_EXPIRES_IN: "24h"
-  
+
   # Traefik Configuration
   TRAEFIK_LOG_LEVEL: "INFO"
-  TRAEFIK_AUTH_USERS: "admin:admin123"
-  
+  TRAEFIK_AUTH_USERS: "{{ vault_traefik_auth_users }}"
+
   # Cloudflare Configuration
-  CLOUDFLARE_API_TOKEN: "oycrpCKXpVQmDq_6V2ArnidSxImWxvkzJhxhhBtl"
-  CLOUDFLARE_ZONE_ID: "c59ab9e254cc4d555f265d1d111f95ed"
-  
+  CLOUDFLARE_API_TOKEN: "{{ vault_cloudflare_api_token }}"
+  CLOUDFLARE_ZONE_ID: "{{ vault_cloudflare_zone_id }}"
+
   # Application Images
   BACKEND_IMAGE: "norohim/pro-mata-backend-dev:latest"
   FRONTEND_IMAGE: "norohim/pro-mata-frontend-dev:latest"
-  DATABASE_IMAGE: "norohim/pro-mata-database-infrastructure"
-  
+  DATABASE_IMAGE: "norohim/pro-mata-database-infrastructure:latest"
+
   # Monitoring & Tools
-  GRAFANA_ADMIN_PASSWORD: "GrF4n4_D3v_S3cur3_P4ssw0rd_2024!"
+  GRAFANA_ADMIN_PASSWORD: "{{ vault_grafana_admin_password }}"
   PROMETHEUS_RETENTION: "7d"
-  
+
   # PgBouncer Configuration
   PGBOUNCER_POOL_MODE: "session"
   PGBOUNCER_POOL_SIZE: "20"
   PGBOUNCER_MAX_CLIENT_CONN: "100"
   PGBOUNCER_AUTH_TYPE: "md5"
-  
+
   # Analytics - Umami
-  UMAMI_DB_PASSWORD: "Um4m1_DB_S3cur3_P4ssw0rd_2024!"
-  UMAMI_WEBSITE_ID: "998aa7a1-a362-46ed-877c-ae8355d324c7"
-  UMAMI_HASH_SALT: "um4m1_h4sh_s4lt_d3v_2024_s3cur3_k3y"
-  UMAMI_SECRET: "um4m1_s3cr3t_k3y_d3v_2024_ch4ng3_m3"
-  
+  UMAMI_DB_PASSWORD: "{{ vault_umami_db_password }}"
+  UMAMI_WEBSITE_ID: "{{ vault_umami_website_id }}"
+  UMAMI_HASH_SALT: "{{ vault_umami_hash_salt }}"
+  UMAMI_SECRET: "{{ vault_umami_secret }}"
+
   # Metabase Configuration
-  METABASE_DB_PASSWORD: "M3t4b4s3_DB_S3cur3_2024!"
-  MB_ENCRYPTION_SECRET_KEY: "Mb_3ncr1pt10n_S3cr3t_K3y_D3v_2024_S3cur3!"
-  
+  METABASE_DB_PASSWORD: "{{ vault_metabase_db_password }}"
+  MB_ENCRYPTION_SECRET_KEY: "{{ vault_mb_encryption_secret_key }}"
+
   # Backup Configuration
-  BACKUP_ENCRYPTION_KEY: "b4ckup_3ncr1pt10n_k3y_d3v_2024_s3cur3"
+  BACKUP_ENCRYPTION_KEY: "{{ vault_backup_encryption_key }}"
 
 # Monitoring Configuration
 monitoring_enabled: true

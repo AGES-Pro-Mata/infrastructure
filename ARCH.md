@@ -207,7 +207,7 @@ After deployment, visit these URLs:
 
 ## Development Workflow
 
-### Setting Up Local Environment
+### Local Development and Setup
 
 ```bash
 # 1. Clone the infrastructure repository
@@ -308,4 +308,4 @@ curl https://api.promata.com.br/health
 
 ---
 
-## Built with ❤️ for Centro de Pesquisas e Proteção da Natureza (CPPN) Pró-Mata - PUCRS
+## Built with ❤️ for Centro de Pesquisas e Proteção da Natureza (CPPN) Pró-Mata - PUCRS**

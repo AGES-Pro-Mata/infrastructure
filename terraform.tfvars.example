@@ -1,0 +1,37 @@
+# ============================================================================
+# terraform.tfvars.example
+# ============================================================================
+# Copy this file to terraform.tfvars and fill in your values
+
+# Basic Configuration
+project_name = "promata"
+aws_region   = "us-east-2"
+owner        = "pro-mata-team"
+
+# Domain Configuration
+domain_name = "promata.com.br"
+
+# Instance Configuration
+manager_instance_type = "t3.medium"
+worker_instance_type  = "t3.medium"
+ebs_volume_size      = 50
+
+# SSH Key (generate with: ssh-keygen -t rsa -b 4096)
+ssh_public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQC... your-public-key-here"
+
+# Cloudflare Configuration (get from Cloudflare dashboard)
+cloudflare_api_token = "your-cloudflare-api-token"
+cloudflare_zone_id   = "your-cloudflare-zone-id"
+
+# Email Configuration
+admin_email = "admin@promata.com.br"
+ses_email_list = [
+  "admin@promata.com.br",
+  "noreply@promata.com.br",
+  "support@promata.com.br"
+]
+
+# ============================================================================
+# NOTA: Todos os recursos serão criados como PRODUÇÃO
+# Environment é fixo como "prod" no código Terraform
+# ============================================================================

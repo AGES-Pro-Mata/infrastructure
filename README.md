@@ -1,311 +1,270 @@
-# Pro-Mata Infrastructure
+# ============================================================================
+# README.md
+# ============================================================================
+# Pro-Mata AWS Infrastructure
 
-Infrastructure as Code for the Pro-Mata application using Terraform and Ansible on Azure.
+Complete AWS infrastructure for Pro-Mata project using Terraform, mirroring the Azure architecture but leveraging AWS services.
 
-## 📖 Documentation
+## 🏗️ Architecture Overview
 
-- **[Architecture Documentation](ARCH.md)** - Complete system architecture, components, and deployment details
-- **[Quick Start Guide](#quick-start)** - Get up and running in minutes
-- **[CI/CD Guide](#cicd-pipeline)** - Automated deployment workflows
+This infrastructure replicates the Azure setup using AWS services:
 
-## What This Does
+- **EC2 Instances**: Replace Azure VMs with static Elastic IPs
+- **Docker Swarm**: Same container orchestration as Azure
+- **S3 Storage**: Replace Azure Storage Account
+- **SES Email**: Email service for application notifications
+- **Secrets Manager**: Replace Azure Key Vault
+- **CloudWatch**: Monitoring and logging
+- **Cloudflare**: DNS and CDN (same as Azure setup)
 
-- **Infrastructure**: Provisions Azure VMs, networking, and storage with Terraform
-- **Configuration**: Sets up Docker Swarm cluster with Ansible
-- **Deployment**: Automated CI/CD pipeline via GitHub Actions
-- **Services**: Deploys frontend, backend, database, and monitoring stack
+## 💰 Cost Estimate
 
-## Architecture Overview
+Based on AWS Calculator (us-east-2):
+- **Monthly Cost**: ~$61.20 USD
+- **Annual Cost**: ~$734.40 USD
+- **Services**: EC2 (2x t3.medium), S3 (1 bucket), SES, Elastic IPs
 
-```mermaid
-graph TB
-    subgraph "Client Layer"
-        WEB[Web Browser]
-        MOBILE[Mobile App]
-    end
-    
-    subgraph "CDN & Security"
-        CF[Cloudflare CDN/WAF]
-    end
-    
-    subgraph "Azure Infrastructure"
-        subgraph "Load Balancer"
-            TRAEFIK[Traefik Reverse Proxy]
-        end
-        
-        subgraph "Application Tier"
-            FRONTEND[React Frontend]
-            BACKEND[NestJS Backend]
-        end
-        
-        subgraph "Data Tier"
-            POSTGRES[PostgreSQL Primary]
-            POSTGRES_R[PostgreSQL Replica]
-            REDIS[Redis Cache]
-        end
-        
-        subgraph "Monitoring"
-            PROMETHEUS[Prometheus]
-            GRAFANA[Grafana]
-            UMAMI[Umami Analytics]
-        end
-    end
-    
-    WEB --> CF
-    MOBILE --> CF
-    CF --> TRAEFIK
-    TRAEFIK --> FRONTEND
-    TRAEFIK --> BACKEND
-    FRONTEND --> BACKEND
-    BACKEND --> POSTGRES
-    BACKEND --> REDIS
-    PROMETHEUS --> BACKEND
-    GRAFANA --> PROMETHEUS
-```
-
-> 📋 **See [ARCH.md](ARCH.md) for complete architecture documentation**
-
-## Quick Start
+## 🚀 Quick Start
 
 ### Prerequisites
 
-- Azure subscription with Service Principal credentials
-- GitHub repository secrets configured (see below)
+1. **AWS Account** with administrative access
+2. **AWS CLI** installed and configured
+3. **Terraform** >= 1.5 installed
+4. **Cloudflare account** with domain management
 
-### Required Secrets
-
-```plain
-AZURE_CREDENTIALS          # Service Principal JSON
-AZURE_SUBSCRIPTION_ID      # Azure subscription ID
-ANSIBLE_VAULT_PASSWORD     # Vault encryption key
-CLOUDFLARE_API_TOKEN       # Optional: DNS management
-CLOUDFLARE_ZONE_ID         # Optional: DNS zone
-```
-
-### Deploy
-
-**Manual Deployment:**
-
-1. Go to Actions → "Pro-Mata Unified Deployment"
-2. Click "Run workflow"
-3. Select environment (dev/prod) and action (deploy)
-
-**Automatic Deployment:**
-
-- Push to `main` branch triggers dev deployment
-- External webhook via repository dispatch
-
-### Local Development
+### 1. Initial Setup
 
 ```bash
-# Deploy dev environment
-make deploy-automated ENV=dev
+# Clone and setup
+git clone <this-repository>
+cd aws-infrastructure
 
-# Check status
-make quick-status ENV=dev
-
-# Health check
-make health ENV=dev
-
-# Destroy (careful!)
-make destroy-dev
+# Run setup script (creates backend, SSH keys, config files)
+./scripts/setup.sh
 ```
 
-## System Components
+### 2. Configure Variables
 
-| Component | Technology | Access | Purpose |
-|-----------|-----------|--------|---------|
-| **Frontend** | React + Vite | <https://promata.com.br> | User interface |
-| **Backend** | NestJS + Node.js | <https://api.promata.com.br> | Business logic & API |
-| **Database** | PostgreSQL 15 | Internal | Primary data store |
-| **Cache** | Redis 7 | Internal | Session & data cache |
-| **Proxy** | Traefik v3 | <https://traefik.promata.com.br> | Load balancer & SSL |
-| **Monitoring** | Prometheus + Grafana | <https://grafana.promata.com.br> | System monitoring |
-| **Analytics** | Umami | <https://analytics.promata.com.br> | Web analytics |
-| **Database Admin** | PgAdmin 4 | <https://pgadmin.promata.com.br> | DB management |
-
-## CI/CD Pipeline
-
-Our automated deployment pipeline ensures reliable, consistent deployments:
-
-```mermaid
-graph LR
-    subgraph "Development"
-        DEV_PUSH[Push to Branch]
-        DEV_TEST[Run Tests]
-        DEV_BUILD[Build Images]
-        DEV_DEPLOY[Deploy to Dev]
-    end
-    
-    subgraph "Production"
-        PROD_PUSH[Push to Main]
-        PROD_TEST[Full Test Suite]
-        PROD_BUILD[Production Build]
-        PROD_TERRAFORM[Infrastructure]
-        PROD_ANSIBLE[Configuration]
-        PROD_VERIFY[Health Checks]
-    end
-    
-    DEV_PUSH --> DEV_TEST --> DEV_BUILD --> DEV_DEPLOY
-    PROD_PUSH --> PROD_TEST --> PROD_BUILD --> PROD_TERRAFORM --> PROD_ANSIBLE --> PROD_VERIFY
+Copy and configure the variables file:
+```bash
+cp terraform.tfvars.example terraform.tfvars
 ```
 
-> 📋 **See [CI/CD Documentation](ARCH.md#cicd-pipeline) for detailed workflow information**
+Update `terraform.tfvars` with your values:
+```hcl
+# SSH Key (generate with ssh-keygen)
+ssh_public_key = "your-public-key-here"
 
-## Monitoring
+# Cloudflare credentials
+cloudflare_api_token = "your-actual-token"
+cloudflare_zone_id   = "your-actual-zone-id"
+```
 
-- **System Metrics**: <https://grafana.promata.com.br>
-- **Application Logs**: <https://prometheus.promata.com.br>
-- **Uptime Status**: <https://traefik.promata.com.br>
-- **Web Analytics**: <https://analytics.promata.com.br>
-
-## Security
-
-- **Secrets Management**: Ansible Vault + Azure Key Vault
-- **Authentication**: Service Principal + SSH keys
-- **Network Security**: Azure NSG rules
-- **SSL/TLS**: Let's Encrypt certificates via Traefik
-- **Edge Protection**: Cloudflare WAF and DDoS protection
-
-> 📋 **See [Security Architecture](ARCH.md#security-architecture) for detailed security measures**
-
-## Environments
-
-| Environment | Purpose | Auto-Deploy | Manual Approval |
-|-------------|---------|-------------|----------------|
-| **Development** | Feature testing | ✅ Push to dev branch | ❌ |
-| **Staging** | Pre-production testing | ✅ Push to staging branch | ❌ |
-| **Production** | Live system | ❌ | ✅ Required |
-
-## For Beginners - Simple Instructions
-
-### How to Deploy (Easy Way)
-
-1. Go to the **Actions** tab in this GitHub repo
-2. Click **"Pro-Mata Unified Deployment"**
-3. Click **"Run workflow"** button
-4. Choose:
-   - **Environment**: `dev` (for testing) or `prod` (for live site)
-   - **Action**: `deploy` (to build everything)
-5. Click **"Run workflow"** - wait ~15 minutes
-
-That's it! The system will create cloud servers and make the website live.
-
-### Check If It's Working
-
-After deployment, visit these URLs:
-
-- **Main site**: <https://promata.com.br>
-- **API health**: <https://api.promata.com.br/health>
-- **System status**: <https://grafana.promata.com.br>
-
-### Troubleshooting for Beginners
-
-- **Deployment failed?** Check the Actions tab for error messages
-- **Website not loading?** Wait 5-10 minutes after deployment completes
-- **Need help?** Ask the infrastructure team or check the [Architecture Documentation](ARCH.md)
-
-## Development Workflow
-
-### Setting Up Local Environment
+### 3. Deploy Infrastructure
 
 ```bash
-# 1. Clone the infrastructure repository
-git clone <this-repo>
+# Initialize Terraform
+terraform init
 
-# 2. Setup local environment
-make dev-init
+# Plan deployment
+terraform plan
 
-# 3. Deploy development stack
-make dev-deploy
-
-# 4. Monitor deployment
-make logs ENV=dev
+# Apply changes
+terraform apply
 ```
 
-### Making Changes
-
-1. **Create a feature branch** from `dev`
-2. **Make your changes** to Terraform/Ansible files
-3. **Test locally** with `make validate ENV=dev`
-4. **Push to your branch** - automatic dev deployment
-5. **Create a pull request** to `main` for production
-
-### Secret Management
+### 4. Verify Deployment
 
 ```bash
-# Setup vault password (first time only)
-./scripts/vault/vault-easy.sh setup
+# Check outputs
+terraform output
 
-# Edit secrets for development
-./scripts/vault/vault-easy.sh edit envs/dev/secrets/all.yml
+# SSH into manager node
+ssh ubuntu@<manager-ip> -i promata-prod-key.pem
 
-# Edit secrets for production
-./scripts/vault/vault-easy.sh edit envs/prod/secrets/all.yml
+# Check infrastructure status
+docker node ls
 ```
 
-## Common Tasks
+## 📊 Infrastructure Components
 
-### Infrastructure Management
+### Networking
+- **VPC**: 10.0.0.0/16 with public/private subnets
+- **Internet Gateway**: Public access
+- **NAT Gateways**: Private subnet internet access
+- **Security Groups**: Firewall rules for each service
 
+### Compute
+- **Manager Node**: t3.medium (Traefik, monitoring, management)
+- **Worker Node**: t3.medium (applications, databases)
+- **Elastic IPs**: Static IPs for DNS stability
+- **EBS Volumes**: Encrypted storage for data persistence
+
+### Security
+- **Security Groups**: Network-level firewall rules
+- **Encrypted Storage**: All EBS volumes and S3 bucket encrypted
+- **SSH Keys**: Secure access to EC2 instances
+
+### Services
+- **S3 Bucket**: Application files (PDFs, emails, attachments)
+- **SES**: Email service for application notifications
+- **Cloudflare**: DNS management and CDN
+
+## 🛠️ Available Commands
+
+### Basic Operations
 ```bash
-# Deploy specific environment
-make deploy-automated ENV=dev
-
-# Check system health
-make health ENV=dev
-
-# View deployment logs
-make logs ENV=dev
-
-# Clean up resources (careful!)
-make destroy-dev
+terraform init              # Initialize Terraform
+terraform plan              # Plan changes
+terraform apply             # Apply changes
+terraform output            # Show outputs
+terraform destroy           # Destroy infrastructure (careful!)
 ```
 
-### Database Operations
-
+### Validation and Formatting
 ```bash
-# Connect to database
-docker exec -it <postgres-container> psql -U postgres -d promata
-
-# Create backup
-./scripts/backup/backup-database.sh dev
-
-# Restore from backup
-./scripts/backup/restore-database.sh dev backup-file.sql
+terraform validate          # Validate configuration
+terraform fmt              # Format Terraform files
 ```
 
-### Monitoring and Debugging
-
+### Operations
 ```bash
-# Check container status
+# SSH into instances
+ssh ubuntu@<manager-ip> -i promata-prod-key.pem
+ssh ubuntu@<worker-ip> -i promata-prod-key.pem
+
+# Check Docker Swarm status
+docker node ls
 docker service ls
-
-# View service logs
-docker service logs promata-dev_backend
-
-# Monitor resource usage
-docker stats
-
-# Test API endpoints
-curl https://api.promata.com.br/health
 ```
 
-## Important Notes
+## 🔗 Service URLs
 
-⚠️ **Never run commands with `destroy` unless you know what you're doing**
-⚠️ **Production deployments should be reviewed by the team first**
-⚠️ **Always test changes in development environment first**
-✅ **Development environment is safe to experiment with**
-✅ **All secrets are encrypted and stored securely**
+After deployment, services will be available at:
 
-## Support
+### Production URLs
+- **Main App**: https://promata.com.br
+- **API**: https://api.promata.com.br
+- **Traefik Dashboard**: https://traefik.promata.com.br
+- **Grafana**: https://grafana.promata.com.br
+- **Prometheus**: https://prometheus.promata.com.br
+- **Prisma Studio**: https://prisma.promata.com.br
+- **Analytics**: https://analytics.promata.com.br
+- **Metabase**: https://metabase.promata.com.br
 
-- **Documentation**: [ARCH.md](ARCH.md) - Complete architecture guide
-- **Issues**: Create a GitHub issue for bugs or feature requests
-- **Emergency**: Contact the infrastructure team for production issues
-- **Questions**: Use GitHub Discussions for general questions
+## 📧 Email Service (SES)
+
+The infrastructure includes AWS SES for email functionality:
+
+- **SMTP Endpoint**: `email-smtp.us-east-2.amazonaws.com`
+- **Port**: 587 (TLS)
+- **Verified Domain**: promata.com.br
+- **Verified Emails**: admin@, noreply@, support@promata.com.br
+
+### Email Configuration for Applications
+
+```env
+# Add to your application environment
+SMTP_HOST=email-smtp.us-east-2.amazonaws.com
+SMTP_PORT=587
+SMTP_FROM=noreply@promata.com.br
+```
+
+## 🔒 Security Configuration
+
+### SSH Access
+```bash
+# SSH using the generated key pair
+ssh ubuntu@<manager-ip> -i promata-{env}-key.pem
+ssh ubuntu@<worker-ip> -i promata-{env}-key.pem
+```
+
+### Security Groups
+- **Manager**: HTTP/HTTPS, SSH, Docker Swarm, monitoring ports (Prometheus, Grafana, Node/Postgres exporters)
+- **Worker**: Application ports, database ports, Docker Swarm, monitoring ports
+- **Database**: Internal access only from manager and worker security groups
+
+## 📈 Monitoring
+
+### Monitoring Stack
+- **Prometheus**: Metrics collection (port 9090)
+- **Grafana**: Dashboards and visualization (port 3000)
+- **Node Exporter**: System metrics (port 9100)
+- **Postgres Exporter**: Database metrics (port 9187)
+
+### Available Dashboards
+Pre-configured dashboards for:
+- System metrics (CPU, memory, disk, network)
+- Application performance monitoring
+- Docker container and Swarm metrics
+- PostgreSQL database performance
+- Custom business metrics
+
+## 🚚 Migration from Azure
+
+### Key Differences
+| Component | Azure | AWS |
+|-----------|--------|-----|
+| Virtual Machines | Azure VMs | EC2 Instances |
+| Static IPs | Azure Public IPs | Elastic IPs |
+| Storage | Storage Account | S3 Bucket |
+| Secrets | Key Vault | Environment Variables |
+| Monitoring | Azure Monitor | Prometheus + Grafana |
+| Networking | VNet | VPC |
+| Database Admin | PgAdmin | Prisma Studio |
+
+### Migration Steps
+1. **Deploy AWS infrastructure** (this repository)
+2. **Export data** from Azure PostgreSQL
+3. **Transfer Docker images** to new registry or reuse existing
+4. **Update DNS** from Azure IPs to AWS Elastic IPs
+5. **Import data** to AWS PostgreSQL
+6. **Update application** configuration for AWS services
+7. **Verify functionality** and performance
+8. **Decommission Azure** resources
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+**SSH Connection Failed**
+```bash
+# Check security group allows SSH from your IP
+# Verify SSH key is correct
+ssh -i ~/.ssh/id_rsa ubuntu@<instance-ip>
+```
+
+**Terraform State Lock**
+```bash
+# If state is locked, release manually
+aws dynamodb delete-item \
+  --table-name promata-terraform-state-lock \
+  --key '{"LockID":{"S":"<lock-id>"}}'
+```
+
+**Services Not Starting**
+```bash
+# SSH into instances and check Docker
+ssh ubuntu@<manager-ip>
+sudo docker service ls
+sudo docker service logs <service-name>
+```
+
+### Logs Location
+- **System Logs**: CloudWatch `/aws/ec2/promata-<env>/syslog`
+- **Application Logs**: CloudWatch `/aws/ec2/promata-<env>/application`
+- **Local Logs**: `/opt/promata/logs/` on instances
+
+## 📞 Support
+
+- **Documentation**: This README and inline code comments
+- **Issues**: Create GitHub issues for bugs or questions
+- **Architecture**: See `ARCHITECTURE.md` for detailed design
+- **Cost Optimization**: Contact AWS support for usage optimization
 
 ---
 
-## Built with ❤️ for Centro de Pesquisas e Proteção da Natureza (CPPN) Pró-Mata - PUCRS
+**🌟 Built for Centro de Pesquisas e Proteção da Natureza (CPPN) Pró-Mata - PUCRS**
+
+*Migrating from Azure to AWS for AGES infrastructure project budgets usage.*

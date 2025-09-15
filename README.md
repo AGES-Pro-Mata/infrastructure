@@ -1,6 +1,5 @@
-# ============================================================================
 # README.md
-# ============================================================================
+
 # Pro-Mata AWS Infrastructure
 
 Complete AWS infrastructure for Pro-Mata project using Terraform, mirroring the Azure architecture but leveraging AWS services.

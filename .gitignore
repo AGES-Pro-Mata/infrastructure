@@ -1,0 +1,111 @@
+# ============================================
+# PRO-MATA Infrastructure - .gitignore
+# ============================================
+
+# Environment Variables (NEVER commit!)
+.env
+.env.*
+!.env.example
+*.env
+!*.env.example
+
+# Credentials (CRITICAL!)
+*CREDENTIALS*
+*credentials*
+*secrets*
+*.pem
+*.key
+*.private
+
+# Ansible
+cac/inventory/hosts.yml
+cac/inventory/group_vars/all.yml
+*.vault
+.vault_pass
+
+# Terraform
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+.terraform/
+.terraform.lock.hcl
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+tfplan
+tfplan.*
+
+# SSH Keys
+*.ppk
+id_rsa*
+id_ed25519*
+known_hosts
+
+# Backups
+*.backup
+*.bak
+*.sql
+*.dump
+backups/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*~
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+.project
+.settings/
+*.sublime-*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Docker
+docker-compose.override.yml
+
+# Temporary
+tmp/
+temp/
+*.tmp
+
+# AWS
+.aws/
+
+# Azure
+.azure/
+
+# Archives
+*.zip
+*.tar.gz
+*.rar

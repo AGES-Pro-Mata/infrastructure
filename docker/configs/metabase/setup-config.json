@@ -1,0 +1,28 @@
+{
+  "token": "METABASE_SETUP_TOKEN_WILL_BE_SET_AT_RUNTIME",
+  "user": {
+    "first_name": "Admin",
+    "last_name": "Pro-Mata",
+    "email": "admin@promata.com.br",
+    "password": "promata2025",
+    "site_name": "Pro-Mata Analytics"
+  },
+  "database": {
+    "engine": "postgres",
+    "name": "promata",
+    "details": {
+      "host": "postgres-primary",
+      "port": 5432,
+      "dbname": "promata",
+      "user": "admin",
+      "password": "admin",
+      "ssl": false,
+      "tunnel-enabled": false
+    }
+  },
+  "prefs": {
+    "site_name": "Pro-Mata Analytics",
+    "site_locale": "pt_BR",
+    "allow_tracking": false
+  }
+}

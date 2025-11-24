@@ -1,0 +1,211 @@
+# PRO-MATA Infrastructure - Docker Compose
+# Single-Node Deployment (Development + Simple Production)
+# Use este arquivo para desenvolvimento local ou deploy em servidor único
+
+version: "3.8"
+
+networks:
+  promata_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  traefik_certs:
+
+services:
+  # === REVERSE PROXY ===
+  traefik:
+    image: traefik:v2.11
+    container_name: promata-traefik
+    environment:
+      - DOCKER_API_VERSION=1.44
+      - CF_DNS_API_TOKEN=${CLOUDFLARE_API_TOKEN:-}
+      - CF_ZONE_API_TOKEN=${CLOUDFLARE_API_TOKEN:-}
+    
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_certs:/letsencrypt
+      - ./docker/configs/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+
+    networks:
+      - promata_network
+
+    labels:
+      - traefik.enable=true
+
+      # Middleware HTTPS redirect
+      - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
+      - traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true
+
+      # Dashboard
+      - traefik.http.routers.traefik-dashboard.rule=Host(`traefik.${DOMAIN_NAME:-promata.com.br}`)
+      - traefik.http.routers.traefik-dashboard.service=api@internal
+      - traefik.http.routers.traefik-dashboard.entrypoints=websecure
+      - traefik.http.routers.traefik-dashboard.tls.certresolver=letsencrypt
+
+      # Security headers
+      - traefik.http.middlewares.security-headers.headers.sslredirect=true
+      - traefik.http.middlewares.security-headers.headers.stsSeconds=31536000
+      - traefik.http.middlewares.security-headers.headers.stsIncludeSubdomains=true
+      - traefik.http.middlewares.security-headers.headers.stsPreload=true
+      - traefik.http.middlewares.security-headers.headers.contentTypeNosniff=true
+      - traefik.http.middlewares.security-headers.headers.frameDeny=true
+
+    restart: unless-stopped
+
+  # === FRONTEND PROXY (S3) ===
+  frontend:
+    image: nginx:alpine
+    container_name: promata-frontend
+    environment:
+      - S3_WEBSITE_ENDPOINT=http://${S3_BUCKET_NAME}.s3-website.${AWS_REGION:-sa-east-1}.amazonaws.com
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME}
+      - AWS_REGION=${AWS_REGION:-sa-east-1}
+    volumes:
+      - ./docker/configs/nginx/s3-proxy.conf:/etc/nginx/templates/default.conf.template:ro
+    networks:
+      - promata_network
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.frontend.rule=Host(`${DOMAIN_NAME:-promata.com.br}`) || Host(`www.${DOMAIN_NAME:-promata.com.br}`)
+      - traefik.http.routers.frontend.entrypoints=websecure
+      - traefik.http.routers.frontend.tls.certresolver=letsencrypt
+      - traefik.http.routers.frontend.middlewares=security-headers
+      - traefik.http.services.frontend.loadbalancer.server.port=80
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # === DATABASE ===
+  postgres:
+    image: postgres:17-alpine
+    container_name: promata-postgres
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-promata}
+      - POSTGRES_USER=${POSTGRES_USER:-promata}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_HOST_AUTH_METHOD=scram-sha-256
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/database/scripts/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - promata_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-promata}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: always
+
+  # === BACKEND API ===
+  backend:
+    image: ${BACKEND_IMAGE:-norohim/pro-mata-backend:latest}
+    container_name: promata-backend
+    environment:
+      # Database
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-promata}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-promata}?schema=app
+
+      # Application
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=3000
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-2h}
+
+      # CORS
+      - CORS_ORIGIN=https://${DOMAIN_NAME:-promata.com.br},https://www.${DOMAIN_NAME:-promata.com.br}
+      - CORS_CREDENTIALS=true
+
+      # Analytics
+      - UMAMI_URL=https://analytics.${DOMAIN_NAME:-promata.com.br}
+      - UMAMI_WEBSITE_ID=${UMAMI_WEBSITE_ID:-}
+
+      # S3 Storage
+      - AWS_S3_BUCKET=${S3_BUCKET_NAME}
+      - AWS_S3_REGION=${AWS_REGION:-sa-east-1}
+
+      # Logs
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+
+    networks:
+      - promata_network
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.backend.rule=Host(`api.${DOMAIN_NAME:-promata.com.br}`)
+      - traefik.http.routers.backend.entrypoints=websecure
+      - traefik.http.routers.backend.tls.certresolver=letsencrypt
+      - traefik.http.routers.backend.middlewares=security-headers
+      - traefik.http.services.backend.loadbalancer.server.port=3000
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    restart: unless-stopped
+
+  # === ANALYTICS (Umami) ===
+  umami:
+    image: ghcr.io/umami-software/umami:postgresql-latest
+    container_name: promata-umami
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-promata}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-promata}?schema=umami
+      - DATABASE_TYPE=postgresql
+      - APP_SECRET=${APP_SECRET}
+      - DISABLE_TELEMETRY=1
+    networks:
+      - promata_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.umami.rule=Host(`analytics.${DOMAIN_NAME:-promata.com.br}`)
+      - traefik.http.routers.umami.entrypoints=websecure
+      - traefik.http.routers.umami.tls.certresolver=letsencrypt
+      - traefik.http.services.umami.loadbalancer.server.port=3000
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/heartbeat || exit 1"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 45s
+    restart: unless-stopped
+
+  # === BUSINESS INTELLIGENCE (Metabase) ===
+  metabase:
+    image: metabase/metabase:v0.51.3
+    container_name: promata-metabase
+    environment:
+      - MB_DB_TYPE=postgres
+      - MB_DB_CONNECTION_URI=postgresql://${POSTGRES_USER:-promata}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-promata}?currentSchema=metabase
+      - JAVA_OPTS=-Xmx1024m -Duser.timezone=America/Sao_Paulo
+    networks:
+      - promata_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.metabase.rule=Host(`metabase.${DOMAIN_NAME:-promata.com.br}`)
+      - traefik.http.routers.metabase.entrypoints=websecure
+      - traefik.http.routers.metabase.tls.certresolver=letsencrypt
+      - traefik.http.routers.metabase.middlewares=security-headers
+      - traefik.http.services.metabase.loadbalancer.server.port=3000
+    restart: unless-stopped

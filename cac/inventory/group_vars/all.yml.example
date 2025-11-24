@@ -1,0 +1,36 @@
+# Group Variables Example
+# Copy to all.yml and update with your configuration
+# These variables are used by Ansible playbooks
+
+# Project Configuration
+project_name: promata
+environment: prod  # or dev
+domain_name: promata.com.br
+
+# Docker Configuration
+docker_compose_version: v2.31.0
+
+# Application Images
+backend_image: norohim/pro-mata-backend:latest
+# frontend_image: norohim/pro-mata-frontend:latest  # Not needed (S3/Blob)
+
+# Stack Environment Variables
+# IMPORTANT: Use GitHub Secrets for sensitive values in production
+stack_environment:
+  DOMAIN_NAME: "{{ domain_name }}"
+
+  # Database (use strong passwords in production!)
+  POSTGRES_DB: promata
+  POSTGRES_USER: promata
+  POSTGRES_PASSWORD: "{{ lookup('env', 'POSTGRES_PASSWORD') | default('changeme') }}"
+
+  # Application Security
+  JWT_SECRET: "{{ lookup('env', 'JWT_SECRET') | default('changeme') }}"
+  APP_SECRET: "{{ lookup('env', 'APP_SECRET') | default('changeme') }}"
+
+  # Traefik
+  ACME_EMAIL: "admin@{{ domain_name }}"
+  TRAEFIK_LOG_LEVEL: INFO
+
+# NOTE: In production, set these via environment variables or GitHub Secrets
+# Never commit actual passwords to this file!

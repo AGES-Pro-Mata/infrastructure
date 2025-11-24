@@ -1,0 +1,106 @@
+name: Deploy Frontend
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test & Build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm'
+
+      - run: npm ci --legacy-peer-deps
+      - run: npm run generate-routes
+      - run: npx tsc --noEmit
+      - run: npm run lint
+        continue-on-error: true
+      - run: npm run build:ci
+        env:
+          VITE_API_URL: https://api.${{ vars.DOMAIN_NAME }}
+          VITE_APP_ENV: production
+          VITE_APP_VERSION: ${{ github.sha }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 7
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-24.04
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm audit --audit-level=moderate
+        continue-on-error: true
+      - uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'fs'
+          severity: 'HIGH,CRITICAL'
+
+  deploy-s3:
+    name: Deploy to S3
+    runs-on: ubuntu-24.04
+    needs: [test, security]
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - run: npm ci --legacy-peer-deps
+      - run: npm run build:ci
+        env:
+          VITE_API_URL: https://api.${{ vars.DOMAIN_NAME }}
+          VITE_APP_ENV: production
+          VITE_APP_VERSION: ${{ github.sha }}
+          VITE_UMAMI_WEBSITE_ID: ${{ vars.VITE_UMAMI_WEBSITE_ID }}
+          VITE_UMAMI_SCRIPT_URL: https://analytics.${{ vars.DOMAIN_NAME }}/script.js
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: sa-east-1
+
+      - name: Sync to S3
+        run: |
+          aws s3 sync ./dist s3://${{ vars.AWS_S3_BUCKET }} \
+            --delete \
+            --cache-control "public,max-age=31536000,immutable" \
+            --exclude "index.html"
+
+          aws s3 cp ./dist/index.html s3://${{ vars.AWS_S3_BUCKET }}/index.html \
+            --cache-control "public,max-age=0,must-revalidate"
+
+      - name: Purge Cloudflare Cache
+        run: |
+          curl -X POST "https://api.cloudflare.com/client/v4/zones/${{ secrets.CLOUDFLARE_ZONE_ID }}/purge_cache" \
+            -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            --data '{"purge_everything":true}'
+
+      - name: Summary
+        run: |
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **URL**: https://${{ vars.DOMAIN_NAME }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **API**: https://api.${{ vars.DOMAIN_NAME }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+
+      - uses: sarisia/actions-status-discord@v1
+        if: always()
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          status: ${{ job.status }}
+          title: "Frontend Deployment"

@@ -1,0 +1,29 @@
+# Ansible Inventory Example
+# Copy to hosts.yml and update with your infrastructure IPs
+# Usage: ansible-playbook -i cac/inventory/hosts.yml cac/playbooks/deploy-complete-stack.yml
+
+all:
+  vars:
+    ansible_user: ubuntu
+    ansible_ssh_private_key_file: ~/.ssh/promata_key
+    ansible_python_interpreter: /usr/bin/python3
+
+  children:
+    # Single-node deployment (Docker Compose)
+    single_node:
+      hosts:
+        promata-server:
+          ansible_host: 1.2.3.4  # Replace with your EC2/VM IP
+
+    # Multi-node deployment (Docker Swarm)
+    swarm_managers:
+      hosts:
+        promata-manager:
+          ansible_host: 1.2.3.4  # Replace with manager IP
+
+    swarm_workers:
+      hosts:
+        promata-worker-1:
+          ansible_host: 1.2.3.5  # Replace with worker IP
+        # promata-worker-2:
+        #   ansible_host: 1.2.3.6

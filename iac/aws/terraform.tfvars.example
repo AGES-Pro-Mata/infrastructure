@@ -1,0 +1,50 @@
+# ============================================================================
+# terraform.tfvars.example - AWS Production Configuration
+# ============================================================================
+# Copy this file to terraform.tfvars and fill in your actual values
+# NEVER commit terraform.tfvars to Git (it contains secrets)
+
+# ============================================================================
+# BASIC CONFIGURATION
+# ============================================================================
+project_name = "promata"
+aws_region   = "us-east-2"
+owner        = "pro-mata-team"
+
+# ============================================================================
+# DOMAIN CONFIGURATION
+# ============================================================================
+domain_name = "promata.com.br"
+
+# ============================================================================
+# EC2 INSTANCE CONFIGURATION - Single Instance
+# ============================================================================
+instance_type   = "t2.medium"  # 2 vCPU, 4GB RAM
+ebs_volume_size = 19           # GB
+
+# ============================================================================
+# CLOUDFLARE CONFIGURATION
+# ============================================================================
+# Get from Cloudflare Dashboard -> API Tokens
+cloudflare_api_token = "your-cloudflare-api-token-here"
+cloudflare_zone_id   = "your-cloudflare-zone-id-here"
+
+# ============================================================================
+# EMAIL CONFIGURATION - Amazon SES
+# ============================================================================
+admin_email = "admin@promata.com.br"
+
+ses_email_list = [
+  "admin@promata.com.br",
+  "noreply@promata.com.br",
+  "support@promata.com.br"
+]
+
+# ============================================================================
+# NOTES
+# ============================================================================
+# 1. Terraform State: Stored in Azure Storage Account (not S3)
+# 2. S3 Bucket: Only for static assets (PDFs, images, frontend files)
+# 3. No DynamoDB: Not needed for single-instance architecture
+# 4. Single EC2: All services run on one t2.medium instance
+# ============================================================================

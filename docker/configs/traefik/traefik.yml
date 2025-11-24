@@ -1,0 +1,36 @@
+api:
+  dashboard: true
+  insecure: false
+
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"
+
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    network: promata_network
+    httpClientTimeout: 0
+    watch: true
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: admin@promata.com.br
+      storage: /letsencrypt/acme.json
+      dnsChallenge:
+        provider: cloudflare
+        resolvers:
+          - "1.1.1.1:53"
+          - "8.8.8.8:53"
+
+log:
+  level: INFO
+
+accessLog: {}
+
+global:
+  sendAnonymousUsage: false

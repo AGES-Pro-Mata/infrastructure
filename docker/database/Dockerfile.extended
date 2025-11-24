@@ -1,0 +1,54 @@
+# Pro-Mata Infrastructure Database - Extends Backend Base Image
+FROM norohim/pro-mata-database:latest
+
+# Metadata labels for infrastructure-specific image
+LABEL org.label-schema.name="pro-mata-database-infrastructure" \
+      org.label-schema.description="Production-ready PostgreSQL for Pro-Mata with infrastructure configurations" \
+      org.label-schema.vendor="AGES PUCRS" \
+      org.label-schema.version="infrastructure-v1"
+
+# Install additional infrastructure tools
+RUN apk add --no-cache \
+    # Backup and monitoring tools
+    postgresql-contrib \
+    # PostGIS for spatial data support
+    postgis \
+    # Network utilities for cluster management
+    netcat-openbsd \
+    # Process monitoring
+    procps \
+    # Log management
+    logrotate
+
+# Copy infrastructure-specific PostgreSQL configurations
+COPY configs/postgresql.conf /etc/postgresql/postgresql.conf
+COPY configs/pg_hba.conf /etc/postgresql/pg_hba.conf
+
+# Copy infrastructure initialization scripts (will run after base scripts)
+COPY scripts/init/ /docker-entrypoint-initdb.d/
+
+# Copy custom infrastructure entrypoint
+COPY entrypoint-infrastructure.sh /usr/local/bin/docker-entrypoint-infrastructure.sh
+
+# Set permissions for infrastructure files
+RUN chmod +x /usr/local/bin/docker-entrypoint-infrastructure.sh && \
+    chmod +x /docker-entrypoint-initdb.d/*.sh 2>/dev/null || true && \
+    chmod 644 /etc/postgresql/*.conf && \
+    chown -R postgres:postgres /var/lib/postgresql/backups && \
+    chown -R postgres:postgres /var/lib/postgresql/scripts && \
+    chown postgres:postgres /etc/postgresql/*.conf
+
+# Set environment variables for infrastructure deployment
+# Note: Sensitive values should be set via runtime environment, not build-time
+ENV POSTGRES_INITDB_ARGS="--encoding=UTF-8 --lc-collate=C.UTF-8 --lc-ctype=C.UTF-8"
+ENV CLUSTER_NAME="promata-cluster"
+
+# Enhanced health check for production
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-postgres} -h localhost || exit 1
+
+# Override entrypoint to use infrastructure-specific initialization
+ENTRYPOINT ["docker-entrypoint-infrastructure.sh"]
+
+# Start PostgreSQL with default configuration from entrypoint
+CMD ["postgres"]

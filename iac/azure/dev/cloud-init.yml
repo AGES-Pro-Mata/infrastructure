@@ -1,0 +1,143 @@
+#cloud-config
+# Cloud-init configuration for Pro-Mata Development VM
+# This script sets up Docker, Docker Compose, and basic security
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - apt-transport-https
+  - ca-certificates
+  - curl
+  - gnupg
+  - lsb-release
+  - software-properties-common
+  - unzip
+  - htop
+  - tree
+  - jq
+  - fail2ban
+  - ufw
+
+# Write files
+write_files:
+  # Docker daemon configuration
+  - content: |
+      {
+        "log-driver": "json-file",
+        "log-opts": {
+          "max-size": "10m",
+          "max-file": "3"
+        },
+        "storage-driver": "overlay2",
+        "metrics-addr": "0.0.0.0:9323",
+        "experimental": false,
+        "live-restore": true
+      }
+    path: /etc/docker/daemon.json
+    owner: root:root
+    permissions: '0644'
+
+  # Fail2ban jail configuration
+  - content: |
+      [sshd]
+      enabled = true
+      port = ssh
+      filter = sshd
+      logpath = /var/log/auth.log
+      maxretry = 3
+      bantime = 3600
+      findtime = 600
+    path: /etc/fail2ban/jail.d/sshd.conf
+    owner: root:root
+    permissions: '0644'
+
+  # UFW rules script
+  - content: |
+      #!/bin/bash
+      # Basic UFW setup
+      ufw default deny incoming
+      ufw default allow outgoing
+      
+      # SSH
+      ufw allow 22/tcp
+      
+      # HTTP/HTTPS
+      ufw allow 80/tcp
+      ufw allow 443/tcp
+      
+      # Docker Swarm
+      ufw allow 2377/tcp
+      ufw allow 7946/tcp
+      ufw allow 7946/udp
+      ufw allow 4789/udp
+      
+      # Enable UFW
+      ufw --force enable
+    path: /tmp/setup-ufw.sh
+    owner: root:root
+    permissions: '0755'
+
+runcmd:
+  # Update system
+  - apt-get update
+  
+  # Install Docker
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+  - echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+  - apt-get update
+  - apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  
+  # Add ubuntu user to docker group
+  - usermod -aG docker ubuntu
+  
+  # Start and enable Docker
+  - systemctl start docker
+  - systemctl enable docker
+  
+  # Install Docker Compose standalone
+  - curl -L "https://github.com/docker/compose/releases/download/v${docker_compose_version}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+  - chmod +x /usr/local/bin/docker-compose
+  
+  # Setup firewall
+  - /tmp/setup-ufw.sh
+  
+  # Start fail2ban
+  - systemctl start fail2ban
+  - systemctl enable fail2ban
+  
+  # Create directories for Pro-Mata
+  - mkdir -p /opt/promata/{configs,logs,backups}
+  - chown ubuntu:ubuntu /opt/promata -R
+  
+  # Create Docker networks for Swarm
+  - sudo -u ubuntu docker network create --driver overlay promata_public || true
+  - sudo -u ubuntu docker network create --driver overlay promata_internal || true
+  - sudo -u ubuntu docker network create --driver overlay promata_database || true
+  
+  # Set up log rotation for Docker
+  - echo '/var/lib/docker/containers/*/*.log { daily missingok rotate 7 compress notifempty create 644 root root postrotate /bin/kill -USR1 $(cat /var/run/docker.pid) 2>/dev/null || true endscript }' > /etc/logrotate.d/docker
+  
+  # Clean up
+  - apt-get autoremove -y
+  - apt-get autoclean
+
+# Final message
+final_message: |
+  Pro-Mata Development VM setup completed!
+  Docker version: $(docker --version)
+  Docker Compose version: $(docker-compose --version)
+  
+  The system is ready for Docker Swarm deployment.
+  
+  To initialize Docker Swarm:
+  docker swarm init --advertise-addr $(hostname -I | awk '{print $1}')
+  
+  Pro-Mata directories created in /opt/promata/
+  
+  Security features enabled:
+  - UFW firewall configured
+  - fail2ban protection active
+  - Docker logging configured
+  
+  System will reboot if needed...

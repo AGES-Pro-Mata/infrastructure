@@ -17,33 +17,17 @@ RUN apk add --no-cache \
     procps \
     curl
 
-# Create directories
-RUN mkdir -p /var/lib/postgresql/backups/daily \
-             /var/lib/postgresql/backups/weekly \
-             /var/lib/postgresql/backups/wal \
-             /etc/postgresql \
-    && chown -R postgres:postgres /var/lib/postgresql/backups \
-    && chown -R postgres:postgres /etc/postgresql
-
-# Copy PostgreSQL configurations
-COPY configs/postgresql.conf /etc/postgresql/postgresql.conf
-COPY configs/pg_hba.conf /etc/postgresql/pg_hba.conf
-
-# Copy initialization scripts (schemas, users, extensions - NOT seed)
+# Copy initialization scripts (schemas, users, extensions)
 COPY scripts/init/ /docker-entrypoint-initdb.d/
 
-# Set permissions
-RUN chmod 644 /etc/postgresql/*.conf \
-    && chmod +x /docker-entrypoint-initdb.d/*.sh 2>/dev/null || true \
-    && chown postgres:postgres /etc/postgresql/*.conf
+# Set permissions for init scripts
+RUN chmod +x /docker-entrypoint-initdb.d/*.sh 2>/dev/null || true
 
 # Environment variables
 ENV POSTGRES_INITDB_ARGS="--encoding=UTF-8 --lc-collate=C.UTF-8 --lc-ctype=C.UTF-8"
-ENV CLUSTER_NAME="promata-cluster"
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-postgres} -h localhost || exit 1
+    CMD pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-postgres} -h 127.0.0.1 || exit 1
 
-# Use custom postgres config
-CMD ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf", "-c", "hba_file=/etc/postgresql/pg_hba.conf"]
+# Use default postgres entrypoint and command

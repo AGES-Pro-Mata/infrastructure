@@ -14,7 +14,8 @@ jobs:
       - name: Checkout frontend repository
         uses: actions/checkout@v4
         with:
-          repository: ages-pucrs/frontend
+          repository: AGES-Pro-Mata/frontend
+          token: ${{ secrets.GIT_TOKEN }}
           path: frontend
 
       - uses: actions/setup-node@v4
@@ -62,7 +63,8 @@ jobs:
       - name: Checkout frontend repository
         uses: actions/checkout@v4
         with:
-          repository: ages-pucrs/frontend
+          repository: AGES-Pro-Mata/frontend
+          token: ${{ secrets.GIT_TOKEN }}
           path: frontend
 
       - name: NPM Audit
@@ -86,7 +88,8 @@ jobs:
       - name: Checkout frontend repository
         uses: actions/checkout@v4
         with:
-          repository: ages-pucrs/frontend
+          repository: AGES-Pro-Mata/frontend
+          token: ${{ secrets.GIT_TOKEN }}
           path: frontend
 
       - uses: actions/setup-node@v4

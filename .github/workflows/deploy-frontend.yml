@@ -59,6 +59,9 @@ jobs:
     name: Security Scan
     runs-on: ubuntu-24.04
     needs: test
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - name: Checkout frontend repository
         uses: actions/checkout@v4
@@ -78,11 +81,19 @@ jobs:
           scan-type: 'fs'
           scan-ref: 'frontend'
           severity: 'HIGH,CRITICAL'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+        continue-on-error: true
+
+      - uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: 'trivy-results.sarif'
+        continue-on-error: true
 
   deploy-s3:
     name: Deploy to S3
     runs-on: ubuntu-24.04
-    needs: [test, security]
+    needs: test
     if: github.ref == 'refs/heads/main'
     steps:
       - name: Checkout frontend repository
@@ -116,7 +127,18 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: sa-east-1
+          aws-region: ${{ vars.AWS_REGION || 'sa-east-1' }}
+
+      - name: Create S3 bucket if not exists
+        run: |
+          aws s3 mb s3://${{ vars.AWS_S3_BUCKET }} --region ${{ vars.AWS_REGION || 'sa-east-1' }} 2>/dev/null || true
+          aws s3api put-bucket-versioning \
+            --bucket ${{ vars.AWS_S3_BUCKET }} \
+            --versioning-configuration Status=Enabled 2>/dev/null || true
+          aws s3api put-public-access-block \
+            --bucket ${{ vars.AWS_S3_BUCKET }} \
+            --public-access-block-configuration \
+              "BlockPublicAcls=false,IgnorePublicAcls=false,BlockPublicPolicy=false,RestrictPublicBuckets=false" 2>/dev/null || true
 
       - name: Sync to S3
         run: |

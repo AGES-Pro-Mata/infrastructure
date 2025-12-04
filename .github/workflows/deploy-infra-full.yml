@@ -252,6 +252,9 @@ jobs:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           APP_SECRET: ${{ secrets.APP_SECRET }}
+          AWS_REGION: ${{ env.AWS_REGION }}
+          S3_BUCKET_NAME: ${{ vars.S3_BUCKET_NAME || 'promata-prod-static-assets' }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           cd cac
           ansible-playbook \

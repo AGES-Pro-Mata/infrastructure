@@ -14,6 +14,11 @@
     postgres_password: "{{ lookup('env', 'POSTGRES_PASSWORD') | default('changeme', true) }}"
     jwt_secret: "{{ lookup('env', 'JWT_SECRET') | default('changeme', true) }}"
     app_secret: "{{ lookup('env', 'APP_SECRET') | default('changeme', true) }}"
+    
+    # AWS Configuration
+    aws_region: "{{ lookup('env', 'AWS_REGION') | default('sa-east-1', true) }}"
+    s3_bucket_name: "{{ lookup('env', 'S3_BUCKET_NAME') | default('', true) }}"
+    cloudflare_api_token: "{{ lookup('env', 'CLOUDFLARE_API_TOKEN') | default('', true) }}"
   
   tasks:
     # ========================================================================
@@ -93,6 +98,9 @@
         - /opt/promata/configs
         - /opt/promata/data
         - /opt/promata/logs
+        - /opt/promata/docker/configs/traefik
+        - /opt/promata/docker/configs/nginx
+        - /opt/promata/docker/database/scripts/init
 
     - name: Download docker-compose.yml from repository
       get_url:
@@ -131,7 +139,15 @@
           # Application
           JWT_SECRET={{ jwt_secret }}
           APP_SECRET={{ app_secret }}
-          DATABASE_URL=postgresql://promata:{{ postgres_password }}@postgres:5432/promata?schema=public
+          DATABASE_URL=postgresql://promata:{{ postgres_password }}@postgres:5432/promata?schema=app
+          
+          # AWS S3 Storage
+          AWS_REGION={{ aws_region }}
+          AWS_S3_BUCKET={{ s3_bucket_name }}
+          S3_BUCKET_NAME={{ s3_bucket_name }}
+          
+          # Cloudflare (for Traefik DNS challenge)
+          CLOUDFLARE_API_TOKEN={{ cloudflare_api_token }}
           
           # Traefik
           TRAEFIK_LOG_LEVEL=INFO
@@ -142,11 +158,86 @@
     - name: Download Traefik config
       get_url:
         url: "https://raw.githubusercontent.com/AGES-Pro-Mata/infrastructure/main/docker/configs/traefik/traefik.yml"
-        dest: /opt/promata/configs/traefik.yml
+        dest: /opt/promata/docker/configs/traefik/traefik.yml
+        owner: ubuntu
+        group: ubuntu
+        mode: '0644'
+        force: yes
+      register: traefik_config
+      retries: 3
+      delay: 5
+
+    - name: Create Traefik config fallback if download failed
+      when: traefik_config.failed | default(false)
+      copy:
+        dest: /opt/promata/docker/configs/traefik/traefik.yml
+        owner: ubuntu
+        group: ubuntu
+        mode: '0644'
+        content: |
+          api:
+            dashboard: true
+            insecure: false
+          
+          entryPoints:
+            web:
+              address: ":80"
+              http:
+                redirections:
+                  entryPoint:
+                    to: websecure
+                    scheme: https
+            websecure:
+              address: ":443"
+          
+          providers:
+            docker:
+              endpoint: "unix:///var/run/docker.sock"
+              exposedByDefault: false
+              network: promata_promata_network
+          
+          certificatesResolvers:
+            letsencrypt:
+              acme:
+                email: admin@{{ domain_name }}
+                storage: /letsencrypt/acme.json
+                dnsChallenge:
+                  provider: cloudflare
+                  resolvers:
+                    - "1.1.1.1:53"
+                    - "8.8.8.8:53"
+          
+          log:
+            level: INFO
+
+    - name: Download nginx S3 proxy config
+      get_url:
+        url: "https://raw.githubusercontent.com/AGES-Pro-Mata/infrastructure/main/docker/configs/nginx/s3-proxy.conf"
+        dest: /opt/promata/docker/configs/nginx/s3-proxy.conf
         owner: ubuntu
         group: ubuntu
         mode: '0644'
       ignore_errors: true
+
+    - name: Create database init script for schemas
+      copy:
+        dest: /opt/promata/docker/database/scripts/init/01-create-schemas.sh
+        owner: ubuntu
+        group: ubuntu
+        mode: '0755'
+        content: |
+          #!/bin/bash
+          set -e
+          psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+              CREATE SCHEMA IF NOT EXISTS app;
+              CREATE SCHEMA IF NOT EXISTS umami;
+              CREATE SCHEMA IF NOT EXISTS metabase;
+              ALTER DATABASE ${POSTGRES_DB} SET search_path TO app,public;
+              GRANT ALL PRIVILEGES ON SCHEMA app TO ${POSTGRES_USER};
+              GRANT ALL PRIVILEGES ON SCHEMA umami TO ${POSTGRES_USER};
+              GRANT ALL PRIVILEGES ON SCHEMA metabase TO ${POSTGRES_USER};
+          EOSQL
+          echo "✅ Database schemas initialized!"
 
     # ========================================================================
     # START SERVICES
@@ -158,7 +249,34 @@
       become_user: ubuntu
       ignore_errors: true
 
-    - name: Start services with Docker Compose
+    - name: Start PostgreSQL first
+      shell: |
+        cd /opt/promata
+        docker compose up -d postgres || docker-compose up -d postgres
+      become_user: ubuntu
+
+    - name: Wait for PostgreSQL to be ready
+      shell: |
+        for i in {1..30}; do
+          docker exec promata-postgres pg_isready -U promata && break
+          sleep 2
+        done
+      ignore_errors: true
+
+    - name: Create database schemas (idempotent)
+      shell: |
+        docker exec -i promata-postgres psql -U promata -d promata <<'EOSQL'
+        CREATE SCHEMA IF NOT EXISTS app;
+        CREATE SCHEMA IF NOT EXISTS umami;
+        CREATE SCHEMA IF NOT EXISTS metabase;
+        ALTER DATABASE promata SET search_path TO app,public;
+        GRANT ALL PRIVILEGES ON SCHEMA app TO promata;
+        GRANT ALL PRIVILEGES ON SCHEMA umami TO promata;
+        GRANT ALL PRIVILEGES ON SCHEMA metabase TO promata;
+        EOSQL
+      ignore_errors: true
+
+    - name: Start all services with Docker Compose
       shell: |
         cd /opt/promata
         docker compose up -d || docker-compose up -d

@@ -95,6 +95,10 @@ jobs:
           repository: AGES-Pro-Mata/backend
           token: ${{ secrets.GIT_TOKEN }}
           path: backend
+          ref: main
+
+      - name: Debug - List Dockerfiles
+        run: ls -la backend/Dockerfile*
 
       - uses: docker/setup-buildx-action@v3
 

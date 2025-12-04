@@ -135,6 +135,81 @@ docker-compose exec backend npm run cli user:create \
   --email admin@test.com --password admin123 --role ADMIN
 ```
 
+## Deploy pelo Cliente (Primeiro Uso)
+
+Esta seção é destinada ao Prof. Augusto Alvim e equipe do Centro Pro-Mata para realizar o primeiro deploy e configuração do sistema.
+
+### Pré-requisitos
+
+1. **Conta AWS** configurada com credenciais
+2. **Token Cloudflare API** com permissões:
+   - Zone:DNS:Edit
+   - Zone:Zone:Read
+3. **Terraform** instalado (v1.10+)
+4. **Make** instalado
+
+### Configurar Variáveis de Ambiente
+
+```bash
+export AWS_REGION=sa-east-1
+export DOMAIN_NAME=promata.com.br
+export CLOUDFLARE_API_TOKEN=seu-token-aqui
+export CLOUDFLARE_ZONE_ID=seu-zone-id
+export ACME_EMAIL=admin@promata.com.br
+export BACKEND_IMAGE=norohim/pro-mata-backend:latest
+```
+
+### Deploy Completo Automatizado
+
+```bash
+# 1. Clone o repositório
+git clone https://github.com/ages-pucrs/promata-infrastructure
+cd promata-infrastructure
+
+# 2. Execute o deploy completo (IaC + Docker Compose)
+make deploy-compose-full ENV=prod \
+  CLOUDFLARE_API_TOKEN=$CLOUDFLARE_API_TOKEN \
+  DOMAIN_NAME=promata.com.br \
+  AWS_REGION=sa-east-1
+```
+
+Este comando irá:
+
+1. Provisionar infraestrutura AWS (VPC, EC2, S3, DNS)
+2. Configurar Cloudflare DNS
+3. Fazer deploy do Docker Compose stack
+4. Gerar certificados SSL automaticamente
+
+### Primeiro Acesso ao Sistema
+
+1. Aguarde ~2 minutos para certificados SSL serem gerados
+2. Acesse: <https://promata.com.br>
+3. **Faça login com as credenciais fornecidas diretamente ao administrador**
+4. **IMPORTANTE**: Altere a senha imediatamente após primeiro login
+5. Configure usuários adicionais via interface web
+
+### Gerenciamento de Usuários e Seed
+
+Para adicionar novos administradores ou modificar o seed padrão, consulte:
+
+📖 **[docs/SEED_MANAGEMENT.md](docs/SEED_MANAGEMENT.md)** - Guia completo de gerenciamento de usuários
+
+### Comandos Úteis Pós-Deploy
+
+```bash
+# SSH para a instância EC2
+make ssh-instance ENV=prod
+
+# Ver logs de todos os serviços
+ssh ubuntu@<EC2_IP> "cd /opt/promata && docker compose logs -f"
+
+# Ver status dos serviços
+ssh ubuntu@<EC2_IP> "cd /opt/promata && docker compose ps"
+
+# Atualizar imagens Docker
+ssh ubuntu@<EC2_IP> "cd /opt/promata && docker compose pull && docker compose up -d"
+```
+
 ## URLs
 
 - **Frontend**: <https://promata.com.br>

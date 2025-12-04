@@ -101,6 +101,17 @@ jobs:
       - name: Terraform Validate
         run: terraform validate
 
+      - name: Import Existing Resources
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        env:
+          TF_VAR_domain_name: ${{ vars.DOMAIN_NAME }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+        run: |
+          echo "🔄 Checking for existing resources to import..."
+          chmod +x ../../scripts/terraform/import-all-existing-resources.sh
+          ../../scripts/terraform/import-all-existing-resources.sh --auto || true
+
       - name: Terraform Plan
         id: plan
         run: |

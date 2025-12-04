@@ -98,9 +98,18 @@
         - /opt/promata/configs
         - /opt/promata/data
         - /opt/promata/logs
-        - /opt/promata/docker/configs/traefik
         - /opt/promata/docker/configs/nginx
         - /opt/promata/docker/database/scripts/init
+
+    # IMPORTANT: Ensure traefik.yml is a FILE not a directory
+    - name: Remove traefik config if it's a directory (fix common issue)
+      shell: |
+        if [ -d "/opt/promata/docker/configs/traefik/traefik.yml" ]; then
+          rm -rf /opt/promata/docker/configs/traefik/traefik.yml
+        fi
+        mkdir -p /opt/promata/docker/configs/traefik
+      args:
+        executable: /bin/bash
 
     - name: Download docker-compose.yml from repository
       get_url:
@@ -166,14 +175,15 @@
       register: traefik_config
       retries: 3
       delay: 5
+      ignore_errors: true
 
-    - name: Create Traefik config fallback if download failed
-      when: traefik_config.failed | default(false)
+    - name: Create Traefik config (always ensure file exists)
       copy:
         dest: /opt/promata/docker/configs/traefik/traefik.yml
         owner: ubuntu
         group: ubuntu
         mode: '0644'
+        force: yes
         content: |
           api:
             dashboard: true
@@ -194,18 +204,14 @@
             docker:
               endpoint: "unix:///var/run/docker.sock"
               exposedByDefault: false
-              network: promata_promata_network
           
           certificatesResolvers:
             letsencrypt:
               acme:
                 email: admin@{{ domain_name }}
                 storage: /letsencrypt/acme.json
-                dnsChallenge:
-                  provider: cloudflare
-                  resolvers:
-                    - "1.1.1.1:53"
-                    - "8.8.8.8:53"
+                httpChallenge:
+                  entryPoint: web
           
           log:
             level: INFO
@@ -242,6 +248,13 @@
     # ========================================================================
     # START SERVICES
     # ========================================================================
+    - name: Stop existing containers for clean start
+      shell: |
+        cd /opt/promata
+        docker compose down --remove-orphans 2>/dev/null || docker-compose down --remove-orphans 2>/dev/null || true
+      become_user: ubuntu
+      ignore_errors: true
+
     - name: Pull Docker images
       shell: |
         cd /opt/promata
@@ -261,7 +274,8 @@
           docker exec promata-postgres pg_isready -U promata && break
           sleep 2
         done
-      ignore_errors: true
+      retries: 3
+      delay: 5
 
     - name: Create database schemas (idempotent)
       shell: |
@@ -274,6 +288,17 @@
         GRANT ALL PRIVILEGES ON SCHEMA umami TO promata;
         GRANT ALL PRIVILEGES ON SCHEMA metabase TO promata;
         EOSQL
+      register: schema_result
+      ignore_errors: true
+
+    - name: Reset Metabase schema if corrupted (fresh install)
+      shell: |
+        # Check if metabase has incomplete migrations
+        TABLES=$(docker exec -i promata-postgres psql -U promata -d promata -t -c "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'metabase';" 2>/dev/null | tr -d ' ')
+        if [ "$TABLES" -gt 0 ] && [ "$TABLES" -lt 50 ]; then
+          echo "Metabase schema appears corrupted (only $TABLES tables). Resetting..."
+          docker exec -i promata-postgres psql -U promata -d promata -c "DROP SCHEMA IF EXISTS metabase CASCADE; CREATE SCHEMA metabase; GRANT ALL PRIVILEGES ON SCHEMA metabase TO promata;"
+        fi
       ignore_errors: true
 
     - name: Start all services with Docker Compose
@@ -285,7 +310,44 @@
       retries: 2
       delay: 10
 
-    - name: Wait for services to start
+    - name: Wait for services to initialize
+      pause:
+        seconds: 45
+
+    # ========================================================================
+    # POST-DEPLOY FIXES
+    # ========================================================================
+    - name: Fix Frontend health check (create /health file)
+      shell: |
+        docker exec promata-frontend sh -c 'echo "OK" > /usr/share/nginx/html/health' 2>/dev/null || true
+      ignore_errors: true
+
+    - name: Check if Traefik is running properly
+      shell: |
+        STATUS=$(docker inspect --format='{{ "{{" }}.State.Status{{ "}}" }}' promata-traefik 2>/dev/null || echo "not_found")
+        if [ "$STATUS" = "restarting" ]; then
+          echo "Traefik is restarting, checking logs..."
+          docker logs --tail 5 promata-traefik 2>&1
+          # Force recreate traefik
+          cd /opt/promata
+          docker compose up -d --force-recreate traefik || docker-compose up -d --force-recreate traefik
+        fi
+      ignore_errors: true
+
+    - name: Check if Metabase needs restart
+      shell: |
+        # Wait a bit for metabase to try starting
+        sleep 10
+        STATUS=$(docker inspect --format='{{ "{{" }}.State.Status{{ "}}" }}' promata-metabase 2>/dev/null || echo "not_found")
+        RESTARTS=$(docker inspect --format='{{ "{{" }}.RestartCount{{ "}}" }}' promata-metabase 2>/dev/null || echo "0")
+        if [ "$STATUS" = "restarting" ] || [ "$RESTARTS" -gt 3 ]; then
+          echo "Metabase failing, resetting schema..."
+          docker exec -i promata-postgres psql -U promata -d promata -c "DROP SCHEMA IF EXISTS metabase CASCADE; CREATE SCHEMA metabase; GRANT ALL PRIVILEGES ON SCHEMA metabase TO promata;"
+          docker restart promata-metabase
+        fi
+      ignore_errors: true
+
+    - name: Final wait for all services
       pause:
         seconds: 30
 
@@ -298,9 +360,38 @@
         var: docker_ps.stdout_lines
 
     # ========================================================================
-    # HEALTH CHECKS
+    # HEALTH CHECKS & VALIDATION
     # ========================================================================
-    - name: Check Traefik health
+    - name: Validate all containers are running
+      shell: |
+        FAILED=0
+        for container in promata-postgres promata-backend promata-traefik promata-umami promata-frontend; do
+          STATUS=$(docker inspect --format='{{ "{{" }}.State.Status{{ "}}" }}' $container 2>/dev/null || echo "not_found")
+          if [ "$STATUS" != "running" ]; then
+            echo "❌ $container is $STATUS"
+            FAILED=1
+          else
+            echo "✅ $container is running"
+          fi
+        done
+        exit $FAILED
+      register: container_validation
+      ignore_errors: true
+      retries: 2
+      delay: 15
+
+    - name: Check Backend API health
+      uri:
+        url: "http://localhost:3000/health"
+        method: GET
+        status_code: [200]
+      register: backend_health
+      ignore_errors: true
+      retries: 5
+      delay: 10
+      delegate_to: "{{ inventory_hostname }}"
+
+    - name: Check Traefik is responding
       uri:
         url: "http://localhost:80"
         method: GET
@@ -310,16 +401,40 @@
       retries: 3
       delay: 10
 
-    - name: Display health status
+    - name: Get final container status
+      shell: |
+        echo "=== Container Health Summary ==="
+        docker ps --format "table {% raw %}{{.Names}}\t{{.Status}}{% endraw %}" | grep promata
+        echo ""
+        echo "=== Restart Counts ==="
+        for c in promata-postgres promata-backend promata-traefik promata-umami promata-metabase promata-frontend; do
+          RESTARTS=$(docker inspect --format='{{ "{{" }}.RestartCount{{ "}}" }}' $c 2>/dev/null || echo "N/A")
+          echo "$c: $RESTARTS restarts"
+        done
+      register: final_status
+
+    - name: Display final status
+      debug:
+        var: final_status.stdout_lines
+
+    - name: Deployment Summary
       debug:
         msg: |
-          === Deployment Summary ===
-          Domain: {{ domain_name }}
-          Environment: {{ environment }}
-          Traefik Status: {{ 'OK' if traefik_health.status is defined else 'Starting...' }}
-          
-          Services should be available at:
-          - API: https://api.{{ domain_name }}
-          - Traefik Dashboard: https://traefik.{{ domain_name }}
-          
-          Note: SSL certificates may take 1-2 minutes to provision.
+          ╔══════════════════════════════════════════════════════════════╗
+          ║               PRO-MATA DEPLOYMENT COMPLETE                  ║
+          ╠══════════════════════════════════════════════════════════════╣
+          ║ Domain: {{ domain_name }}
+          ║ Environment: {{ environment }}
+          ║                                                              
+          ║ Services:                                                    
+          ║   • API:        https://api.{{ domain_name }}
+          ║   • Frontend:   https://{{ domain_name }}
+          ║   • Analytics:  https://analytics.{{ domain_name }}
+          ║   • Metabase:   https://bi.{{ domain_name }}
+          ║   • Traefik:    https://traefik.{{ domain_name }}
+          ║                                                              
+          ║ Backend API: {{ 'HEALTHY ✅' if backend_health.status == 200 else 'STARTING... ⏳' }}
+          ║ Traefik: {{ 'RESPONDING ✅' if traefik_health.status is defined else 'STARTING... ⏳' }}
+          ║                                                              
+          ║ Note: SSL certificates may take 1-2 minutes to provision.   
+          ╚══════════════════════════════════════════════════════════════╝

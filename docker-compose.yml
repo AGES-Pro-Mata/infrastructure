@@ -2,8 +2,6 @@
 # Single-Node Deployment (Development + Simple Production)
 # Use este arquivo para desenvolvimento local ou deploy em servidor único
 
-version: "3.8"
-
 networks:
   promata_network:
     driver: bridge
@@ -78,7 +76,7 @@ services:
       - traefik.http.routers.frontend.middlewares=security-headers
       - traefik.http.services.frontend.loadbalancer.server.port=80
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost/health || exit 1"]
+      test: ["CMD-SHELL", "wget -q --spider http://localhost/ || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3

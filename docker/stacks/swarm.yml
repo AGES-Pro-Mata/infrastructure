@@ -160,7 +160,7 @@ services:
         - traefik.http.services.frontend.loadbalancer.server.port=80
         - traefik.http.services.frontend.loadbalancer.sticky.cookie=false
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost/health || exit 1"]
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://127.0.0.1/health || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -316,8 +316,15 @@ services:
   metabase:
     image: metabase/metabase:v0.51.3
     environment:
+      # Database config - MUST use MB_DB_* variables for schema to work
       - MB_DB_TYPE=postgres
-      - MB_DB_CONNECTION_URI=postgresql://${POSTGRES_USER:-promata}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-promata}?currentSchema=metabase
+      - MB_DB_HOST=postgres
+      - MB_DB_PORT=5432
+      - MB_DB_DBNAME=${POSTGRES_DB:-promata}
+      - MB_DB_USER=${POSTGRES_USER:-promata}
+      - MB_DB_PASS=${POSTGRES_PASSWORD}
+      - MB_DB_SCHEMA=metabase
+      # JVM settings
       - JAVA_OPTS=-Xmx1536m -Duser.timezone=America/Sao_Paulo
     networks:
       - promata_public

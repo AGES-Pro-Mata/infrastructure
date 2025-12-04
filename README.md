@@ -128,6 +128,7 @@ make local
 ```
 
 Isso irá:
+
 1. Criar `.env` com valores de desenvolvimento
 2. Configurar Traefik para HTTP local
 3. Criar schemas no PostgreSQL
@@ -138,12 +139,12 @@ Isso irá:
 
 | Serviço | URL |
 |---------|-----|
-| Frontend | http://localhost |
-| API | http://localhost:3000/health |
-| Traefik Dashboard | http://localhost:8080 |
-| PostgreSQL | localhost:5432 |
-| Umami | http://localhost:3002 |
-| Metabase | http://localhost:3003 |
+| Frontend | <http://localhost> |
+| API | <http://localhost:3000/health> |
+| Traefik Dashboard | <http://localhost:8080> |
+| PostgreSQL | <localhost:5432> |
+| Umami | <http://localhost:3002> |
+| Metabase | <http://localhost:3003> |
 
 ### Comandos Úteis
 
@@ -255,7 +256,7 @@ ssh ubuntu@<EC2_IP> "cd /opt/promata && docker compose pull && docker compose up
 - **Analytics**: <https://analytics.promata.com.br>
 - **BI**: <https://metabase.promata.com.br>
 
-## Comandos Úteis
+## Comandos Docker Úteis
 
 ```bash
 # Logs

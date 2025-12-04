@@ -60,12 +60,8 @@ services:
   frontend:
     image: nginx:alpine
     container_name: promata-frontend
-    environment:
-      - S3_WEBSITE_ENDPOINT=http://${S3_BUCKET_NAME}.s3-website.${AWS_REGION:-sa-east-1}.amazonaws.com
-      - S3_BUCKET_NAME=${S3_BUCKET_NAME}
-      - AWS_REGION=${AWS_REGION:-sa-east-1}
     volumes:
-      - ./docker/configs/nginx/s3-proxy.conf:/etc/nginx/templates/default.conf.template:ro
+      - ./docker/configs/nginx/s3-proxy.conf:/etc/nginx/conf.d/default.conf:ro
     networks:
       - promata_network
     labels:
@@ -76,7 +72,7 @@ services:
       - traefik.http.routers.frontend.middlewares=security-headers
       - traefik.http.services.frontend.loadbalancer.server.port=80
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost/ || exit 1"]
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/health || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -191,8 +187,15 @@ services:
     image: metabase/metabase:v0.51.3
     container_name: promata-metabase
     environment:
+      # Database config - MUST use MB_DB_* variables for schema to work
       - MB_DB_TYPE=postgres
-      - MB_DB_CONNECTION_URI=postgresql://${POSTGRES_USER:-promata}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-promata}?currentSchema=metabase
+      - MB_DB_HOST=postgres
+      - MB_DB_PORT=5432
+      - MB_DB_DBNAME=${POSTGRES_DB:-promata}
+      - MB_DB_USER=${POSTGRES_USER:-promata}
+      - MB_DB_PASS=${POSTGRES_PASSWORD}
+      - MB_DB_SCHEMA=metabase
+      # JVM settings
       - JAVA_OPTS=-Xmx1024m -Duser.timezone=America/Sao_Paulo
     networks:
       - promata_network

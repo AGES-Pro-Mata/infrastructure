@@ -122,13 +122,22 @@ jobs:
     name: Deploy to EC2
     runs-on: ubuntu-24.04
     needs: build
-    env:
-      EC2_HOST: ${{ secrets.EC2_HOST }}
-    if: github.ref == 'refs/heads/main' && env.EC2_HOST != ''
+    if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check EC2 Host
+        id: check
+        run: |
+          if [ -z "${{ secrets.EC2_HOST }}" ]; then
+            echo "⚠️ EC2_HOST secret not configured. Skipping deploy."
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Deploy via SSH
+        if: steps.check.outputs.skip != 'true'
         env:
           SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
           EC2_HOST: ${{ secrets.EC2_HOST }}

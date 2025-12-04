@@ -129,25 +129,26 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ vars.AWS_REGION || 'sa-east-1' }}
 
-      - name: Create S3 bucket if not exists
+      - name: Get S3 Bucket Name
+        id: s3
         run: |
-          aws s3 mb s3://${{ vars.AWS_S3_BUCKET }} --region ${{ vars.AWS_REGION || 'sa-east-1' }} 2>/dev/null || true
-          aws s3api put-bucket-versioning \
-            --bucket ${{ vars.AWS_S3_BUCKET }} \
-            --versioning-configuration Status=Enabled 2>/dev/null || true
-          aws s3api put-public-access-block \
-            --bucket ${{ vars.AWS_S3_BUCKET }} \
-            --public-access-block-configuration \
-              "BlockPublicAcls=false,IgnorePublicAcls=false,BlockPublicPolicy=false,RestrictPublicBuckets=false" 2>/dev/null || true
+          # Buscar o bucket de produção criado pelo Terraform
+          BUCKET=$(aws s3 ls | grep "promata-prod-static-assets" | awk '{print $3}' | head -1)
+          if [ -z "$BUCKET" ]; then
+            echo "❌ Bucket promata-prod-static-assets-* não encontrado!"
+            exit 1
+          fi
+          echo "bucket=$BUCKET" >> $GITHUB_OUTPUT
+          echo "✅ Usando bucket: $BUCKET"
 
       - name: Sync to S3
         run: |
-          aws s3 sync ./frontend/dist s3://${{ vars.AWS_S3_BUCKET }} \
+          aws s3 sync ./frontend/dist s3://${{ steps.s3.outputs.bucket }} \
             --delete \
             --cache-control "public,max-age=31536000,immutable" \
             --exclude "index.html"
 
-          aws s3 cp ./frontend/dist/index.html s3://${{ vars.AWS_S3_BUCKET }}/index.html \
+          aws s3 cp ./frontend/dist/index.html s3://${{ steps.s3.outputs.bucket }}/index.html \
             --cache-control "public,max-age=0,must-revalidate"
 
       - name: Purge Cloudflare Cache
@@ -162,6 +163,7 @@ jobs:
           echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "- **URL**: https://${{ vars.DOMAIN_NAME }}" >> $GITHUB_STEP_SUMMARY
           echo "- **API**: https://api.${{ vars.DOMAIN_NAME }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **S3 Bucket**: ${{ steps.s3.outputs.bucket }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Version**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
 
       - uses: sarisia/actions-status-discord@v1

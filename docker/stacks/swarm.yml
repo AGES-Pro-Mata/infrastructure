@@ -168,12 +168,11 @@ services:
 
   # === DATABASE ===
   postgres:
-    image: postgres:17-alpine
+    image: ${DATABASE_IMAGE:-norohim/pro-mata-database:latest}
     environment:
       - POSTGRES_DB=${POSTGRES_DB:-promata}
       - POSTGRES_USER=${POSTGRES_USER:-promata}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_HOST_AUTH_METHOD=scram-sha-256
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:

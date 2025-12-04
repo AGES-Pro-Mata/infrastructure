@@ -81,20 +81,14 @@ services:
 
   # === DATABASE ===
   postgres:
-    build:
-      context: ./docker/database
-      dockerfile: Dockerfile.extended
-    image: promata-postgres:latest
+    image: ${DATABASE_IMAGE:-norohim/pro-mata-database:latest}
     container_name: promata-postgres
     environment:
       - POSTGRES_DB=${POSTGRES_DB:-promata}
       - POSTGRES_USER=${POSTGRES_USER:-promata}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_HOST_AUTH_METHOD=scram-sha-256
-      - CLUSTER_NAME=promata-cluster
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./docker/database/scripts/init:/docker-entrypoint-initdb.d:ro
     networks:
       - promata_network
     healthcheck:

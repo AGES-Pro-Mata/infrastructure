@@ -39,7 +39,7 @@ locals {
       port        = 8080
       proxied     = true # Always proxied (orange cloud)
     }
-    
+
     # Analytics
     "analytics" = {
       description = "Umami analytics dashboard"

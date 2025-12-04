@@ -258,7 +258,9 @@ infrastructure/
 │   └── database/            # PostgreSQL init scripts
 ├── scripts/
 │   └── terraform/
-│       └── setup-backend.sh # Criar S3 backend
+│       ├── setup-backend-aws.sh   # Criar S3 backend (AWS)
+│       ├── setup-backend-azure.sh # Criar Blob Storage backend (Azure)
+│       └── setup-backends.sh      # Menu interativo
 ├── envs/
 │   ├── local.env.example
 │   └── production.env.example

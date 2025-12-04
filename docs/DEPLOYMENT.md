@@ -61,6 +61,35 @@ POSTGRES_DB=promata
 
 ### 3. Deploy Infraestrutura
 
+#### Pré-requisito: Configurar Terraform Backend (State Remoto)
+
+O Terraform state precisa ser compartilhado entre todos os desenvolvedores e CI/CD.
+
+**AWS Backend (S3 + DynamoDB):**
+```bash
+# Criar bucket S3 e DynamoDB table para locking
+./scripts/terraform/setup-backend-aws.sh
+
+# Verificar se foi criado
+aws s3 ls s3://promata-terraform-state
+```
+
+**Azure Backend (Blob Storage):**
+```bash
+# Criar Storage Account e Container
+./scripts/terraform/setup-backend-azure.sh
+
+# Verificar se foi criado
+az storage blob list --account-name promatatfstate --container-name tfstate
+```
+
+**Setup interativo (ambos):**
+```bash
+./scripts/terraform/setup-backends.sh
+```
+
+> ⚠️ **IMPORTANTE**: Nunca commite arquivos `.tfstate` locais. Eles contêm dados sensíveis!
+
 #### Opção A: Automático (GitHub Actions)
 
 ```bash
@@ -74,7 +103,7 @@ git push origin main  # Workflows deployam automaticamente
 ```bash
 # Setup backend
 cd scripts/terraform
-./setup-backend.sh
+./setup-backend-aws.sh
 
 # Deploy
 cd iac/aws

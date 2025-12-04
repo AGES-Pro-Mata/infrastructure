@@ -50,8 +50,11 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Terraform Format Check
-        run: terraform fmt -check -recursive
-        continue-on-error: true
+        run: |
+          if ! terraform fmt -check -recursive; then
+            echo "⚠️ Formatting issues found. Auto-fixing..."
+            terraform fmt -recursive
+          fi
 
       - name: Terraform Init
         run: terraform init

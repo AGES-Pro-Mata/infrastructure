@@ -310,3 +310,148 @@ dev: ## Quick dev deployment
 
 prod: ## Quick prod deployment
 	@$(MAKE) deploy-full ENV=prod
+
+# ============================================================================
+# LOCAL DEVELOPMENT (No Cloud)
+# ============================================================================
+local: ## Run complete stack locally with Docker Compose
+	@echo "🐳 Starting Pro-Mata stack locally..."
+	@$(MAKE) local-setup
+	@$(MAKE) local-up
+	@echo ""
+	@echo "✅ Stack running locally!"
+	@echo ""
+	@echo "🌐 Services available at:"
+	@echo "   - Frontend: http://localhost"
+	@echo "   - API: http://localhost:3000/health"
+	@echo "   - Traefik Dashboard: http://localhost:8080"
+	@echo "   - PostgreSQL: localhost:5432"
+	@echo ""
+	@echo "📝 Commands:"
+	@echo "   make local-logs    - View logs"
+	@echo "   make local-ps      - Container status"
+	@echo "   make local-down    - Stop stack"
+	@echo "   make local-reset   - Reset everything (including data)"
+
+local-setup: ## Setup local environment
+	@echo "📁 Setting up local environment..."
+	@mkdir -p docker/configs/traefik docker/configs/nginx docker/database/scripts/init
+	@# Create local .env if not exists
+	@if [ ! -f .env ]; then \
+		echo "Creating .env from local.env.example..."; \
+		cp envs/local.env.example .env 2>/dev/null || \
+		cat > .env << 'EOF'
+# Pro-Mata Local Development
+ENVIRONMENT=local
+PROJECT_NAME=promata
+DOMAIN_NAME=localhost
+
+# Database
+POSTGRES_DB=promata
+POSTGRES_USER=promata
+POSTGRES_PASSWORD=localdev123
+
+# Application
+JWT_SECRET=local-dev-jwt-secret-change-in-production
+APP_SECRET=local-dev-app-secret-change-in-production
+DATABASE_URL=postgresql://promata:localdev123@postgres:5432/promata?schema=app
+
+# AWS S3 (leave empty for local, uses mock/disabled)
+AWS_REGION=sa-east-1
+AWS_S3_BUCKET=
+S3_BUCKET_NAME=
+
+# Traefik
+TRAEFIK_LOG_LEVEL=DEBUG
+CLOUDFLARE_API_TOKEN=
+
+# Backend
+BACKEND_IMAGE=norohim/pro-mata-backend:latest
+EOF
+	fi
+	@# Create traefik config for local (HTTP only, no SSL)
+	@cat > docker/configs/traefik/traefik.yml << 'EOF'
+api:
+  dashboard: true
+  insecure: true
+
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"
+
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+
+log:
+  level: DEBUG
+EOF
+	@# Create database init script
+	@cat > docker/database/scripts/init/01-create-schemas.sh << 'EOF'
+#!/bin/bash
+set -e
+psql -v ON_ERROR_STOP=1 --username "$$POSTGRES_USER" --dbname "$$POSTGRES_DB" <<-EOSQL
+    CREATE SCHEMA IF NOT EXISTS app;
+    CREATE SCHEMA IF NOT EXISTS umami;
+    CREATE SCHEMA IF NOT EXISTS metabase;
+    ALTER DATABASE promata SET search_path TO app,public;
+    GRANT ALL PRIVILEGES ON SCHEMA app TO $$POSTGRES_USER;
+    GRANT ALL PRIVILEGES ON SCHEMA umami TO $$POSTGRES_USER;
+    GRANT ALL PRIVILEGES ON SCHEMA metabase TO $$POSTGRES_USER;
+EOSQL
+echo "✅ Database schemas initialized!"
+EOF
+	@chmod +x docker/database/scripts/init/01-create-schemas.sh
+	@echo "✅ Local environment ready!"
+
+local-up: ## Start local stack
+	@echo "🚀 Starting containers..."
+	@docker compose up -d
+	@echo "⏳ Waiting for services to start..."
+	@sleep 10
+	@# Create schemas if postgres is fresh
+	@docker exec -i promata-postgres psql -U promata -d promata -c "CREATE SCHEMA IF NOT EXISTS app; CREATE SCHEMA IF NOT EXISTS umami; CREATE SCHEMA IF NOT EXISTS metabase;" 2>/dev/null || true
+	@# Wait for backend
+	@echo "⏳ Waiting for backend..."
+	@for i in 1 2 3 4 5 6 7 8 9 10; do \
+		if curl -s http://localhost:3000/health > /dev/null 2>&1; then \
+			echo "✅ Backend is ready!"; \
+			break; \
+		fi; \
+		sleep 3; \
+	done
+	@docker compose ps
+
+local-down: ## Stop local stack
+	@echo "🛑 Stopping containers..."
+	@docker compose down
+	@echo "✅ Stack stopped"
+
+local-logs: ## View local logs
+	@docker compose logs -f
+
+local-ps: ## Show local container status
+	@docker compose ps
+
+local-reset: ## Reset local environment (removes all data!)
+	@echo "⚠️  WARNING: This will remove ALL local data!"
+	@read -p "Type 'yes' to continue: " confirm && [ "$$confirm" = "yes" ] || exit 1
+	@docker compose down -v --remove-orphans
+	@rm -f .env
+	@rm -rf docker/configs/traefik/traefik.yml
+	@echo "✅ Local environment reset"
+
+local-db: ## Connect to local PostgreSQL
+	@docker exec -it promata-postgres psql -U promata -d promata
+
+local-backend-logs: ## View backend logs only
+	@docker compose logs -f backend
+
+local-rebuild: ## Rebuild and restart local stack
+	@echo "🔄 Rebuilding local stack..."
+	@docker compose down
+	@docker compose pull
+	@$(MAKE) local-up

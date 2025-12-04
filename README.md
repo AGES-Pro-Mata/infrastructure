@@ -120,6 +120,44 @@ docker stack deploy -c docker/stacks/swarm.yml promata
 
 ## Desenvolvimento Local
 
+### Quick Start (Recomendado)
+
+```bash
+# Inicia tudo automaticamente
+make local
+```
+
+Isso irá:
+1. Criar `.env` com valores de desenvolvimento
+2. Configurar Traefik para HTTP local
+3. Criar schemas no PostgreSQL
+4. Iniciar todos os containers
+5. Aguardar services ficarem healthy
+
+### URLs Locais
+
+| Serviço | URL |
+|---------|-----|
+| Frontend | http://localhost |
+| API | http://localhost:3000/health |
+| Traefik Dashboard | http://localhost:8080 |
+| PostgreSQL | localhost:5432 |
+| Umami | http://localhost:3002 |
+| Metabase | http://localhost:3003 |
+
+### Comandos Úteis
+
+```bash
+make local-logs      # Ver logs de todos os containers
+make local-ps        # Status dos containers
+make local-down      # Parar stack
+make local-reset     # Resetar tudo (apaga dados!)
+make local-db        # Conectar ao PostgreSQL
+make local-rebuild   # Rebuild e restart
+```
+
+### Manual (Alternativo)
+
 ```bash
 # Copiar env
 cp envs/local.env.example .env
@@ -127,11 +165,11 @@ cp envs/local.env.example .env
 # Editar variáveis
 vim .env
 
-# Subir com Prisma Studio
-docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+# Subir stack
+docker compose up -d
 
 # Criar admin
-docker-compose exec backend npm run cli user:create \
+docker compose exec backend npm run cli user:create \
   --email admin@test.com --password admin123 --role ADMIN
 ```
 

@@ -62,6 +62,17 @@ variable "instance_count" {
   }
 }
 
+variable "nat_gateway_count" {
+  description = "Number of NAT Gateways (1 for cost savings, 3 for high availability)"
+  type        = number
+  default     = 1
+
+  validation {
+    condition     = var.nat_gateway_count >= 1 && var.nat_gateway_count <= 3
+    error_message = "nat_gateway_count must be between 1 and 3"
+  }
+}
+
 # Cloudflare
 variable "enable_cloudflare" {
   description = "Enable Cloudflare DNS management (set to false to skip DNS module entirely)"

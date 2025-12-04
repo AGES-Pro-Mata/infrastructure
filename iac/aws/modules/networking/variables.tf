@@ -22,6 +22,12 @@ variable "availability_zones" {
   type        = list(string)
 }
 
+variable "nat_gateway_count" {
+  description = "Number of NAT Gateways to create (1 for cost savings, 3 for HA)"
+  type        = number
+  default     = 1
+}
+
 variable "tags" {
   description = "Common tags to apply to all resources"
   type        = map(string)

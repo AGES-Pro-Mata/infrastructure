@@ -25,6 +25,7 @@ module "networking" {
   environment        = "prod"
   aws_region         = var.aws_region
   availability_zones = var.availability_zones
+  nat_gateway_count  = var.nat_gateway_count
 
   tags = local.common_tags
 }

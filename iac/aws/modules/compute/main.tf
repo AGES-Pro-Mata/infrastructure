@@ -49,6 +49,10 @@ resource "aws_key_pair" "main" {
   public_key = tls_private_key.main.public_key_openssh
 
   tags = var.tags
+
+  lifecycle {
+    ignore_changes = [public_key]
+  }
 }
 
 # ============================================================================
@@ -134,7 +138,7 @@ resource "aws_instance" "worker" {
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.instance_type
   key_name               = aws_key_pair.main.key_name
-  subnet_id              = var.public_subnet_ids[0]  # Use same subnet as manager for AZ compatibility
+  subnet_id              = var.public_subnet_ids[0] # Use same subnet as manager for AZ compatibility
   vpc_security_group_ids = [var.security_group_ids.main]
 
   user_data = local.user_data

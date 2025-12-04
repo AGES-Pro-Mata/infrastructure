@@ -16,3 +16,9 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "aws_region" {
+  description = "AWS region for S3 website endpoint URL"
+  type        = string
+  default     = "sa-east-1"
+}

@@ -109,6 +109,16 @@ output "static_assets_bucket" {
   value       = module.storage.s3_bucket_name
 }
 
+output "s3_website_endpoint" {
+  description = "S3 static website endpoint for nginx proxy"
+  value       = module.storage.s3_website_endpoint
+}
+
+output "s3_website_domain" {
+  description = "S3 static website domain for nginx proxy configuration"
+  value       = module.storage.s3_website_domain
+}
+
 # Cloudflare Status
 output "cloudflare_enabled" {
   description = "Whether Cloudflare DNS management is enabled"

@@ -114,7 +114,7 @@ services:
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-2h}
 
       # CORS
-      - CORS_ORIGIN=https://${DOMAIN_NAME:-promata.com.br},https://www.${DOMAIN_NAME:-promata.com.br}
+      - CORS_ORIGINS=https://${DOMAIN_NAME:-promata.com.br},https://www.${DOMAIN_NAME:-promata.com.br}
       - CORS_CREDENTIALS=true
 
       # Analytics
